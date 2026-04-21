@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="nl"><head>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.13/html-to-image.min.js" integrity="sha512-iZ2ORl595Wx6miw+GuadDet4WQbdSWS3JLMoNfY8cRGoEFy6oT3G9IbcrBeL6AfkgpA51ETt/faX6yLV+/gFJg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script>
+      (function() {
+        const originalConsole = window.console;
+        window.console = {
+          log: (...args) => {
+            originalConsole.log(...args);
+            window.parent.postMessage({ type: 'console', message: args.join(' ') }, '*');
+          },
+          error: (...args) => {
+            originalConsole.error(...args);
+            window.parent.postMessage({ type: 'console', message: 'Error: ' + args.join(' ') }, '*');
+          },
+          warn: (...args) => {
+            originalConsole.warn(...args);
+            window.parent.postMessage({ type: 'console', message: 'Warning: ' + args.join(' ') }, '*');
+          }
+        };
+
+        let requestId = 0;
+        let callbacksMap = new Map();
+        let streamControllers = new Map();
+
+        window.claude = {
+          complete: (prompt) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'claudeComplete', id, prompt }, '*');
+            });
+          }
+        };
+
+        window.storage = {
+          get: (key, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageGet', id, key, shared }, '*');
+            });
+          },
+          set: (key, value, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageSet', id, key, value, shared }, '*');
+            });
+          },
+          delete: (key, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageDelete', id, key, shared }, '*');
+            });
+          },
+          list: (prefix, shared = false) => {
+            return new Promise((resolve, reject) => {
+              const id = requestId++;
+              callbacksMap.set(id, { resolve, reject });
+              window.parent.postMessage({ type: 'storageList', id, prefix, shared }, '*');
+            });
+          }
+        };
+
+        let pendingBlobs = new Map();
+        URL.createObjectURL = (blob) => {
+          const blobId = `blob-${Date.now()}-${Math.random()}`;
+          pendingBlobs.set(blobId, blob);
+          return `blob-request://${blobId}`;
+        };
+
+        URL.revokeObjectURL = (url) => {
+          const blobId = url.replace("blob-request://", "");
+          pendingBlobs.delete(blobId);
+        };
+
+        const getBlobFromURL = (url) => {
+          const blobId = url.replace("blob-request://", "");
+          return pendingBlobs.get(blobId);
+        };
+
+        // Override global fetch with streaming support
+        window.fetch = (url, init = {}) => {
+          return new Promise((resolve, reject) => {
+            const id = requestId++;
+            const channelId = `fetch-${id}-${Date.now()}`;
+
+            callbacksMap.set(id, {
+              resolve: (response) => {
+                const stream = new ReadableStream({
+                  start(controller) {
+                    streamControllers.set(channelId, controller);
+                  },
+                  cancel() {
+                    streamControllers.delete(channelId);
+                  }
+                });
+
+                resolve(new Response(stream, {
+                  status: response.status,
+                  statusText: response.statusText,
+                  headers: response.headers
+                }));
+              },
+              reject,
+              channelId
+            });
+
+            window.parent.postMessage({
+              type: 'proxyFetch',
+              id,
+              url,
+              init,
+              channelId
+            }, '*');
+          });
+        };
+
+        window.addEventListener('message', async (event) => {
+          if (event.data.type === 'takeScreenshot') {
+            const rootElement = document.getElementById('artifacts-component-root-html');
+            if (!rootElement) {
+              window.parent.postMessage({
+                type: 'screenshotError',
+                error: new Error('Root element not found'),
+              }, '*');
+            }
+            const screenshot = await htmlToImage.toPng(rootElement, {
+              imagePlaceholder:
+                "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAA1JREFUGFdjePDgwX8ACOQDoNsk0PMAAAAASUVORK5CYII=",
+            });
+            window.parent.postMessage({
+              type: 'screenshotData',
+              data: screenshot,
+            }, '*');
+          } else if (event.data.type === 'claudeComplete') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.completion);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'proxyFetchResponse') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+              callbacksMap.delete(event.data.id);
+            } else {
+              callback.resolve({
+                status: event.data.status,
+                statusText: event.data.statusText,
+                headers: event.data.headers
+              });
+              if (!event.data.body) {
+                callbacksMap.delete(event.data.id);
+              }
+            }
+          } else if (event.data.type === 'proxyFetchStream') {
+            const controller = streamControllers.get(event.data.channelId);
+            if (controller) {
+              if (event.data.error) {
+                controller.error(new Error(event.data.error));
+                streamControllers.delete(event.data.channelId);
+              } else if (event.data.done) {
+                controller.close();
+                streamControllers.delete(event.data.channelId);
+                const callback = Array.from(callbacksMap.entries()).find(
+                  ([_, value]) => value.channelId === event.data.channelId
+                );
+                if (callback) {
+                  callbacksMap.delete(callback[0]);
+                }
+              } else if (event.data.chunk) {
+                controller.enqueue(new Uint8Array(event.data.chunk));
+              }
+            }
+          } else if (event.data.type === 'storageGet') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageSet') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageDelete') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          } else if (event.data.type === 'storageList') {
+            const callback = callbacksMap.get(event.data.id);
+            if (event.data.error) {
+              callback.reject(new Error(event.data.error));
+            } else {
+              callback.resolve(event.data.result);
+            }
+            callbacksMap.delete(event.data.id);
+          }
+        });
+
+        window.addEventListener('click', (event) => {
+          const isEl = event.target instanceof HTMLElement;
+          if (!isEl) return;
+
+          const linkEl = event.target.closest("a");
+          if (!linkEl || !linkEl.href) return;
+
+          event.preventDefault();
+          event.stopImmediatePropagation();
+
+          if (linkEl.href.startsWith("blob-request:")) {
+            const blob = getBlobFromURL(linkEl.href);
+            if (!blob) return;
+            void blob.arrayBuffer().then((data) => {
+              window.parent.postMessage({
+                type: "downloadFile",
+                filename: linkEl.download,
+                data,
+                mimeType: blob.type || "application/octet-stream",
+              });
+            });
+          } else if (linkEl.href.startsWith("data:")) {
+            const [header, base64Data] = linkEl.href.split(",");
+            const mimeMatch = header.match(/data:([^;]+)/);
+            const mimeType = mimeMatch ? mimeMatch[1] : "application/octet-stream";
+            const binaryString = atob(base64Data);
+            const data = Uint8Array.from(binaryString, (c) =>
+              c.charCodeAt(0),
+            ).buffer;
+            window.parent.postMessage({
+              type: "downloadFile",
+              filename: linkEl.download,
+              data,
+              mimeType,
+            });
+          } else {
+            let linkUrl;
+            try {
+              linkUrl = new URL(linkEl.href);
+            } catch (error) {
+              return;
+            }
+
+            if (linkUrl.hostname === window.location.hostname) return;
+
+            window.parent.postMessage({
+              type: 'openExternal',
+              href: linkEl.href,
+            }, '*');
+          }
+      });
+
+        const originalOpen = window.open;
+        window.open = function (url) {
+          window.parent.postMessage({
+            type: "openExternal",
+            href: url,
+          }, "*");
+        };
+
+        window.addEventListener('error', (event) => {
+          window.parent.postMessage({ type: 'console', message: 'Uncaught Error: ' + event.message }, '*');
+        });
+      })();
+    </script>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Energiegroepsprofiel</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body id="artifacts-component-root-html">
+<div class="nf" id="nf"></div>
+<div class="hdr">
+  <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
+    <circle cx="22" cy="22" r="21" stroke="#46962b" stroke-width="1.5" opacity=".4"></circle>
+    <path d="M14 22 Q18 14 22 22 Q26 30 30 22" stroke="#fbba00" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
+    <path d="M14 22 Q18 16 22 22 Q26 28 30 22" stroke="#a6d6cc" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"></path>
+    <path d="M14 22 Q18 18 22 22 Q26 26 30 22" stroke="#46962b" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".9"></path>
+  </svg>
+  <div><div class="logo-txt">Impuls <span>Zeeland</span></div><div class="logo-sub">Energiegroepsprofiel</div></div>
+  <div class="hdr-r">
+    <select class="ps" id="projSel"><option value="f2bfdkol" selected>Mijn eerste project</option></select>
+    <button class="b o" id="btnNieuwProj">+ Project</button>
+    <button class="b d" id="btnDelProj">Verwijder</button>
+    <button class="b tc" id="btnRapport">Rapport</button>
+    <button class="b o" id="btnExpData">Data exp.</button>
+    <label class="b o" style="cursor:pointer">Data imp.<input type="file" id="impIn" accept=".json" style="display:none"></label>
+    <button class="b y" id="btnDlApp">App dl.</button>
+  </div>
+</div>
+<div class="app">
+  <div class="sb">
+    <div style="margin-bottom:10px">
+      <div class="st">Groeps-GTV</div>
+      <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
+        <div class="fg"><label>GTV afname (kW)</label><input type="number" id="gGtvA" min="0" step="1" style="font-size:12px"></div>
+        <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="gGtvT" min="0" step="1" style="font-size:12px"></div>
+        <div style="font-size:9px;color:#888" id="gtvHint"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div class="st">Aansluitingen</div>
+      <div class="cl" id="cList"><div style="padding:10px 0;text-align:center;font-size:11px;color:#aaa">Nog geen aansluitingen</div></div>
+      <button class="b" id="btnAddComp" style="width:100%;margin-top:6px">+ Aansluiting toevoegen</button>
+    </div>
+    <div>
+      <div class="st">Analyse</div>
+      <button class="b dk" id="btnRun" style="width:100%">Bereken groepsprofiel</button>
+    </div>
+  </div>
+  <div class="ct">
+    <div class="tabs">
+      <button class="tab on" data-tab="tOv">Overzicht</button>
+      <button class="tab" data-tab="tJaar">Jaarprofiel</button>
+      <button class="tab" data-tab="tWeek">Weekprofiel</button>
+      <button class="tab" data-tab="tBdk">BDK</button>
+      <button class="tab" data-tab="tOvsch">Overschrijdingen</button>
+      <button class="tab" data-tab="tPiek">Piekanalyse</button>
+      <button class="tab" data-tab="tKost">Kosten</button>
+    </div>
+    <!-- OVERZICHT -->
+    <div class="pn on" id="tOv">
+      <div class="kg">
+        <div class="kb"><div class="kl">Project</div><div class="kv" id="kProj" style="font-size:11px">Mijn eerste project</div></div>
+        <div class="kb"><div class="kl">Aansluitingen</div><div class="kv" id="kN">0</div></div>
+        <div class="kb"><div class="kl">Overlap punten</div><div class="kv" id="kOvlp">—</div><div class="ku">kwartierwaarden</div></div>
+        <div class="kb"><div class="kl">Piek afname</div><div class="kv" id="kPA">—</div><div class="ku">kW</div></div>
+        <div class="kb"><div class="kl">Piek teruglevering</div><div class="kv" id="kPT">—</div><div class="ku">kW</div></div>
+        <div class="kb"><div class="kl">GTV overschr.</div><div class="kv" id="kOA">—</div><div class="ku">kwartierwaarden</div></div>
+        <div class="kb"><div class="kl">GTV-T overschr.</div><div class="kv" id="kOT">—</div><div class="ku">kwartierwaarden</div></div>
+        <div class="kb"><div class="kl">Totaal volume</div><div class="kv" id="kVol">—</div><div class="ku">MWh</div></div>
+      </div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Aansluitingen</div>
+        <table class="tbl"><thead><tr><th></th><th>Naam</th><th>EAN</th><th>Cat.</th><th>GTV</th><th>GTV-T</th><th>Punten</th><th></th></tr></thead>
+        <tbody id="ovBody"><tr><td colspan="8" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr></tbody></table></div>
+    </div>
+    <!-- JAARPROFIEL -->
+    <div class="pn" id="tJaar">
+      <div class="cd"><div class="ct2"><div class="ac"></div>Cumulatief groepsprofiel (kW) — positief=afname, negatief=teruglevering</div>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
+          <div class="lg" style="margin:0;flex:1">
+            <span class="li"><span class="ld" style="background:#46962b"></span>Afname</span>
+            <span class="li"><span class="ld" style="background:#fbba00"></span>Teruglevering</span>
+            <span class="li"><span class="ld" style="border:2px dashed #c0392b;background:none"></span>GTV</span>
+            <span class="li"><span class="ld" style="border:2px dashed #e67e22;background:none"></span>GTV-T</span>
+          </div>
+          <div style="display:flex;gap:4px">
+            <button class="b" id="btnZoomIn" style="padding:3px 7px;font-size:10px">+ In</button>
+            <button class="b" id="btnZoomUit" style="padding:3px 7px;font-size:10px;background:#888">- Uit</button>
+            <button class="b dk" id="btnZoomReset" style="padding:3px 7px;font-size:10px">Reset</button>
+          </div>
+        </div>
+        <div style="display:flex;gap:7px;align-items:center;margin-bottom:6px">
+          <span style="font-size:10px;color:#888;white-space:nowrap">Venster:</span>
+          <input type="range" id="jPan" min="0" max="100" value="0" step="1" style="flex:1">
+          <span style="font-size:10px;color:#888;min-width:70px;text-align:right" id="jZoomLbl">Volledig</span>
+        </div>
+        <div class="cw" style="height:340px"><canvas id="cJaarG" role="img" aria-label="Cumulatief groepsprofiel"></canvas></div>
+      </div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Per aansluiting (kW) — negatief=teruglevering</div>
+        <div class="lg" id="jLeg"></div>
+        <div class="cw" style="height:230px"><canvas id="cJaar" role="img" aria-label="Jaarprofiel per aansluiting"></canvas></div>
+      </div>
+    </div>
+    <!-- WEEKPROFIEL -->
+    <div class="pn" id="tWeek">
+      <div class="cd"><div class="ct2"><div class="ac"></div>Weekprofiel groep — gem / min / max (Ma–Zo)</div>
+        <div class="cw" style="height:240px"><canvas id="cWeek" role="img" aria-label="Weekprofiel groep"></canvas></div></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Per aansluiting — gemiddeld weekprofiel</div>
+        <div class="lg" id="wLeg"></div>
+        <div class="cw" style="height:240px"><canvas id="cWeekP" role="img" aria-label="Weekprofiel per aansluiting"></canvas></div></div>
+    </div>
+    <!-- BDK -->
+    <div class="pn" id="tBdk">
+      <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme — afname</div>
+        <div class="lg" id="bdkLeg"></div>
+        <div class="cw" style="height:260px"><canvas id="cBdk" role="img" aria-label="BDK afname"></canvas></div></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme — teruglevering</div>
+        <div class="lg" id="bdkLegT"></div>
+        <div class="cw" style="height:260px"><canvas id="cBdkT" role="img" aria-label="BDK teruglevering"></canvas></div></div>
+    </div>
+    <!-- OVERSCHRIJDINGEN -->
+    <div class="pn" id="tOvsch">
+      <div class="kg" id="ovKpis"></div>
+      <div class="cd">
+        <div class="ct2"><div class="ac"></div>GTV-overschrijdingen per maand (gestapeld)</div>
+        <div class="lg">
+          <span class="li"><span class="ld" style="background:rgba(192,57,43,.85)"></span>Afname overschrijding (kW)</span>
+          <span class="li"><span class="ld" style="background:rgba(230,126,34,.75)"></span>Teruglevering overschrijding (kW)</span>
+        </div>
+        <div class="cw" style="height:240px"><canvas id="cOvsch" role="img" aria-label="Overschrijdingen per maand"></canvas></div>
+      </div>
+      <div class="cd">
+        <div class="ct2"><div class="ac"></div>Top piekwaarden afname
+          <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:#888">Toon:</span>
+            <select id="peakLimitA" style="font-size:11px;padding:2px 5px;border:1px solid #dce6e0;border-radius:5px">
+              <option value="10" selected>Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+            </select>
+          </span>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Timestamp</th><th>Afname (kW)</th><th>GTV (kW)</th><th>Overschrijding (kW)</th><th>Status</th></tr></thead>
+          <tbody id="peakBodyA"></tbody>
+        </table>
+      </div>
+      <div class="cd">
+        <div class="ct2"><div class="ac"></div>Top piekwaarden teruglevering
+          <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;color:#888">Toon:</span>
+            <select id="peakLimitT" style="font-size:11px;padding:2px 5px;border:1px solid #dce6e0;border-radius:5px">
+              <option value="10" selected>Top 10</option>
+              <option value="25">Top 25</option>
+              <option value="50">Top 50</option>
+            </select>
+          </span>
+        </div>
+        <table class="tbl">
+          <thead><tr><th>#</th><th>Timestamp</th><th>Teruglevering (kW)</th><th>GTV-T (kW)</th><th>Overschrijding (kW)</th><th>Status</th></tr></thead>
+          <tbody id="peakBodyT"></tbody>
+        </table>
+      </div>
+    </div>
+    <!-- PIEKANALYSE -->
+    <div class="pn" id="tPiek">
+      <div class="kg" id="pKpis"></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Maandpieken — individueel vs. collectief (kW)</div>
+        <div class="ib">Collectieve piek = maandpiek afname + maandpiek teruglevering van het groepsprofiel. Som individueel = optelling van de hoogste kwartierwaarden per aansluiting. Het verschil is de diversiteitswinst van het GTO.</div>
+        <div class="lg" id="pLeg"></div>
+        <div class="cw" style="height:270px"><canvas id="cPiek" role="img" aria-label="Maandpieken individueel vs collectief"></canvas></div></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>GTO-besparing per maand</div>
+        <table class="tbl"><thead><tr><th>Maand</th><th>Som ind. pieken (kW)</th><th>Coll. piek (kW)</th><th>Diversiteitswinst (kW / %)</th><th>Besparing kW-max (€)</th></tr></thead>
+        <tbody id="gtoBody"></tbody></table></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Besparingssimulatie — extra piekreductie</div>
+        <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
+          <div style="flex:1;min-width:150px"><div class="fg"><label>Piekreductie</label><input type="range" id="simSlider" min="0" max="50" value="10" step="1" style="width:100%"></div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#46962b" id="simVal">10%</div><div style="font-size:10px;color:#999">reductie</div></div>
+        </div>
+        <div class="kg" id="simKpis"></div>
+        <div class="cw" style="height:180px;margin-top:10px"><canvas id="cSim" role="img" aria-label="Besparingssimulatie"></canvas></div></div>
+    </div>
+    <!-- KOSTEN -->
+    <div class="pn" id="tKost">
+      <div class="cd"><div class="ct2"><div class="ac"></div>Kostenoverzicht per aansluiting</div>
+        <div class="cw" style="height:240px"><canvas id="cKost" role="img" aria-label="Kostenoverzicht"></canvas></div></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Kosten detail</div>
+        <table class="tbl"><thead><tr><th>Post</th><th>Vol. afname</th><th>Vol. teruglevering</th><th>Afname (€)</th><th>Teruglevering (€)</th><th>Bedrag (€)</th></tr></thead>
+        <tbody id="kostenBody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+<!-- Modals -->
+<div class="mbg" id="mProj" style="display:none">
+  <div class="mo">
+    <div class="mh">Nieuw project<button class="mx" id="btnCloseProj">×</button></div>
+    <div class="fg" style="margin-bottom:8px"><label>Naam</label><input type="text" id="mPN" placeholder="bijv. Energiehub Terneuzen"></div>
+    <div class="fg" style="margin-bottom:13px"><label>Beschrijving</label><input type="text" id="mPD" placeholder="Optioneel..."></div>
+    <button class="b" id="btnCreateProj" style="width:100%">Aanmaken</button>
+  </div>
+</div>
+<div class="mbg" id="mComp" style="display:none">
+  <div class="mo">
+    <div class="mh"><span id="mCT">Aansluiting toevoegen</span><button class="mx" id="btnCloseComp">×</button></div>
+    <div class="sh">Basisgegevens</div>
+    <div class="fg2" style="margin-bottom:8px">
+      <div class="fg"><label>Naam</label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
+      <div class="fg"><label>EAN</label><input type="text" id="cE" placeholder="18 cijfers"></div>
+    </div>
+    <div class="fg3" style="margin-bottom:8px">
+      <div class="fg"><label>Categorie</label><select id="cCat"><option>Kleinverbruik</option><option selected>Grootverbruik</option></select></div>
+      <div class="fg"><label>GTV afname (kW)</label><input type="number" id="cGA" value="150" min="0"></div>
+      <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="cGT" value="80" min="0"></div>
+    </div>
+    <div class="fg2" style="margin-bottom:8px">
+      <div class="fg"><label>Stedin aansluitcategorie</label>
+        <select id="cSA">
+          <option value="none">— N.v.t. —</option>
+          <option value="LS">LS — €75,40/jr</option>
+          <option value="TrafoMSLS" selected>Trafo MS/LS — €171,84/jr</option>
+          <option value="MSdist">MS-distributie — €1.505/jr</option>
+          <option value="TrafoHS1">Trafo HS+TS/MS — €3.958,95/jr</option>
+          <option value="TrafoHS2">Trafo HS+TS/MS — €17.149,08/jr</option>
+          <option value="TS">TS — Maatwerk</option>
+        </select>
+      </div>
+      <div class="fg"><label>Stedin transportcategorie</label>
+        <select id="cST">
+          <option value="none">— N.v.t. —</option>
+          <option value="LS">LS — t/m 50 kW</option>
+          <option value="TrafoMSLS" selected>Trafo MS/LS — 51–150 kW</option>
+          <option value="MS">MS — 151–1.500 kW</option>
+          <option value="TrafoHSres">Trafo HS+TS/MS reserve</option>
+          <option value="TrafoHS">Trafo HS+TS/MS</option>
+          <option value="TSres">TS reserve</option>
+          <option value="TS">TS</option>
+        </select>
+      </div>
+    </div>
+    <div class="sh">Energieprijzen</div>
+    <div class="tr" id="pTgl">
+      <button class="tg on" data-pt="static">Statisch (€/kWh)</button>
+      <button class="tg" data-pt="dynamic">Dynamisch (CSV)</button>
+    </div>
+    <div id="pStatic" class="fg2">
+      <div class="fg"><label>Prijs afname (€/kWh)</label><input type="number" id="cPA" value="0.12" step="0.001"></div>
+      <div class="fg"><label>Terugleververgoeding (€/kWh)</label><input type="number" id="cPT2" value="0.08" step="0.001"></div>
+    </div>
+    <div id="pDynamic" style="display:none"><div class="fg"><label>Dynamisch CSV</label><textarea id="cPD" placeholder="2024-01-01T00:00:00;0.10;0.06"></textarea></div></div>
+    <div class="sh">Meetdata — CSV: kWh/kwartier ×4=kW · JSON: kWh/kwartier ×4=kW</div>
+    <div class="drop" id="cDrop">
+      <div class="dtt">Kwartierdata uploaden</div>
+      <div class="dts">CSV: timestamp;kWh_per_kwartier | JSON: Netbeheer NL dp-meetdata</div>
+      <button class="dbtn" type="button" id="cDropBtn">Bestand kiezen</button>
+      <input type="file" id="cFileIn" accept=".csv,.json" style="display:none">
+      <div class="pls" id="cPills"></div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:12px">
+      <button class="b" id="btnSaveComp" style="flex:1">Opslaan</button>
+      <button class="b d" id="btnDelComp" style="display:none">Verwijderen</button>
+    </div>
+  </div>
+</div>
+<div class="mbg" id="mRap" style="display:none">
+  <div class="mo" style="max-width:780px;padding:0;overflow:hidden">
+    <div style="background:#242b38;padding:11px 16px;display:flex;align-items:center;justify-content:space-between">
+      <span style="color:#fff;font-weight:700;font-size:13px">Rapport — druk af voor PDF</span>
+      <div style="display:flex;gap:6px"><button class="b" id="btnPrint">Afdrukken / PDF</button><button class="mx" id="btnCloseRap" style="color:#fff">×</button></div>
+    </div>
+    <div id="rContent" style="overflow-y:auto;max-height:80vh;padding:24px 28px;background:#fff;font-family:Tahoma,Arial,sans-serif;font-size:10pt;color:#242b38;line-height:1.6"></div>
+  </div>
+</div>
+
+<!-- JavaScript modules — volgorde is belangrijk (globals eerst, app.js als laatste) -->
+<script src="tarieven.js"></script>
+<script src="db.js"></script>
+<script src="parsers.js"></script>
+<script src="charts/jaarprofiel.js"></script>
+<script src="charts/weekprofiel.js"></script>
+<script src="charts/bdk.js"></script>
+<script src="charts/overschrijdingen.js"></script>
+<script src="charts/piekanalyse.js"></script>
+<script src="charts/kosten.js"></script>
+<script src="rapport.js"></script>
+<script src="app.js"></script>
+
+</body></html>
