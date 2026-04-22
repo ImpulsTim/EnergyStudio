@@ -2,6 +2,7 @@
 var S={projects:[],activeId:null};
 var editId=null,pendData=null,pendName='',pType='static';
 var CH={},_piek=null,_jaarState=null,_jZoom=1;
+var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],activeScenId:'basis',scenResults:{}};
 
 // Hulpfuncties
 function uid(){return Math.random().toString(36).slice(2,10);}
@@ -30,7 +31,7 @@ function setKpi(id,val,alert){var el=document.getElementById(id);el.textContent=
 function mndLabel(mnds,m){var parts=m.split('-');var mo=parseInt(parts[1]);var y=parts[0];var multi=mnds.some(function(x){return x.slice(0,4)!==mnds[0].slice(0,4);});return MND[mo-1]+(multi?" '"+y.slice(2):'');}
 
 // Renderen
-function renderAll(){renderProjSel();renderSidebar();renderOverzicht();}
+function renderAll(){renderProjSel();renderSidebar();renderOverzicht();try{renderScenarioSidebar();}catch(e){}}
 
 function renderProjSel(){
   var s=document.getElementById('projSel');
@@ -211,6 +212,11 @@ async function runAnalysis(){
   try{drawOvsch(allTs,gA,gT,gtvA,gtvT);}catch(e){console.error('drawOvsch:',e);}
   try{drawPiek(allTs,perKw,grpKw,withData);}catch(e){console.error('drawPiek:',e);}
   try{drawKosten(allTs,perKw,withData);}catch(e){console.error('drawKosten:',e);}
+  var totKm=withData.reduce(function(s,c){return s+(ST[c.stedinT||'none']||ST.none).km;},0);
+  _optim.baseKw=grpKw.slice();_optim.allTs=allTs.slice();
+  _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.avgKm=totKm/Math.max(1,withData.length);
+  _optim.perKw=perKw;_optim.withData=withData;
+  try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}
   notify('Analyse klaar — '+allTs.length+' overlappende kwartierwaarden');
 }
 
@@ -228,18 +234,64 @@ function genDemo(idx){
 }
 
 // Exporteren / importeren / downloaden
+function openExportModal(){
+  var p=ap();
+  document.getElementById('expProjName').textContent=p?p.name:'—';
+  document.getElementById('expScopeCurrent').checked=true;
+  document.getElementById('expChkTs').checked=true;
+  document.getElementById('expChkScen').checked=true;
+  updateExpInfo();
+  showM('mExp');
+}
+
+function updateExpInfo(){
+  var p=ap();
+  var scope=document.querySelector('input[name="expScope"]:checked').value;
+  var inclTs=document.getElementById('expChkTs').checked;
+  var inclScen=document.getElementById('expChkScen').checked;
+  var projs=scope==='current'?(p?[p]:[]):S.projects;
+  var nConn=projs.reduce(function(s,pr){return s+pr.companies.length;},0);
+  var nScen=projs.reduce(function(s,pr){return s+((pr.scenarios&&pr.scenarios.length)||0);},0);
+  var parts=[];
+  parts.push(projs.length+' project'+(projs.length!==1?'en':''));
+  parts.push(nConn+' aansluiting'+(nConn!==1?'en':''));
+  if(inclTs)parts.push('meetdata');
+  if(inclScen&&nScen>0)parts.push(nScen+' scenario'+(nScen!==1?'s':''));
+  document.getElementById('expInfo').textContent='Export bevat: '+parts.join(' · ');
+}
+
 async function doExportData(){
+  var p=ap();
+  var scope=document.querySelector('input[name="expScope"]:checked').value;
+  var inclTs=document.getElementById('expChkTs').checked;
+  var inclScen=document.getElementById('expChkScen').checked;
   try{
+    var projs=scope==='current'?(p?[p]:[]):S.projects;
+    // Diepe kopie zodat we veilig kunnen strippen
+    var projsCopy=JSON.parse(JSON.stringify(projs));
+    if(!inclScen)projsCopy.forEach(function(pr){delete pr.scenarios;});
     var tsData={};
-    for(var i=0;i<S.projects.length;i++){for(var j=0;j<S.projects[i].companies.length;j++){var c=S.projects[i].companies[j];var d=await dbGet('ts',c.id);if(d&&d.length)tsData[c.id]=d;}}
-    var json=JSON.stringify({version:4,exportDate:new Date().toISOString(),state:S,timeseries:tsData});
+    if(inclTs){
+      for(var i=0;i<projsCopy.length;i++){
+        for(var j=0;j<projsCopy[i].companies.length;j++){
+          var c=projsCopy[i].companies[j];
+          var d=await dbGet('ts',c.id);
+          if(d&&d.length)tsData[c.id]=d;
+        }
+      }
+    }
+    var activeId=scope==='current'&&p?p.id:S.activeId;
+    var payload={version:4,exportDate:new Date().toISOString(),state:{projects:projsCopy,activeId:activeId},timeseries:tsData};
+    var json=JSON.stringify(payload);
     var bytes=new TextEncoder().encode(json);var bin='';var chunk=8192;
     for(var i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
+    var safeName=(scope==='current'&&p)?p.name.replace(/[^a-z0-9]/gi,'-').toLowerCase():'alle-projecten';
     var a=document.createElement('a');
     a.setAttribute('href','data:application/json;base64,'+btoa(bin));
-    a.setAttribute('download','egp-data-'+new Date().toISOString().slice(0,10)+'.json');
+    a.setAttribute('download','egp-'+safeName+'-'+new Date().toISOString().slice(0,10)+'.json');
     document.body.appendChild(a);a.click();document.body.removeChild(a);
-    notify('Data geëxporteerd');
+    hideM('mExp');
+    notify('Data geëxporteerd'+(scope==='current'?' ('+p.name+')':''));
   }catch(e){notify('Export mislukt: '+e.message,false);}
 }
 
@@ -266,22 +318,6 @@ async function doImportData(file){
   r.readAsText(file,'UTF-8');
 }
 
-function doDownloadApp(){
-  try{
-    var html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;
-    var bytes=new TextEncoder().encode(html);var bin='';var chunk=8192;
-    for(var i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
-    var a=document.createElement('a');
-    a.setAttribute('href','data:text/html;base64,'+btoa(bin));
-    a.setAttribute('download','energiegroepsprofiel-impuls-zeeland.html');
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    notify('App gedownload!');
-  }catch(e){
-    var w=window.open('','_blank');
-    if(w){w.document.write('<!DOCTYPE html>\n'+document.documentElement.outerHTML);w.document.close();notify('Geopend in nieuw tabblad — Ctrl+S om op te slaan');}
-    else notify('Sta pop-ups toe',false);
-  }
-}
 
 // Event listeners
 document.addEventListener('DOMContentLoaded',function(){
@@ -300,14 +336,15 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   // Project select
   document.getElementById('projSel').addEventListener('change',function(){
-    S.activeId=this.value;resetCH();renderAll();
+    S.activeId=this.value;_optim.activeScenId='basis';_optim.scenResults={};_optim.baseKw=[];
+    try{document.getElementById('scenBanner').style.display='none';}catch(e){}
+    resetCH();renderAll();
   });
   // Header knoppen
   document.getElementById('btnNieuwProj').addEventListener('click',function(){showM('mProj');});
   document.getElementById('btnDelProj').addEventListener('click',delProj);
   document.getElementById('btnRapport').addEventListener('click',doExportRapport);
-  document.getElementById('btnExpData').addEventListener('click',doExportData);
-  document.getElementById('btnDlApp').addEventListener('click',doDownloadApp);
+  document.getElementById('btnExpData').addEventListener('click',openExportModal);
   document.getElementById('impIn').addEventListener('change',function(){doImportData(this.files[0]);this.value='';});
   // Zijbalk
   document.getElementById('btnAddComp').addEventListener('click',openAddComp);
@@ -326,14 +363,21 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnCloseProj').addEventListener('click',function(){hideM('mProj');});
   document.getElementById('btnCloseComp').addEventListener('click',function(){hideM('mComp');});
   document.getElementById('btnCloseRap').addEventListener('click',function(){hideM('mRap');});
+  document.getElementById('btnCloseExp').addEventListener('click',function(){hideM('mExp');});
   document.getElementById('mProj').addEventListener('click',function(e){if(e.target===this)hideM('mProj');});
   document.getElementById('mComp').addEventListener('click',function(e){if(e.target===this)hideM('mComp');});
   document.getElementById('mRap').addEventListener('click',function(e){if(e.target===this)hideM('mRap');});
+  document.getElementById('mExp').addEventListener('click',function(e){if(e.target===this)hideM('mExp');});
   // Modal knoppen
   document.getElementById('btnCreateProj').addEventListener('click',createProj);
   document.getElementById('btnSaveComp').addEventListener('click',saveComp);
   document.getElementById('btnDelComp').addEventListener('click',deleteComp);
   document.getElementById('btnPrint').addEventListener('click',printRapport);
+  document.getElementById('btnDoExp').addEventListener('click',doExportData);
+  // Export modal — live info bijwerken bij wijziging scope of opties
+  document.querySelectorAll('input[name="expScope"]').forEach(function(r){r.addEventListener('change',updateExpInfo);});
+  document.getElementById('expChkTs').addEventListener('change',updateExpInfo);
+  document.getElementById('expChkScen').addEventListener('change',updateExpInfo);
   // Zoom
   document.getElementById('btnZoomIn').addEventListener('click',function(){_jZoom=Math.max(0.03,_jZoom*0.5);panJ();});
   document.getElementById('btnZoomUit').addEventListener('click',function(){_jZoom=Math.min(1,_jZoom*2);panJ();});
@@ -349,6 +393,8 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   // Upload
   initUpload();
+  // Scenario's
+  try{initScenarios();}catch(e){console.error('initScenarios:',e);}
 });
 
 // Opstarten

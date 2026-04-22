@@ -280,7 +280,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Energiegroepsprofiel</title>
+<title>Energy Studio — Impuls Zeeland</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <link rel="stylesheet" href="style.css">
@@ -288,21 +288,22 @@
 <body id="artifacts-component-root-html">
 <div class="nf" id="nf"></div>
 <div class="hdr">
-  <svg width="32" height="32" viewBox="0 0 44 44" fill="none">
-    <circle cx="22" cy="22" r="21" stroke="#46962b" stroke-width="1.5" opacity=".4"></circle>
-    <path d="M14 22 Q18 14 22 22 Q26 30 30 22" stroke="#fbba00" stroke-width="2.5" fill="none" stroke-linecap="round"></path>
-    <path d="M14 22 Q18 16 22 22 Q26 28 30 22" stroke="#a6d6cc" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"></path>
-    <path d="M14 22 Q18 18 22 22 Q26 26 30 22" stroke="#46962b" stroke-width="1.5" fill="none" stroke-linecap="round" opacity=".9"></path>
-  </svg>
-  <div><div class="logo-txt">Impuls <span>Zeeland</span></div><div class="logo-sub">Energiegroepsprofiel</div></div>
+  <a href="https://www.impulszeeland.nl" target="_blank" rel="noopener" class="hdr-logo-link" title="Ga naar impulszeeland.nl">
+    <img src="https://www.impulszeeland.nl/assets/img/logo.svg" alt="Impuls Zeeland" class="hdr-logo-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="hdr-logo-fallback" style="display:none"><div class="logo-txt">Impuls <span>Zeeland</span></div></div>
+  </a>
+  <div class="hdr-divider"></div>
+  <div class="hdr-brand">
+    <div class="hdr-brand-name">ENERGY <span>STUDIO</span></div>
+    <div class="hdr-brand-by">by Impuls Zeeland</div>
+  </div>
   <div class="hdr-r">
     <select class="ps" id="projSel"><option value="f2bfdkol" selected>Mijn eerste project</option></select>
-    <button class="b o" id="btnNieuwProj">+ Project</button>
-    <button class="b d" id="btnDelProj">Verwijder</button>
-    <button class="b tc" id="btnRapport">Rapport</button>
-    <button class="b o" id="btnExpData">Data exp.</button>
-    <label class="b o" style="cursor:pointer">Data imp.<input type="file" id="impIn" accept=".json" style="display:none"></label>
-    <button class="b y" id="btnDlApp">App dl.</button>
+    <button class="b o" id="btnNieuwProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Project</button>
+    <button class="b d" id="btnDelProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>Verwijder</button>
+    <button class="b tc" id="btnRapport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport</button>
+    <button class="b o" id="btnExpData"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Exporteer</button>
+    <label class="b o" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Importeer<input type="file" id="impIn" accept=".json" style="display:none"></label>
   </div>
 </div>
 <div class="app">
@@ -324,8 +325,20 @@
       <div class="st">Analyse</div>
       <button class="b dk" id="btnRun" style="width:100%">Bereken groepsprofiel</button>
     </div>
+    <div style="margin-top:12px">
+      <div class="st">Scenario's</div>
+      <div class="cl" id="scenList">
+        <div class="ci s"><div class="cn"><div class="sck on" data-scen-id="basis"></div>Basis</div><div class="cm">Gemeten groepsprofiel</div></div>
+      </div>
+      <button class="b" id="btnAddScen" style="width:100%;margin-top:6px;background:#e67e22">+ Scenario toevoegen</button>
+    </div>
   </div>
   <div class="ct">
+    <div class="scen-banner" id="scenBanner" style="display:none">
+      <span class="sb-lbl">⚡ Actief: <strong id="scenBannerName"></strong></span>
+      <span style="opacity:.75;font-size:10px;font-weight:400">Alle grafieken tonen scenariodata</span>
+      <button id="btnScenBack">← Terug naar basis</button>
+    </div>
     <div class="tabs">
       <button class="tab on" data-tab="tOv">Overzicht</button>
       <button class="tab" data-tab="tJaar">Jaarprofiel</button>
@@ -334,6 +347,8 @@
       <button class="tab" data-tab="tOvsch">Overschrijdingen</button>
       <button class="tab" data-tab="tPiek">Piekanalyse</button>
       <button class="tab" data-tab="tKost">Kosten</button>
+      <div class="tab-sep"></div>
+      <button class="tab tab-verg" data-tab="tVerg">⚖ Vergelijking</button>
     </div>
     <!-- OVERZICHT -->
     <div class="pn on" id="tOv">
@@ -443,10 +458,13 @@
     <!-- PIEKANALYSE -->
     <div class="pn" id="tPiek">
       <div class="kg" id="pKpis"></div>
-      <div class="cd"><div class="ct2"><div class="ac"></div>Maandpieken — individueel vs. collectief (kW)</div>
-        <div class="ib">Collectieve piek = maandpiek afname + maandpiek teruglevering van het groepsprofiel. Som individueel = optelling van de hoogste kwartierwaarden per aansluiting. Het verschil is de diversiteitswinst van het GTO.</div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Maandpieken — individueel vs. collectief</div>
+        <div class="ib">Som individueel = optelling van de hoogste kwartierwaarden per aansluiting. Collectief = maandpiek van het groepsprofiel. Afname en teruglevering worden apart weergegeven.</div>
         <div class="lg" id="pLeg"></div>
-        <div class="cw" style="height:270px"><canvas id="cPiek" role="img" aria-label="Maandpieken individueel vs collectief"></canvas></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:240px"><canvas id="cPiekA" role="img"></canvas></div></div>
+          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:240px"><canvas id="cPiekT" role="img"></canvas></div></div>
+        </div></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>GTO-besparing per maand</div>
         <table class="tbl"><thead><tr><th>Maand</th><th>Som ind. pieken (kW)</th><th>Coll. piek (kW)</th><th>Diversiteitswinst (kW / %)</th><th>Besparing kW-max (€)</th></tr></thead>
         <tbody id="gtoBody"></tbody></table></div>
@@ -456,7 +474,28 @@
           <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#46962b" id="simVal">10%</div><div style="font-size:10px;color:#999">reductie</div></div>
         </div>
         <div class="kg" id="simKpis"></div>
-        <div class="cw" style="height:180px;margin-top:10px"><canvas id="cSim" role="img" aria-label="Besparingssimulatie"></canvas></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
+          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:170px"><canvas id="cSimA" role="img"></canvas></div></div>
+          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:170px"><canvas id="cSimT" role="img"></canvas></div></div>
+        </div></div>
+    </div>
+    <!-- VERGELIJKING -->
+    <div class="pn" id="tVerg">
+      <div class="verg-empty" id="vergEmpty">
+        <div class="big">⚖</div>
+        Voeg een scenario toe en voer de analyse uit om de vergelijking te zien.
+      </div>
+      <div id="vergContent" style="display:none">
+        <div class="cd">
+          <div class="ct2"><div class="ac ac-verg"></div>Scenario-vergelijking</div>
+          <div style="overflow-x:auto"><table class="verg-tbl" id="vergTbl"></table></div>
+        </div>
+        <div class="cd">
+          <div class="ct2"><div class="ac ac-verg"></div>Maandpieken afname — basis vs. scenario's (kW)</div>
+          <div class="cw" style="height:240px"><canvas id="cVergPiek" role="img"></canvas></div>
+        </div>
+        <div id="vergAssets"></div>
+      </div>
     </div>
     <!-- KOSTEN -->
     <div class="pn" id="tKost">
@@ -549,6 +588,80 @@
   </div>
 </div>
 
+<div class="mbg" id="mExp" style="display:none">
+  <div class="mo" style="max-width:420px">
+    <div class="mh">Data exporteren<button class="mx" id="btnCloseExp">×</button></div>
+    <div class="sh">Projecten</div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:14px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="radio" name="expScope" value="current" id="expScopeCurrent" checked style="accent-color:#46962b;flex-shrink:0">
+        <span>Huidig project: <strong id="expProjName"></strong></span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="radio" name="expScope" value="all" style="accent-color:#46962b;flex-shrink:0">
+        <span>Alle projecten</span>
+      </label>
+    </div>
+    <div class="sh">Inhoud</div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:16px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="expChkTs" checked style="accent-color:#46962b;flex-shrink:0">
+        <span>Meetdata (kwartierwaarden per aansluiting)</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="expChkScen" checked style="accent-color:#46962b;flex-shrink:0">
+        <span>Scenario-configuratie (PV, batterij, strategieën)</span>
+      </label>
+    </div>
+    <div class="ib2" id="expInfo" style="margin-bottom:12px"></div>
+    <button class="b" id="btnDoExp" style="width:100%">Exporteren</button>
+  </div>
+</div>
+
+<div class="mbg" id="mScen" style="display:none">
+  <div class="mo">
+    <div class="mh">Scenario configureren<button class="mx" id="btnCloseScen">×</button></div>
+    <div class="fg" style="margin-bottom:10px"><label>Naam</label><input type="text" id="sName" placeholder="bijv. Zonnepanelen + Batterij"></div>
+    <div class="ms-toggle" id="togSolar"><div class="tog"></div>☀ Zonnepanelen</div>
+    <div class="scen-fields" id="sfSolar" style="display:none">
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="fg"><label>Vermogen (kWp)</label><input type="number" id="sKwp" value="100" min="1" max="5000"></div>
+        <div class="fg"><label>Performance ratio (%)</label><input type="number" id="sPr" value="85" min="50" max="100"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="fg"><label>Tilt (°)</label><input type="number" id="sTilt" value="35" min="0" max="90"></div>
+        <div class="fg"><label>Azimut (° v. Zuid)</label><input type="number" id="sAzimut" value="0" min="-90" max="90"></div>
+      </div>
+    </div>
+    <div class="ms-toggle" id="togBat"><div class="tog"></div>⚡ Batterijopslag</div>
+    <div class="scen-fields" id="sfBat" style="display:none">
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="fg"><label>Capaciteit (kWh)</label><input type="number" id="sCap" value="200" min="1"></div>
+        <div class="fg"><label>Max vermogen (kW)</label><input type="number" id="sPMax" value="50" min="1"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="fg"><label>Laadrendement (%)</label><input type="number" id="sEtaC" value="95" min="50" max="100"></div>
+        <div class="fg"><label>Ontlaadrendement (%)</label><input type="number" id="sEtaD" value="95" min="50" max="100"></div>
+      </div>
+      <div class="fg2" style="margin-bottom:8px">
+        <div class="fg"><label>Min SoC (%)</label><input type="number" id="sSocMin" value="10" min="0" max="50"></div>
+        <div class="fg"><label>Max SoC (%)</label><input type="number" id="sSocMax" value="90" min="50" max="100"></div>
+      </div>
+      <div class="sh">Strategie</div>
+      <div class="strat-opt">
+        <label><input type="radio" name="sBatStrat" value="peakshaving" checked><span><strong>Peak shaving</strong> — minimaliseer maandpiek (perfecte voorkennis)</span></label>
+        <label><input type="radio" name="sBatStrat" value="autarkie"><span><strong>Maximale autarkie</strong> — minimaliseer netto import</span></label>
+        <label><input type="radio" name="sBatStrat" value="maxsolar"><span><strong>Maximaal zonneverbruik</strong> — laad alleen uit PV-surplus</span></label>
+        <label class="disabled"><input type="radio" name="sBatStrat" value="rendement" disabled><span><strong>Maximaal rendement</strong> — dynamische prijzen (binnenkort)</span></label>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:14px">
+      <button class="b" id="btnSaveScen" style="flex:1;background:#e67e22">Opslaan</button>
+      <button class="b d" id="btnCancelScen">Annuleren</button>
+    </div>
+  </div>
+</div>
+
 <!-- JavaScript modules — volgorde is belangrijk (globals eerst, app.js als laatste) -->
 <script src="tarieven.js"></script>
 <script src="db.js"></script>
@@ -559,6 +672,7 @@
 <script src="charts/overschrijdingen.js"></script>
 <script src="charts/piekanalyse.js"></script>
 <script src="charts/kosten.js"></script>
+<script src="charts/optimalisatie.js"></script>
 <script src="rapport.js"></script>
 <script src="app.js"></script>
 
