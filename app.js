@@ -2,7 +2,7 @@
 var S={projects:[],activeId:null};
 var editId=null,pendData=null,pendName='',pType='static';
 var CH={},_piek=null,_jaarState=null,_jZoom=1;
-var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],activeScenId:'basis',scenResults:{}};
+var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],allData:[],activeScenId:'basis',scenResults:{}};
 
 // Hulpfuncties
 function uid(){return Math.random().toString(36).slice(2,10);}
@@ -41,12 +41,16 @@ function renderProjSel(){
 function renderSidebar(){
   var p=ap();var list=document.getElementById('cList');
   if(!p||!p.companies.length){list.innerHTML='<div style="padding:10px 0;text-align:center;font-size:11px;color:#aaa">Nog geen aansluitingen</div>';return;}
+  // Bepaal welke aansluitingen in het actieve scenario zitten
+  var activeSc=null;
+  try{var sid=_optim.activeScenId;if(sid&&sid!=='basis')activeSc=_findScen(sid);}catch(e){}
+  var activeIds=(activeSc&&activeSc.connectionIds&&activeSc.connectionIds.length)?activeSc.connectionIds:null;
   var html='';
   for(var i=0;i<p.companies.length;i++){
     var c=p.companies[i];
-    html+='<div class="ci '+(c.selected!==false?'s':'')+'">';
-    html+='<div class="cn"><div class="ck '+(c.selected!==false?'on':'')+'" data-cid="'+c.id+'"></div>';
-    html+='<span class="dt" style="background:'+PAL[i%PAL.length]+'"></span>'+c.name+'</div>';
+    var inScen=!activeIds||activeIds.indexOf(c.id)!==-1;
+    html+='<div class="ci s'+(inScen?'':' ci-dim')+'">';
+    html+='<div class="cn"><span class="dt" style="background:'+PAL[i%PAL.length]+'"></span>'+c.name+'</div>';
     html+='<div class="cm">'+c.category+' · GTV '+c.gtvA+'kW · <span id="pt_'+c.id+'">…</span> pt</div>';
     html+='<div style="margin-top:4px"><button class="b" style="font-size:9px;padding:2px 6px;background:#f0f4f2;color:#46962b" data-editid="'+c.id+'">Bewerken</button></div>';
     html+='</div>';
@@ -58,6 +62,29 @@ function renderSidebar(){
       if(el)el.textContent=(d&&d.length)||0;
     }).catch(function(){});
   });
+}
+
+function updateKpisForRes(res){
+  if(!_optim.allTs.length)return;
+  var grpKw=res.grpKw||_optim.baseKw;
+  var wd=res.withData||_optim.withData;
+  var gtvA=(res.gtvA!=null&&res.gtvA>0)?res.gtvA:_optim.gtvA;
+  var gtvT=(res.gtvT!=null&&res.gtvT>0)?res.gtvT:_optim.gtvT;
+  var gA=grpKw.map(function(v){return Math.max(0,v);});
+  var gT=grpKw.map(function(v){return Math.max(0,-v);});
+  var maxA=gA.length?Math.max.apply(null,gA):0;
+  var maxT=gT.length?Math.max.apply(null,gT):0;
+  var ovA=gA.filter(function(v){return v>gtvA;}).length;
+  var ovT=gT.filter(function(v){return v>gtvT;}).length;
+  var vol=grpKw.reduce(function(s,v){return s+Math.abs(v);},0)*0.25/1000;
+  document.getElementById('kOvlp').textContent=_optim.allTs.length;
+  document.getElementById('kN').textContent=wd.length;
+  setKpi('kPA',maxA.toFixed(0),maxA>gtvA);
+  setKpi('kPT',maxT.toFixed(0),maxT>gtvT);
+  setKpi('kOA',ovA,ovA>0);
+  setKpi('kOT',ovT,ovT>0);
+  document.getElementById('kVol').textContent=vol.toFixed(1);
+  document.getElementById('gtvHint').textContent='Afname: '+gtvA+' kW | Teruglevering: '+gtvT+' kW';
 }
 
 function renderOverzicht(){
@@ -172,13 +199,16 @@ function setPT(type){
 
 // Analyse
 async function runAnalysis(){
-  var cos=selC();if(!cos.length){notify('Selecteer minimaal één aansluiting',false);return;}
+  var p=ap();
+  if(!p||!p.companies.length){notify('Voeg eerst aansluitingen toe',false);return;}
+  // Laad data voor ALLE aansluitingen — basis = altijd de volledige groep
   var withData=[];
-  for(var i=0;i<cos.length;i++){
-    var d=await dbGet('ts',cos[i].id)||[];
-    if(!d.length){d=genDemo(withData.length);notify('Demodata voor: '+cos[i].name);}
-    withData.push(Object.assign({},cos[i],{data:d}));
+  for(var i=0;i<p.companies.length;i++){
+    var d=await dbGet('ts',p.companies[i].id)||[];
+    if(!d.length){d=genDemo(withData.length);notify('Demodata voor: '+p.companies[i].name);}
+    withData.push(Object.assign({},p.companies[i],{data:d}));
   }
+  _optim.allData=withData;
   resetCH();
   var somA=withData.reduce(function(s,c){return s+(c.gtvA||150);},0);
   var somT=withData.reduce(function(s,c){return s+(c.gtvT||80);},0);
@@ -188,7 +218,6 @@ async function runAnalysis(){
   var gtvT=isNaN(inGT)?somT:inGT;
   document.getElementById('gGtvA').placeholder=String(somA);
   document.getElementById('gGtvT').placeholder=String(somT);
-  document.getElementById('gtvHint').textContent='Afname: '+gtvA+' kW | Teruglevering: '+gtvT+' kW';
   var tsSets=withData.map(function(c){var s={};c.data.forEach(function(d){s[d.ts]=1;});return s;});
   var allTs=Object.keys(tsSets[0]).filter(function(ts){return tsSets.every(function(s){return s[ts];});}).sort();
   if(!allTs.length){notify('Geen overlappende timestamps',false);return;}
@@ -196,16 +225,6 @@ async function runAnalysis(){
   var grpKw=allTs.map(function(_,i){return perKw.reduce(function(s,a){return s+a[i];},0);});
   var gA=grpKw.map(function(v){return Math.max(0,v);});
   var gT=grpKw.map(function(v){return Math.max(0,-v);});
-  var maxA=gA.length?Math.max.apply(null,gA):0;
-  var maxT=gT.length?Math.max.apply(null,gT):0;
-  var ovA=gA.filter(function(v){return v>gtvA;}).length;
-  var ovT=gT.filter(function(v){return v>gtvT;}).length;
-  var vol=grpKw.reduce(function(s,v){return s+Math.abs(v);},0)*0.25/1000;
-  document.getElementById('kOvlp').textContent=allTs.length;
-  document.getElementById('kN').textContent=ap().companies.length;
-  setKpi('kPA',maxA.toFixed(0),maxA>gtvA);setKpi('kPT',maxT.toFixed(0),maxT>gtvT);
-  setKpi('kOA',ovA,ovA>0);setKpi('kOT',ovT,ovT>0);
-  document.getElementById('kVol').textContent=vol.toFixed(1);
   try{drawJaar(allTs,perKw,grpKw,withData,gtvA,gtvT);}catch(e){console.error('drawJaar:',e);}
   try{drawWeek(allTs,grpKw,perKw,withData,gtvA,gtvT);}catch(e){console.error('drawWeek:',e);}
   try{drawBDK(perKw,gA,gT,withData,gtvA,gtvT);}catch(e){console.error('drawBDK:',e);}
@@ -216,6 +235,7 @@ async function runAnalysis(){
   _optim.baseKw=grpKw.slice();_optim.allTs=allTs.slice();
   _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.avgKm=totKm/Math.max(1,withData.length);
   _optim.perKw=perKw;_optim.withData=withData;
+  updateKpisForRes({grpKw:grpKw,withData:withData,gtvA:gtvA,gtvT:gtvT});
   try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}
   notify('Analyse klaar — '+allTs.length+' overlappende kwartierwaarden');
 }
@@ -343,18 +363,16 @@ document.addEventListener('DOMContentLoaded',function(){
   // Header knoppen
   document.getElementById('btnNieuwProj').addEventListener('click',function(){showM('mProj');});
   document.getElementById('btnDelProj').addEventListener('click',delProj);
-  document.getElementById('btnRapport').addEventListener('click',doExportRapport);
+  document.getElementById('btnRapport').addEventListener('click',openRapportModal);
   document.getElementById('btnExpData').addEventListener('click',openExportModal);
   document.getElementById('impIn').addEventListener('change',function(){doImportData(this.files[0]);this.value='';});
   // Zijbalk
   document.getElementById('btnAddComp').addEventListener('click',openAddComp);
   document.getElementById('btnRun').addEventListener('click',runAnalysis);
-  // Gedelegeerd: bewerk-knoppen & checkboxen in zijbalk/tabel
+  // Gedelegeerd: bewerk-knoppen in zijbalk/tabel
   document.getElementById('cList').addEventListener('click',function(e){
     var editBtn=e.target.closest('[data-editid]');
-    var chk=e.target.closest('.ck');
     if(editBtn)openEditComp(editBtn.getAttribute('data-editid'));
-    else if(chk){var cid=chk.getAttribute('data-cid');var p=ap();var c=null;for(var i=0;i<p.companies.length;i++){if(p.companies[i].id===cid){c=p.companies[i];break;}}if(c){c.selected=c.selected===false?true:false;saveMeta();renderSidebar();renderOverzicht();}}
   });
   document.getElementById('ovBody').addEventListener('click',function(e){
     var editBtn=e.target.closest('[data-editid]');if(editBtn)openEditComp(editBtn.getAttribute('data-editid'));
@@ -364,15 +382,20 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnCloseComp').addEventListener('click',function(){hideM('mComp');});
   document.getElementById('btnCloseRap').addEventListener('click',function(){hideM('mRap');});
   document.getElementById('btnCloseExp').addEventListener('click',function(){hideM('mExp');});
+  document.getElementById('btnCloseRapOpts').addEventListener('click',function(){hideM('mRapOpts');});
+  document.getElementById('btnCloseRapOpts2').addEventListener('click',function(){hideM('mRapOpts');});
   document.getElementById('mProj').addEventListener('click',function(e){if(e.target===this)hideM('mProj');});
   document.getElementById('mComp').addEventListener('click',function(e){if(e.target===this)hideM('mComp');});
   document.getElementById('mRap').addEventListener('click',function(e){if(e.target===this)hideM('mRap');});
+  document.getElementById('mRapOpts').addEventListener('click',function(e){if(e.target===this)hideM('mRapOpts');});
   document.getElementById('mExp').addEventListener('click',function(e){if(e.target===this)hideM('mExp');});
   // Modal knoppen
   document.getElementById('btnCreateProj').addEventListener('click',createProj);
   document.getElementById('btnSaveComp').addEventListener('click',saveComp);
   document.getElementById('btnDelComp').addEventListener('click',deleteComp);
-  document.getElementById('btnPrint').addEventListener('click',printRapport);
+  document.getElementById('btnDownloadRap').addEventListener('click',downloadRapportHTML);
+  document.getElementById('btnPrint').addEventListener('click',printPreviewRapport);
+  document.getElementById('btnGenRap').addEventListener('click',generateRapport);
   document.getElementById('btnDoExp').addEventListener('click',doExportData);
   // Export modal — live info bijwerken bij wijziging scope of opties
   document.querySelectorAll('input[name="expScope"]').forEach(function(r){r.addEventListener('change',updateExpInfo);});

@@ -49,13 +49,21 @@ function renderScenarioSidebar() {
   var active = _optim.activeScenId || 'basis';
   var html = '';
 
+  var bGtvLine = _optim.gtvA ? 'GTV ' + _optim.gtvA + ' / ' + _optim.gtvT + ' kW' : 'Gemeten groepsprofiel';
   html += '<div class="ci ' + (active === 'basis' ? 's' : '') + '">' +
     '<div class="cn"><div class="sck ' + (active === 'basis' ? 'on' : '') + '" data-scen-id="basis"></div>Basis</div>' +
-    '<div class="cm">Gemeten groepsprofiel</div></div>';
+    '<div class="cm">' + bGtvLine + '</div></div>';
 
+  var totalCos = p ? p.companies.length : 0;
   scens.forEach(function (sc) {
     var isActive = active === sc.id;
     var tags = [];
+    if (sc.connectionIds && sc.connectionIds.length && sc.connectionIds.length < totalCos)
+      tags.push('👥 ' + sc.connectionIds.length + '/' + totalCos);
+    var scRes = _optim.scenResults[sc.id];
+    var gtvLine = scRes ? ('GTV ' + scRes.gtvA + ' / ' + scRes.gtvT + ' kW') :
+                  (sc.gtvA ? 'GTV ' + sc.gtvA + ' / ' + sc.gtvT + ' kW' : '');
+    if (gtvLine) tags.push(gtvLine);
     if (sc.solar && sc.solar.enabled) tags.push('☀ ' + sc.solar.kWp + ' kWp');
     if (sc.bat && sc.bat.enabled) tags.push('⚡ ' + sc.bat.cap + ' kWh');
     html += '<div class="ci ' + (isActive ? 's' : '') + '">' +
@@ -73,9 +81,24 @@ function renderScenarioSidebar() {
 
 // ─── Modal ────────────────────────────────────────────────────────────────────
 
+function renderScenCosList(selectedIds) {
+  var p = ap();
+  var cos = p ? p.companies : [];
+  if (!cos.length) { document.getElementById('sConList').innerHTML = '<div style="color:#aaa;font-size:11px">Geen aansluitingen in project</div>'; return; }
+  var html = cos.map(function (c, i) {
+    var checked = (!selectedIds || !selectedIds.length || selectedIds.indexOf(c.id) !== -1) ? 'checked' : '';
+    return '<label class="scen-con-lbl"><input type="checkbox" class="scen-con-chk" value="' + c.id + '" ' + checked + '>' +
+      '<span class="scen-con-dot" style="background:' + PAL[i % PAL.length] + '"></span>' + c.name + '</label>';
+  }).join('');
+  document.getElementById('sConList').innerHTML = html;
+}
+
 function openAddScen() {
   _editScenId = null;
   document.getElementById('sName').value = '';
+  document.getElementById('sGtvA').value = '';
+  document.getElementById('sGtvT').value = '';
+  renderScenCosList([]);
   _setToggle('togSolar', 'sfSolar', false);
   _setToggle('togBat', 'sfBat', false);
   _resetModalFields();
@@ -87,6 +110,9 @@ function openEditScen(id) {
   if (!sc) return;
   _editScenId = id;
   document.getElementById('sName').value = sc.name;
+  document.getElementById('sGtvA').value = sc.gtvA || '';
+  document.getElementById('sGtvT').value = sc.gtvT || '';
+  renderScenCosList(sc.connectionIds || []);
   var hasSolar = !!(sc.solar && sc.solar.enabled);
   var hasBat = !!(sc.bat && sc.bat.enabled);
   _setToggle('togSolar', 'sfSolar', hasSolar);
@@ -136,11 +162,22 @@ function saveScen() {
   if (!name) { notify('Vul een naam in', false); return; }
   var hasSolar = document.getElementById('togSolar').classList.contains('on');
   var hasBat = document.getElementById('togBat').classList.contains('on');
-  if (!hasSolar && !hasBat) { notify('Activeer minimaal één asset', false); return; }
+
+  // Verbindingsselectie lezen
+  var checkedCons = [].slice.call(document.querySelectorAll('.scen-con-chk:checked')).map(function (el) { return el.value; });
+  var p = ap(); var allIds = p ? p.companies.map(function (c) { return c.id; }) : [];
+  // Sla connectionIds op als het een echte subset is; leeg array = alle aansluitingen
+  var connectionIds = (checkedCons.length && checkedCons.length < allIds.length) ? checkedCons : [];
+
+  var rawGA = parseFloat(document.getElementById('sGtvA').value);
+  var rawGT = parseFloat(document.getElementById('sGtvT').value);
 
   var sc = {
     id: _editScenId || uid(),
     name: name,
+    connectionIds: connectionIds,
+    gtvA: isNaN(rawGA) ? 0 : rawGA,
+    gtvT: isNaN(rawGT) ? 0 : rawGT,
     solar: {
       enabled: hasSolar,
       kWp: parseFloat(document.getElementById('sKwp').value) || 100,
@@ -192,11 +229,12 @@ function deleteScen(id) {
 function activateScenario(id) {
   _optim.activeScenId = id;
   renderScenarioSidebar();
+  try { renderSidebar(); } catch(e) {}
 
   var banner = document.getElementById('scenBanner');
   if (id === 'basis') {
     banner.style.display = 'none';
-    if (_optim.baseKw.length) redrawChartsForScenario(_optim.baseKw);
+    if (_optim.baseKw.length) redrawChartsForScenario({ grpKw: _optim.baseKw, perKw: _optim.perKw, withData: _optim.withData, gtvA: _optim.gtvA, gtvT: _optim.gtvT });
     renderComparison();
     return;
   }
@@ -212,21 +250,26 @@ function activateScenario(id) {
   document.getElementById('scenBannerName').textContent = sc2 ? sc2.name : id;
   banner.style.display = '';
 
-  redrawChartsForScenario(res.grpKw);
+  redrawChartsForScenario(res);
   renderComparison();
 }
 
-function redrawChartsForScenario(scenGrpKw) {
+function redrawChartsForScenario(res) {
   if (!_optim.allTs.length) return;
-  var allTs = _optim.allTs, perKw = _optim.perKw, withData = _optim.withData;
-  var gtvA = _optim.gtvA, gtvT = _optim.gtvT;
-  var gA = scenGrpKw.map(function (v) { return Math.max(0, v); });
-  var gT = scenGrpKw.map(function (v) { return Math.max(0, -v); });
-  try { drawJaar(allTs, perKw, scenGrpKw, withData, gtvA, gtvT); } catch (e) { console.error('drawJaar scen:', e); }
-  try { drawWeek(allTs, scenGrpKw, perKw, withData, gtvA, gtvT); } catch (e) { console.error('drawWeek scen:', e); }
+  var allTs = _optim.allTs;
+  var grpKw = Array.isArray(res) ? res : (res.grpKw || []);
+  var perKw = (!Array.isArray(res) && res.perKw) ? res.perKw : _optim.perKw;
+  var withData = (!Array.isArray(res) && res.withData) ? res.withData : _optim.withData;
+  var gtvA = (!Array.isArray(res) && res.gtvA != null) ? res.gtvA : _optim.gtvA;
+  var gtvT = (!Array.isArray(res) && res.gtvT != null) ? res.gtvT : _optim.gtvT;
+  try { updateKpisForRes({ grpKw: grpKw, withData: withData, gtvA: gtvA, gtvT: gtvT }); } catch(e) {}
+  var gA = grpKw.map(function (v) { return Math.max(0, v); });
+  var gT = grpKw.map(function (v) { return Math.max(0, -v); });
+  try { drawJaar(allTs, perKw, grpKw, withData, gtvA, gtvT); } catch (e) { console.error('drawJaar scen:', e); }
+  try { drawWeek(allTs, grpKw, perKw, withData, gtvA, gtvT); } catch (e) { console.error('drawWeek scen:', e); }
   try { drawBDK(perKw, gA, gT, withData, gtvA, gtvT); } catch (e) { console.error('drawBDK scen:', e); }
   try { drawOvsch(allTs, gA, gT, gtvA, gtvT); } catch (e) { console.error('drawOvsch scen:', e); }
-  try { drawPiek(allTs, perKw, scenGrpKw, withData); } catch (e) { console.error('drawPiek scen:', e); }
+  try { drawPiek(allTs, perKw, grpKw, withData); } catch (e) { console.error('drawPiek scen:', e); }
 }
 
 // ─── Herberekening ───────────────────────────────────────────────────────────
@@ -241,7 +284,7 @@ function recalcAllScenarios() {
   });
   renderScenarioSidebar();
   if (_optim.activeScenId && _optim.activeScenId !== 'basis' && _optim.scenResults[_optim.activeScenId]) {
-    redrawChartsForScenario(_optim.scenResults[_optim.activeScenId].grpKw);
+    redrawChartsForScenario(_optim.scenResults[_optim.activeScenId]);
     document.getElementById('scenBanner').style.display = '';
   }
   renderComparison();
@@ -250,7 +293,27 @@ function recalcAllScenarios() {
 // ─── Scenarioberekening ──────────────────────────────────────────────────────
 
 function calcScenario(sc) {
-  var grpKw = _optim.baseKw.slice();
+  var allTs = _optim.allTs;
+
+  // Bepaal aansluitingen voor dit scenario
+  var ids = (sc.connectionIds && sc.connectionIds.length) ? sc.connectionIds : null;
+  var allData = _optim.allData && _optim.allData.length ? _optim.allData : _optim.withData;
+  var subset = ids ? allData.filter(function (c) { return ids.indexOf(c.id) !== -1; }) : _optim.withData;
+  if (!subset || !subset.length) subset = _optim.withData;
+
+  // Bereken groepsprofiel voor de subset
+  var perKwSub = subset.map(function (c) {
+    var m = {}; c.data.forEach(function (d) { m[d.ts] = d.kw; });
+    return allTs.map(function (ts) { return m[ts] || 0; });
+  });
+  var grpKw = allTs.map(function (_, i) {
+    return perKwSub.reduce(function (s, a) { return s + a[i]; }, 0);
+  });
+
+  // GTV voor dit scenario
+  var gtvA = sc.gtvA || subset.reduce(function (s, c) { return s + (c.gtvA || 0); }, 0);
+  var gtvT = sc.gtvT || subset.reduce(function (s, c) { return s + (c.gtvT || 0); }, 0);
+
   var solar_kw = null, solarLog = null, batProfile = null, socProfile = null, batLog = null;
 
   if (sc.solar && sc.solar.enabled) {
@@ -268,7 +331,6 @@ function calcScenario(sc) {
     batLog = bRes.log;
   }
 
-  var allTs = _optim.allTs;
   var baseKw = _optim.baseKw;
   var gA = grpKw.map(function (v) { return Math.max(0, v); });
   var baseA = baseKw.map(function (v) { return Math.max(0, v); });
@@ -300,7 +362,8 @@ function calcScenario(sc) {
   var kmSaving = (basePA.reduce(function (s, v) { return s + v; }, 0) - mPA.reduce(function (s, v) { return s + v; }, 0)) / Math.max(1, mnds.length) * 12 * avgKm;
 
   return {
-    grpKw: grpKw, solar_kw: solar_kw, batProfile: batProfile, socProfile: socProfile,
+    grpKw: grpKw, perKw: perKwSub, withData: subset, gtvA: gtvA, gtvT: gtvT,
+    solar_kw: solar_kw, batProfile: batProfile, socProfile: socProfile,
     solarLog: solarLog, batLog: batLog,
     metrics: { maxA: maxA, maxT: maxT, baseMaxA: baseMaxA, autarkie: autarkie, pvTotal: pvTotal, mPeaks: mPA, baseMPeaks: basePA, mnds: mnds, kmSaving: kmSaving }
   };
@@ -534,6 +597,9 @@ function renderComparison() {
   }
 
   var stratNames = { peakshaving: 'Peak shaving', autarkie: 'Autarkie', maxsolar: 'Max. zon' };
+  var bGtvA = _optim.gtvA, bGtvT = _optim.gtvT;
+  var bCosLen = _optim.withData ? _optim.withData.length : 0;
+  var totalCosLen = p ? p.companies.length : 0;
 
   // Tabel header
   var thead = '<thead><tr><th>Metric</th><th>Basis</th>';
@@ -542,6 +608,15 @@ function renderComparison() {
 
   // Rijen
   var metrics = [
+    { lbl: 'Aansluitingen', base: bCosLen + (totalCosLen > bCosLen ? '/' + totalCosLen : ''), raw: function(res, sc) {
+      var n = (res && res.withData) ? res.withData.length : (sc.connectionIds && sc.connectionIds.length ? sc.connectionIds.length : bCosLen);
+      return n + (totalCosLen > n ? '/' + totalCosLen : '');
+    }},
+    { lbl: 'GTV afname / teruglevering (kW)', base: bGtvA + ' / ' + bGtvT, raw: function(res, sc) {
+      var a = (res && res.gtvA) ? res.gtvA : bGtvA;
+      var t = (res && res.gtvT) ? res.gtvT : bGtvT;
+      return a + ' / ' + t;
+    }},
     { lbl: 'Piekafname (kW)', base: bMaxA.toFixed(0), lower: true, get: function(m) { return m.maxA; } },
     { lbl: 'Piek teruglev. (kW)', base: bMaxT.toFixed(0), lower: false, get: function(m) { return m.maxT; }, noColor: true },
     { lbl: 'PV productie (MWh/jr)', base: '—', get: function(m, res) { return res.solar_kw ? m.pvTotal * 1000 : null; }, fmt: function(v) { return v ? (v/1000).toFixed(2) + ' MWh' : '—'; }, higher: true },

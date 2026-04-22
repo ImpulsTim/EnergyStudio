@@ -1,7 +1,7 @@
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:14px}
-.hdr{background:#46962b;padding:14px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
-.logo-txt{color:#fff;font-size:16px;font-weight:900}.logo-txt span{color:#fbba00}
+.hdr{background:#383b49;padding:14px 22px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:100;flex-wrap:wrap;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.logo-txt{color:#ffffff00;font-size:16px;font-weight:900}.logo-txt span{color:#eafb00}
 .logo-sub{color:rgba(255,255,255,.7);font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase}
 .hdr-logo-link{display:flex;align-items:center;text-decoration:none;flex-shrink:0;opacity:.93;transition:opacity .15s}
 .hdr-logo-link:hover{opacity:1}
@@ -129,6 +129,13 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .strat-opt label{display:flex;align-items:flex-start;gap:8px;font-size:11px;cursor:pointer;line-height:1.4}
 .strat-opt input[type=radio]{accent-color:#e67e22;margin-top:2px;flex-shrink:0}
 .strat-opt label.disabled{opacity:.4;cursor:default}
+.ci-dim{opacity:.35;pointer-events:none}
+.scen-con-list{max-height:150px;overflow-y:auto;border:1px solid #e4ede6;border-radius:6px;padding:6px;margin-bottom:10px;background:#fafcfa}
+.scen-con-lbl{display:flex;align-items:center;gap:7px;font-size:11px;cursor:pointer;padding:3px 4px;border-radius:4px;transition:background .1s}
+.scen-con-lbl:hover{background:#edf5ea}
+.scen-con-lbl input[type=checkbox]{accent-color:#46962b;flex-shrink:0}
+.scen-con-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;display:inline-block}
+.lbl-hint{font-weight:400;color:#aaa;font-size:9px;margin-left:3px}
 .verg-tbl{width:100%;border-collapse:collapse;font-size:11px}
 .verg-tbl th{text-align:left;padding:6px 10px;background:#f7f9f7;border-bottom:2px solid #e2ecdf;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.7px;color:#999}
 .verg-tbl th.scen-h{background:#fdf3ea;color:#b35a00;border-bottom-color:#f5c89a}
@@ -140,3 +147,7 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .verg-empty{text-align:center;padding:40px 20px;color:#bbb}
 .verg-empty .big{font-size:32px;margin-bottom:8px}
 .ac-verg{background:#242b38}
+/* Rapport opties */
+.rap-opt-lbl{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:5px;transition:background .1s}
+.rap-opt-lbl:hover{background:#f7fbf5}
+.rap-opt-lbl input[type=checkbox]{accent-color:#46962b;width:14px;height:14px;flex-shrink:0}

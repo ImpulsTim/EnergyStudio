@@ -17,8 +17,8 @@ function drawWeek(allTs,grpKw,perKw,cos,gtvA,gtvT){
   var zeroLine={color:function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';},lineWidth:function(ctx){return ctx.tick.value===0?2:0.5;}};
   var tOpts={responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},maxTicksLimit:20,autoSkip:false,callback:function(v,i){return lb[i]||null;}},grid:{color:'#f3f7f4'}},y:Object.assign(ax('kW'),{grid:zeroLine})}};
   CH['week']=new Chart(document.getElementById('cWeek'),{type:'line',data:{labels:lb,datasets:[
-    {label:'Max',data:mx,borderColor:'rgba(166,214,204,.5)',backgroundColor:'rgba(166,214,204,.12)',fill:'+1',tension:.3,pointRadius:0,borderWidth:1},
-    {label:'Min',data:mn,borderColor:'rgba(166,214,204,.5)',fill:false,tension:.3,pointRadius:0,borderWidth:1},
+    {label:'Max',data:mx,borderColor:'rgba(70,150,43,.45)',backgroundColor:'rgba(70,150,43,.09)',fill:'+1',tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3]},
+    {label:'Min',data:mn,borderColor:'rgba(70,150,43,.45)',fill:false,tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3]},
     {label:'Gemiddeld',data:avg,borderColor:'#46962b',fill:false,tension:.3,pointRadius:0,borderWidth:2.5},
     {label:'GTV '+gtvA+'kW',data:new Array(S2).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false},
     {label:'GTV-T -'+gtvT+'kW',data:new Array(S2).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false},
