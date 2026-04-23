@@ -638,8 +638,39 @@
         <span>Scenario-configuratie (PV, batterij, strategieën)</span>
       </label>
     </div>
+    <div class="sh" style="margin-top:10px">Beveiliging</div>
+    <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">
+      <label class="rap-opt-lbl"><input type="checkbox" id="expEncrypt"> Bestand versleutelen (AES-256)</label>
+    </div>
+    <div id="expPwdSection" style="display:none;margin-bottom:10px">
+      <div class="fg pwd-wrap">
+        <input type="password" id="expPwd" placeholder="Wachtwoord" autocomplete="new-password">
+        <button type="button" class="pwd-eye" id="expPwdEye">&#128065;</button>
+      </div>
+      <div class="pwd-strength" id="expPwdStrength"></div>
+      <div class="fg" style="margin-top:6px">
+        <input type="password" id="expPwdConfirm" placeholder="Wachtwoord bevestigen" autocomplete="new-password">
+      </div>
+      <div style="font-size:10px;color:#aaa;margin-top:5px">Deel het wachtwoord apart (telefoon, Teams) — niet via hetzelfde kanaal als het bestand.</div>
+    </div>
     <div class="ib2" id="expInfo" style="margin-bottom:12px"></div>
     <button class="b" id="btnDoExp" style="width:100%">Exporteren</button>
+  </div>
+</div>
+
+<!-- Import wachtwoord modal -->
+<div class="mbg" id="mImportPwd" style="display:none">
+  <div class="mo" style="max-width:380px">
+    <div class="mh">Versleuteld bestand<button class="mx" id="btnCloseImpPwd">×</button></div>
+    <p style="font-size:12px;color:#666;margin:0 0 12px">Dit bestand is beveiligd. Voer het wachtwoord in om de data te importeren.</p>
+    <div class="fg pwd-wrap">
+      <input type="password" id="impPwd" placeholder="Wachtwoord" autocomplete="current-password">
+      <button type="button" class="pwd-eye" id="impPwdEye">&#128065;</button>
+    </div>
+    <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="b" style="background:transparent;border:1.5px solid #ccc;color:#555" id="btnCloseImpPwd2">Annuleren</button>
+      <button class="b" id="btnImpDecrypt">Ontsleutelen</button>
+    </div>
   </div>
 </div>
 
@@ -704,6 +735,7 @@
 <script src="charts/piekanalyse.js"></script>
 <script src="charts/kosten.js"></script>
 <script src="charts/optimalisatie.js"></script>
+<script src="crypto.js"></script>
 <script src="rapport.js"></script>
 <script src="app.js"></script>
 

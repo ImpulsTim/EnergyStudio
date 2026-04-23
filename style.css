@@ -151,3 +151,8 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .rap-opt-lbl{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:5px;transition:background .1s}
 .rap-opt-lbl:hover{background:#f7fbf5}
 .rap-opt-lbl input[type=checkbox]{accent-color:#46962b;width:14px;height:14px;flex-shrink:0}
+/* Wachtwoord velden */
+.pwd-wrap{position:relative}
+.pwd-wrap input{padding-right:32px;width:100%;box-sizing:border-box}
+.pwd-eye{position:absolute;right:7px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;font-size:14px;padding:0;color:#aaa;line-height:1}
+.pwd-strength{height:3px;border-radius:2px;background:#e74c3c;width:0;transition:width .2s,background .2s;margin-top:4px}

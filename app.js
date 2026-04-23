@@ -253,6 +253,14 @@ function genDemo(idx){
   }}return data;
 }
 
+function triggerDownload(blob,filename){
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a');
+  a.href=url;a.download=filename;a.style.display='none';
+  document.body.appendChild(a);a.click();
+  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+}
+
 // Exporteren / importeren / downloaden
 function openExportModal(){
   var p=ap();
@@ -285,9 +293,15 @@ async function doExportData(){
   var scope=document.querySelector('input[name="expScope"]:checked').value;
   var inclTs=document.getElementById('expChkTs').checked;
   var inclScen=document.getElementById('expChkScen').checked;
+  var useEnc=document.getElementById('expEncrypt').checked;
+  if(useEnc){
+    var pwd=document.getElementById('expPwd').value;
+    var pwd2=document.getElementById('expPwdConfirm').value;
+    if(!pwd){notify('Vul een wachtwoord in',false);return;}
+    if(pwd!==pwd2){notify('Wachtwoorden komen niet overeen',false);return;}
+  }
   try{
     var projs=scope==='current'?(p?[p]:[]):S.projects;
-    // Diepe kopie zodat we veilig kunnen strippen
     var projsCopy=JSON.parse(JSON.stringify(projs));
     if(!inclScen)projsCopy.forEach(function(pr){delete pr.scenarios;});
     var tsData={};
@@ -303,16 +317,30 @@ async function doExportData(){
     var activeId=scope==='current'&&p?p.id:S.activeId;
     var payload={version:4,exportDate:new Date().toISOString(),state:{projects:projsCopy,activeId:activeId},timeseries:tsData};
     var json=JSON.stringify(payload);
-    var bytes=new TextEncoder().encode(json);var bin='';var chunk=8192;
-    for(var i=0;i<bytes.length;i+=chunk)bin+=String.fromCharCode.apply(null,bytes.subarray(i,i+chunk));
     var safeName=(scope==='current'&&p)?p.name.replace(/[^a-z0-9]/gi,'-').toLowerCase():'alle-projecten';
-    var a=document.createElement('a');
-    a.setAttribute('href','data:application/json;base64,'+btoa(bin));
-    a.setAttribute('download','egp-'+safeName+'-'+new Date().toISOString().slice(0,10)+'.json');
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    if(useEnc){json=await egpEncrypt(json,pwd);safeName+='-encrypted';}
+    var fname='egp-'+safeName+'-'+new Date().toISOString().slice(0,10)+'.json';
+    triggerDownload(new Blob([json],{type:'application/octet-stream'}),fname);
     hideM('mExp');
-    notify('Data geëxporteerd'+(scope==='current'?' ('+p.name+')':''));
+    notify('Data geëxporteerd'+(scope==='current'?' ('+p.name+')':'')+(useEnc?' — versleuteld':''));
   }catch(e){notify('Export mislukt: '+e.message,false);}
+}
+
+var _pendingEncJson=null;
+
+async function _doImportObj(obj){
+  if(!obj.state||!obj.timeseries){notify('Ongeldig bestand',false);return;}
+  var nP=obj.state.projects?obj.state.projects.length:0;
+  var nPt=Object.values(obj.timeseries).reduce(function(s,d){return s+d.length;},0);
+  if(!confirm('Importeer '+nP+' project(en) met '+nPt.toLocaleString()+' meetpunten?'))return;
+  var existIds={};S.projects.forEach(function(p){existIds[p.id]=p;});
+  obj.state.projects.forEach(function(p){
+    if(existIds[p.id]){var ex=existIds[p.id];var exCIds={};ex.companies.forEach(function(c){exCIds[c.id]=1;});p.companies.forEach(function(c){if(exCIds[c.id]){for(var i=0;i<ex.companies.length;i++){if(ex.companies[i].id===c.id){ex.companies[i]=c;break;}}}else ex.companies.push(c);});}
+    else S.projects.push(p);
+  });
+  if(!S.activeId&&obj.state.activeId)S.activeId=obj.state.activeId;
+  for(var id in obj.timeseries)await dbSet('ts',id,obj.timeseries[id]);
+  await saveMeta();renderAll();notify('Geïmporteerd: '+nP+' project(en)');
 }
 
 async function doImportData(file){
@@ -320,19 +348,15 @@ async function doImportData(file){
   var r=new FileReader();
   r.onload=async function(e){
     try{
-      var obj=JSON.parse(e.target.result);
-      if(!obj.state||!obj.timeseries){notify('Ongeldig bestand',false);return;}
-      var nP=obj.state.projects?obj.state.projects.length:0;
-      var nPt=Object.values(obj.timeseries).reduce(function(s,d){return s+d.length;},0);
-      if(!confirm('Importeer '+nP+' project(en) met '+nPt.toLocaleString()+' meetpunten?'))return;
-      var existIds={};S.projects.forEach(function(p){existIds[p.id]=p;});
-      obj.state.projects.forEach(function(p){
-        if(existIds[p.id]){var ex=existIds[p.id];var exCIds={};ex.companies.forEach(function(c){exCIds[c.id]=1;});p.companies.forEach(function(c){if(exCIds[c.id]){for(var i=0;i<ex.companies.length;i++){if(ex.companies[i].id===c.id){ex.companies[i]=c;break;}}}else ex.companies.push(c);});}
-        else S.projects.push(p);
-      });
-      if(!S.activeId&&obj.state.activeId)S.activeId=obj.state.activeId;
-      for(var id in obj.timeseries)await dbSet('ts',id,obj.timeseries[id]);
-      await saveMeta();renderAll();notify('Geimporteerd: '+nP+' project(en)');
+      var text=e.target.result;
+      var obj=JSON.parse(text);
+      if(isEncryptedExport(obj)){
+        _pendingEncJson=text;
+        document.getElementById('impPwd').value='';
+        showM('mImportPwd');
+        return;
+      }
+      await _doImportObj(obj);
     }catch(err){notify('Import mislukt: '+err.message,false);}
   };
   r.readAsText(file,'UTF-8');
@@ -389,6 +413,22 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('mRap').addEventListener('click',function(e){if(e.target===this)hideM('mRap');});
   document.getElementById('mRapOpts').addEventListener('click',function(e){if(e.target===this)hideM('mRapOpts');});
   document.getElementById('mExp').addEventListener('click',function(e){if(e.target===this)hideM('mExp');});
+  document.getElementById('mImportPwd').addEventListener('click',function(e){if(e.target===this){hideM('mImportPwd');_pendingEncJson=null;}});
+  document.getElementById('btnCloseImpPwd').addEventListener('click',function(){hideM('mImportPwd');_pendingEncJson=null;});
+  document.getElementById('btnCloseImpPwd2').addEventListener('click',function(){hideM('mImportPwd');_pendingEncJson=null;});
+  document.getElementById('btnImpDecrypt').addEventListener('click',async function(){
+    var btn=this;
+    var pwd=document.getElementById('impPwd').value;
+    if(!pwd){notify('Vul een wachtwoord in',false);return;}
+    btn.disabled=true;btn.textContent='Bezig…';
+    try{
+      var plain=await egpDecrypt(_pendingEncJson,pwd);
+      var obj=JSON.parse(plain);
+      hideM('mImportPwd');_pendingEncJson=null;
+      await _doImportObj(obj);
+    }catch(e){notify(e.message,false);}
+    finally{btn.disabled=false;btn.textContent='Ontsleutelen';}
+  });
   // Modal knoppen
   document.getElementById('btnCreateProj').addEventListener('click',createProj);
   document.getElementById('btnSaveComp').addEventListener('click',saveComp);
@@ -401,6 +441,27 @@ document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('input[name="expScope"]').forEach(function(r){r.addEventListener('change',updateExpInfo);});
   document.getElementById('expChkTs').addEventListener('change',updateExpInfo);
   document.getElementById('expChkScen').addEventListener('change',updateExpInfo);
+  (function(){
+    var cb=document.getElementById('expEncrypt');
+    if(!window.crypto||!window.crypto.subtle){
+      cb.disabled=true;cb.parentElement.title='Niet beschikbaar — open het bestand via file:// of HTTPS';
+      cb.parentElement.style.opacity='.45';
+    }
+  })();
+  document.getElementById('expEncrypt').addEventListener('change',function(){
+    document.getElementById('expPwdSection').style.display=this.checked?'':'none';
+  });
+  document.getElementById('expPwdEye').addEventListener('click',function(){
+    var i=document.getElementById('expPwd');i.type=i.type==='password'?'text':'password';
+  });
+  document.getElementById('impPwdEye').addEventListener('click',function(){
+    var i=document.getElementById('impPwd');i.type=i.type==='password'?'text':'password';
+  });
+  document.getElementById('expPwd').addEventListener('input',function(){
+    var n=this.value.length,bar=document.getElementById('expPwdStrength');
+    bar.style.width=Math.min(n*8,100)+'%';
+    bar.style.background=n<8?'#e74c3c':n<14?'#f39c12':'#46962b';
+  });
   // Zoom
   document.getElementById('btnZoomIn').addEventListener('click',function(){_jZoom=Math.max(0.03,_jZoom*0.5);panJ();});
   document.getElementById('btnZoomUit').addEventListener('click',function(){_jZoom=Math.min(1,_jZoom*2);panJ();});

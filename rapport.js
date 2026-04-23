@@ -40,13 +40,9 @@ function printPreviewRapport(){
 function downloadRapportHTML(){
   var iframe=document.getElementById('rPreview');
   var html='<!DOCTYPE html>'+iframe.contentDocument.documentElement.outerHTML;
-  var blob=new Blob([html],{type:'text/html;charset=utf-8'});
-  var url=URL.createObjectURL(blob);
-  var a=document.createElement('a');
   var proj=ap();
-  a.href=url;
-  a.download='rapport-'+(proj?proj.name.replace(/[^a-z0-9]/gi,'-').toLowerCase():'energie-studio')+'-'+new Date().toISOString().slice(0,10)+'.html';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  var fname='rapport-'+(proj?proj.name.replace(/[^a-z0-9]/gi,'-').toLowerCase():'energie-studio')+'-'+new Date().toISOString().slice(0,10)+'.html';
+  triggerDownload(new Blob([html],{type:'application/octet-stream'}),fname);
 }
 
 async function buildRapport(opts){
