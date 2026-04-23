@@ -239,7 +239,7 @@ async function buildRapport(opts){
     }).join('');
 
     // Configuratieinfo (PV/bat)
-    var strats={peakshaving:'Peak shaving',autarkie:'Maximale autarkie',maxsolar:'Maximaal zonneverbruik'};
+    var strats={peakshaving:'Peak shaving (symmetrisch)',onafhankelijkheid:'Onafhankelijkheid / Zon PV',autarkie:'Onafhankelijkheid / Zon PV',maxsolar:'Onafhankelijkheid / Zon PV'};
     var cfgRows='';
     if(!isBasis&&sc){
       if(sc.solar&&sc.solar.enabled)cfgRows+='<tr><td><strong>Zonnepanelen</strong></td><td>'+sc.solar.kWp+' kWp · tilt '+sc.solar.tilt+'° · azimut '+sc.solar.azimut+'° z.v.Z. · PR '+sc.solar.pr+'%</td></tr>';
@@ -375,9 +375,8 @@ async function buildRapport(opts){
       '<tr><td><strong>GTO-besparing (basis)</strong></td><td>Verschil som individuele kW-max kosten en collectieve kW-max kosten over de meetperiode</td></tr>'+
       '<tr><td><strong>kW-max besparing (scenario)</strong></td><td>Verschil tussen individuele kW-max kosten van het basis-scenario en de kW-max kosten van het scenario</td></tr>'+
       '<tr><td><strong>Zonnepanelen (PV)</strong></td><td>Astronomisch model — declinatie, uurhoek, zenithoek, invalshoek op paneel (φ=51.5°N, Zeeland). Maandfactoren o.b.v. KNMI bewolkingsdata.</td></tr>'+
-      '<tr><td><strong>Batterij — Peak shaving</strong></td><td>Binaire zoekstap per maand naar minimale haalbare maandpiek met perfecte voorkennis (theoretisch maximum).</td></tr>'+
-      '<tr><td><strong>Batterij — Maximale autarkie</strong></td><td>Greedy forward-pass simulatie: laden bij netto-export, ontladen bij netto-import.</td></tr>'+
-      '<tr><td><strong>Batterij — Maximaal zonneverbruik</strong></td><td>Laden uitsluitend uit PV-surplus, ontladen bij netto-import van het net.</td></tr>'+
+      '<tr><td><strong>Batterij — Peak shaving (symmetrisch)</strong></td><td>Binaire zoekstap per maand naar minimale symmetrische drempelwaarde voor zowel afname als teruglevering, met cycluslimiet als bovengrens.</td></tr>'+
+      '<tr><td><strong>Batterij — Onafhankelijkheid / Zon PV</strong></td><td>Greedy forward-pass simulatie: laden bij netto-overschot (bijv. PV-surplus), ontladen bij netto-import. Prioriteert opgeslagen energie boven netafname.</td></tr>'+
       '</tbody></table>'+
       '<div class="ft"><span>Energy Studio — Impuls Zeeland · Energiegroepsprofiel</span><span>'+datum+'</span></div>'+
     '</div>';

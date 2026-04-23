@@ -1,5 +1,5 @@
 function drawPiek(allTs,perKw,grpKw,cos){
-  dC('piekA');dC('piekT');dC('simA');dC('simT');
+  dC('cPiekA');dC('cPiekT');dC('simA');dC('simT');
   var mndSet={};allTs.forEach(function(ts){mndSet[ts.slice(0,7)]=1;});
   var mnds=Object.keys(mndSet).sort();
 
