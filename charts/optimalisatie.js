@@ -469,34 +469,53 @@ function simPeakShavingSymmetric(baseKw, cap, pMax, etaC, etaD, socMin, socMax, 
       }
       fs = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax);
     }
+    // Fase 3: secundaire drempel — gebruik resterend cyclusbudget voor sub-piek afvlakking
+    var pStar2 = pStar;
+    var budget2 = maxMonthThrough === Infinity ? Infinity : maxMonthThrough - fs.energyThrough;
+    if (budget2 > cap * 0.1) {
+      var lo3 = 0, hi3 = pStar;
+      for (var iter3 = 0; iter3 < 22; iter3++) {
+        var mid3 = (lo3 + hi3) / 2;
+        var fs3 = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax, mid3);
+        if (fs3.feasible && fs3.energyThrough <= maxMonthThrough) { hi3 = mid3; pStar2 = mid3; } else lo3 = mid3;
+      }
+      fs = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax, pStar2);
+    }
     idxs.forEach(function (gi, li) { result[gi] = fs.kw[li]; batProfile[gi] = fs.bp[li]; socProfile[gi] = fs.soc[li] / cap * 100; });
     totalEnergyThrough += fs.energyThrough;
-    monthLog.push({ month: mn, threshold: pStar, origPeak: Math.max.apply(null, profile.map(function(v){return Math.max(0,v);})), newPeak: Math.max.apply(null, fs.kw.map(function(v){return Math.max(0,v);})), energyThrough: fs.energyThrough });
+    monthLog.push({ month: mn, threshold: pStar, threshLow: pStar2, origPeak: Math.max.apply(null, profile.map(function(v){return Math.max(0,v);})), newPeak: Math.max.apply(null, fs.kw.map(function(v){return Math.max(0,v);})), energyThrough: fs.energyThrough });
   });
 
   return { kw: result, batProfile: batProfile, socProfile: socProfile, monthLog: monthLog, totalEnergyThrough: totalEnergyThrough };
 }
 
-function _fwdPassSymm(profile, threshold, cap, pMax, etaC, etaD, socMin, socMax) {
+function _fwdPassSymm(profile, threshold, cap, pMax, etaC, etaD, socMin, socMax, threshLow) {
+  if (threshLow === undefined) threshLow = threshold;
   var soc = (socMin + socMax) / 2;
   var kw = [], bp = [], socArr = [], feasible = true, energyThrough = 0;
   for (var i = 0; i < profile.length; i++) {
     var v = profile[i], b = 0;
     if (v > threshold && soc > socMin) {
-      // Afname piek boven drempel → ontlaad
+      // Primair: ontlaad bij hoge afname piek
       var dis = Math.min(pMax, (soc - socMin) * 4 * etaD, v - threshold);
       v -= dis; soc -= dis / 4 / etaD; b = -dis; energyThrough += dis * 0.25;
     } else if (v < -threshold && soc < socMax) {
-      // Teruglevering boven drempel → laad (reduceer teruglevering tot drempel)
+      // Primair: laad bij hoge teruglevering (boven threshold)
       var chg = Math.min(pMax, (socMax - soc) * 4 / etaC, -v - threshold);
       v += chg; soc += chg * etaC / 4; b = chg; energyThrough += chg * 0.25;
-    } else if (v < threshold && soc < socMax) {
-      // Rust/laag-last periode → laad op voor toekomstige afname pieken
-      // Maximaal opladen tot afname het drempelniveau bereikt (v + chg = threshold)
-      // Bij teruglevering (v < 0): laad alleen tot v=0 (niet actief van net afnemen voor de batterij)
-      var headroom = v < 0 ? -v : threshold - v;
-      var chg2 = Math.min(pMax, (socMax - soc) * 4 / etaC, headroom);
+    } else if (v > threshLow && soc > socMin) {
+      // Secundair: ontlaad bij sub-piek afname (threshLow < v ≤ threshold)
+      var dis2 = Math.min(pMax, (soc - socMin) * 4 * etaD, v - threshLow);
+      if (dis2 > 0.01) { v -= dis2; soc -= dis2 / 4 / etaD; b = -dis2; energyThrough += dis2 * 0.25; }
+    } else if (v < -threshLow && soc < socMax) {
+      // Secundair: laad bij sub-drempel teruglevering (-threshold ≤ v < -threshLow)
+      var chg2 = Math.min(pMax, (socMax - soc) * 4 / etaC, -v - threshLow);
       if (chg2 > 0.01) { v += chg2; soc += chg2 * etaC / 4; b = chg2; energyThrough += chg2 * 0.25; }
+    } else if (v < threshLow && soc < socMax) {
+      // Laad in rustige periodes: breng netto vermogen omhoog naar threshLow
+      var headroom = v < 0 ? -v : threshLow - v;
+      var chg3 = Math.min(pMax, (socMax - soc) * 4 / etaC, headroom);
+      if (chg3 > 0.01) { v += chg3; soc += chg3 * etaC / 4; b = chg3; energyThrough += chg3 * 0.25; }
     }
     soc = Math.max(socMin, Math.min(socMax, soc));
     if (v > threshold + 0.6 || v < -(threshold + 0.6)) feasible = false;

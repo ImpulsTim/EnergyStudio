@@ -254,11 +254,55 @@ function genDemo(idx){
 }
 
 function triggerDownload(blob,filename){
+  if(window.navigator&&window.navigator.msSaveOrOpenBlob){
+    window.navigator.msSaveOrOpenBlob(blob,filename);
+    return;
+  }
   var url=URL.createObjectURL(blob);
   var a=document.createElement('a');
-  a.href=url;a.download=filename;a.style.display='none';
-  document.body.appendChild(a);a.click();
-  setTimeout(function(){document.body.removeChild(a);URL.revokeObjectURL(url);},200);
+  a.href=url;
+  a.download=filename;
+  a.rel='noopener';
+  a.style.display='none';
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function(){
+    if(a.parentNode)a.parentNode.removeChild(a);
+    URL.revokeObjectURL(url);
+  },1000);
+}
+
+function triggerDownloadAsLink(blob,filename){
+  var url=URL.createObjectURL(blob);
+  var modal=document.createElement('div');
+  modal.className='mbg';
+  modal.style.display='flex';
+  modal.innerHTML=
+    '<div class="mo" style="max-width:460px">'+
+      '<div class="mh">Exportbestand klaar<button class="mx" type="button">&times;</button></div>'+
+      '<p style="font-size:12px;color:#666;margin:0 0 14px">Klik op de knop hieronder om <strong>'+filename+'</strong> op te slaan. Werkt dat niet, klik dan rechts en kies <em>"Link opslaan als…"</em>.</p>'+
+      '<a class="b" id="expLinkBtn" style="display:block;text-align:center;text-decoration:none;width:100%">Download '+filename+'</a>'+
+      '<div style="margin-top:10px;display:flex;justify-content:flex-end">'+
+        '<button class="b" type="button" id="expLinkClose" style="background:transparent;border:1.5px solid #ccc;color:#555">Sluiten</button>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  var link=modal.querySelector('#expLinkBtn');
+  link.href=url;
+  link.setAttribute('download',filename);
+  var revoked=false;
+  function close(){
+    if(revoked)return;
+    revoked=true;
+    if(modal.parentNode)modal.parentNode.removeChild(modal);
+    URL.revokeObjectURL(url);
+    document.removeEventListener('keydown',onKey);
+  }
+  function onKey(e){if(e.key==='Escape')close();}
+  modal.querySelector('.mx').onclick=close;
+  modal.querySelector('#expLinkClose').onclick=close;
+  document.addEventListener('keydown',onKey);
+  setTimeout(function(){if(!revoked)URL.revokeObjectURL(url);},10*60*1000);
 }
 
 // Exporteren / importeren / downloaden
@@ -294,6 +338,7 @@ async function doExportData(){
   var inclTs=document.getElementById('expChkTs').checked;
   var inclScen=document.getElementById('expChkScen').checked;
   var useEnc=document.getElementById('expEncrypt').checked;
+  var method=document.querySelector('input[name="expMethod"]:checked').value;
   if(useEnc){
     var pwd=document.getElementById('expPwd').value;
     var pwd2=document.getElementById('expPwdConfirm').value;
@@ -320,7 +365,12 @@ async function doExportData(){
     var safeName=(scope==='current'&&p)?p.name.replace(/[^a-z0-9]/gi,'-').toLowerCase():'alle-projecten';
     if(useEnc){json=await egpEncrypt(json,pwd);safeName+='-encrypted';}
     var fname='egp-'+safeName+'-'+new Date().toISOString().slice(0,10)+'.json';
-    triggerDownload(new Blob([json],{type:'application/octet-stream'}),fname);
+    var blob=new Blob([json],{type:'application/octet-stream'});
+    if(method==='link'){
+      triggerDownloadAsLink(blob,fname);
+    }else{
+      triggerDownload(blob,fname);
+    }
     hideM('mExp');
     notify('Data geëxporteerd'+(scope==='current'?' ('+p.name+')':'')+(useEnc?' — versleuteld':''));
   }catch(e){notify('Export mislukt: '+e.message,false);}

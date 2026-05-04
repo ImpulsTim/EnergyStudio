@@ -2,7 +2,7 @@
 <html lang="nl"><head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.13/html-to-image.min.js" integrity="sha512-iZ2ORl595Wx6miw+GuadDet4WQbdSWS3JLMoNfY8cRGoEFy6oT3G9IbcrBeL6AfkgpA51ETt/faX6yLV+/gFJg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
     <script>
-      (function() {
+      if (window.parent !== window) (function() {
         const originalConsole = window.console;
         window.console = {
           log: (...args) => {
@@ -653,6 +653,18 @@
       </div>
       <div style="font-size:10px;color:#aaa;margin-top:5px">Deel het wachtwoord apart (telefoon, Teams) — niet via hetzelfde kanaal als het bestand.</div>
     </div>
+    <div class="sh" style="margin-top:10px">Downloadmethode</div>
+    <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:6px">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="radio" name="expMethod" value="download" checked style="accent-color:#46962b;flex-shrink:0">
+        <span>Direct downloaden</span>
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="radio" name="expMethod" value="link" style="accent-color:#46962b;flex-shrink:0">
+        <span>Als link openen (voor als download niet werkt)</span>
+      </label>
+    </div>
+    <div style="font-size:10px;color:#888;margin-bottom:14px">Tip: als de download niet start, kies "Als link openen".</div>
     <div class="ib2" id="expInfo" style="margin-bottom:12px"></div>
     <button class="b" id="btnDoExp" style="width:100%">Exporteren</button>
   </div>
