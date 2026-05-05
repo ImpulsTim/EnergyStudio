@@ -283,6 +283,7 @@
 <title>Energy Studio — Impuls Zeeland</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body id="artifacts-component-root-html">
@@ -376,16 +377,19 @@
             <span class="li"><span class="ld" style="border:2px dashed #c0392b;background:none"></span>GTV</span>
             <span class="li"><span class="ld" style="border:2px dashed #e67e22;background:none"></span>GTV-T</span>
           </div>
-          <div style="display:flex;gap:4px">
-            <button class="b" id="btnZoomIn" style="padding:3px 7px;font-size:10px">+ In</button>
-            <button class="b" id="btnZoomUit" style="padding:3px 7px;font-size:10px;background:#888">- Uit</button>
-            <button class="b dk" id="btnZoomReset" style="padding:3px 7px;font-size:10px">Reset</button>
+          <div style="display:flex;gap:3px">
+            <button class="b" onclick="setJaarPreset(7)" style="padding:3px 7px;font-size:10px">1W</button>
+            <button class="b" onclick="setJaarPreset(30)" style="padding:3px 7px;font-size:10px">1M</button>
+            <button class="b" onclick="setJaarPreset(90)" style="padding:3px 7px;font-size:10px">3M</button>
+            <button class="b dk" onclick="setJaarPreset(0)" style="padding:3px 7px;font-size:10px">Volledig</button>
           </div>
         </div>
-        <div style="display:flex;gap:7px;align-items:center;margin-bottom:6px">
-          <span style="font-size:10px;color:#888;white-space:nowrap">Venster:</span>
-          <input type="range" id="jPan" min="0" max="100" value="0" step="1" style="flex:1">
-          <span style="font-size:10px;color:#888;min-width:70px;text-align:right" id="jZoomLbl">Volledig</span>
+        <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
+          <span style="font-size:10px;color:#888">Van:</span>
+          <input type="date" id="jDateStart" oninput="panJ()" style="font-size:11px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
+          <span style="font-size:10px;color:#888">Tot:</span>
+          <input type="date" id="jDateEnd" oninput="panJ()" style="font-size:11px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
+          <span style="font-size:10px;color:#888;min-width:60px;text-align:right" id="jZoomLbl"></span>
         </div>
         <div class="cw" style="height:480px"><canvas id="cJaarG" role="img" aria-label="Cumulatief groepsprofiel"></canvas></div>
       </div>
@@ -396,7 +400,23 @@
     </div>
     <!-- WEEKPROFIEL -->
     <div class="pn" id="tWeek">
-      <div class="cd"><div class="ct2"><div class="ac"></div>Weekprofiel groep — gem / min / max (Ma–Zo)</div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Weekprofiel groep — gem / min / max (Ma–Zo)
+        <div id="weekMFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">
+          <button data-mf="all"  onclick="setWeekMonthFilter('all')"  style="font-size:10px;padding:3px 8px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Heel het jaar</button>
+          <button data-mf="0"  onclick="setWeekMonthFilter(0)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jan</button>
+          <button data-mf="1"  onclick="setWeekMonthFilter(1)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Feb</button>
+          <button data-mf="2"  onclick="setWeekMonthFilter(2)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mrt</button>
+          <button data-mf="3"  onclick="setWeekMonthFilter(3)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Apr</button>
+          <button data-mf="4"  onclick="setWeekMonthFilter(4)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mei</button>
+          <button data-mf="5"  onclick="setWeekMonthFilter(5)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jun</button>
+          <button data-mf="6"  onclick="setWeekMonthFilter(6)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jul</button>
+          <button data-mf="7"  onclick="setWeekMonthFilter(7)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Aug</button>
+          <button data-mf="8"  onclick="setWeekMonthFilter(8)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Sep</button>
+          <button data-mf="9"  onclick="setWeekMonthFilter(9)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Okt</button>
+          <button data-mf="10" onclick="setWeekMonthFilter(10)" style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Nov</button>
+          <button data-mf="11" onclick="setWeekMonthFilter(11)" style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Dec</button>
+        </div>
+      </div>
         <div class="cw" style="height:600px"><canvas id="cWeek" role="img" aria-label="Weekprofiel groep"></canvas></div></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>Per aansluiting — gemiddeld weekprofiel</div>
         <div class="lg" id="wLeg"></div>
@@ -421,6 +441,21 @@
           <span class="li"><span class="ld" style="background:rgba(230,126,34,.75)"></span>Teruglevering overschrijding (kW)</span>
         </div>
         <div class="cw" style="height:340px"><canvas id="cOvsch" role="img" aria-label="Overschrijdingen per maand"></canvas></div>
+      </div>
+      <div class="cd">
+        <div class="ct2"><div class="ac"></div>Heatmap — overschrijdingen per uur en maand</div>
+        <div class="hm-wrap">
+          <div class="hm-block">
+            <div class="hm-h">Afname (boven GTV)</div>
+            <div class="hm" id="heatA"></div>
+            <div class="hm-leg" id="heatLegA"></div>
+          </div>
+          <div class="hm-block">
+            <div class="hm-h">Teruglevering (boven GTV-T)</div>
+            <div class="hm" id="heatT"></div>
+            <div class="hm-leg" id="heatLegT"></div>
+          </div>
+        </div>
       </div>
       <div class="cd">
         <div class="ct2"><div class="ac"></div>Top piekwaarden afname
@@ -604,12 +639,19 @@
     <div style="background:#242b38;padding:11px 16px;display:flex;align-items:center;justify-content:space-between">
       <span style="color:#fff;font-weight:700;font-size:13px">Rapport — Energy Studio</span>
       <div style="display:flex;gap:6px">
+        <button class="b" id="btnDownloadPdf"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg>Download PDF</button>
         <button class="b" id="btnDownloadRap" style="background:#2d4a3e"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download HTML</button>
-        <button class="b" id="btnPrint"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Afdrukken</button>
+        <button class="b" id="btnPrint" style="background:#2d4a3e"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>Afdrukken</button>
         <button class="mx" id="btnCloseRap" style="color:#fff">×</button>
       </div>
     </div>
-    <iframe id="rPreview" style="width:100%;height:82vh;border:none;background:#fff;display:block"></iframe>
+    <div style="background:#f5f5f5;padding:7px 16px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:14px;font-size:11px;color:#555">
+      <span style="font-weight:700">Downloadmethode:</span>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="rapMethod" value="download" checked style="accent-color:#46962b"> Direct</label>
+      <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="rapMethod" value="link" style="accent-color:#46962b"> Als link openen</label>
+      <span style="color:#888;margin-left:auto;font-size:10px">Tip: lukt direct downloaden niet, kies "Als link openen"</span>
+    </div>
+    <iframe id="rPreview" style="width:100%;height:78vh;border:none;background:#fff;display:block"></iframe>
   </div>
 </div>
 
@@ -723,10 +765,20 @@
       </div>
       <div class="sh">Strategie</div>
       <div class="strat-opt">
-        <label><input type="radio" name="sBatStrat" value="peakshaving" checked><span><strong>Peak shaving</strong> — minimaliseer pieken in afname én teruglevering (symmetrisch)</span></label>
+        <label><input type="radio" name="sBatStrat" value="peakshaving" checked><span><strong>Peak shaving</strong> — stuur het netprofiel richting de nullijn, met dode band en cycli-budget</span></label>
         <label><input type="radio" name="sBatStrat" value="onafhankelijkheid"><span><strong>Onafhankelijkheid / Zon PV</strong> — laad op overschot, ontlaad bij afname van het net</span></label>
       </div>
-      <div id="sfBatCycles" style="margin-top:8px">
+      <div id="sfBatAggr" style="margin-top:10px">
+        <label style="display:block;margin-bottom:4px">Agressiviteit <span id="sBatAggrLbl" style="float:right;color:#46962b;font-weight:700">3 (gemiddeld)</span></label>
+        <input type="range" id="sBatAggr" min="1" max="5" value="3" step="1" style="width:100%;accent-color:#46962b">
+        <small class="lbl-hint" style="display:block;margin-top:2px">1 = rustig (alleen grote pieken) · 5 = agressief (continu naar nullijn sturen)</small>
+      </div>
+      <div id="sfBatHorizon" style="margin-top:10px">
+        <label style="display:block;margin-bottom:4px">Forecast vooruitkijken <span id="sBatHorizonLbl" style="float:right;color:#46962b;font-weight:700">8 kwartieren (2 uur)</span></label>
+        <input type="range" id="sBatHorizon" min="0" max="96" value="8" step="4" style="width:100%;accent-color:#46962b">
+        <small class="lbl-hint" style="display:block;margin-top:2px">0 = puur reactief · 96 = volle dag (perfecte forecast in simulatie)</small>
+      </div>
+      <div id="sfBatCycles" style="margin-top:10px">
         <div class="fg"><label>Max cycli per jaar <small class="lbl-hint">typisch 600 (batterijgarantie)</small></label><input type="number" id="sBatMaxCycles" value="600" min="50" max="5000"></div>
       </div>
     </div>

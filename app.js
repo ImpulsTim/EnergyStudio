@@ -142,7 +142,7 @@ function openAddComp(){
   document.getElementById('cCat').value='Grootverbruik';
   document.getElementById('cGA').value='150';document.getElementById('cGT').value='80';
   document.getElementById('cSA').value='TrafoMSLS';document.getElementById('cST').value='TrafoMSLS';
-  document.getElementById('cPA').value='0.12';document.getElementById('cPT2').value='0.08';
+  document.getElementById('cPA').value='0.23';document.getElementById('cPT2').value='0.08';
   document.getElementById('cPD').value='';document.getElementById('cPills').innerHTML='';
   setPT('static');showM('mComp');
 }
@@ -483,6 +483,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.getElementById('btnCreateProj').addEventListener('click',createProj);
   document.getElementById('btnSaveComp').addEventListener('click',saveComp);
   document.getElementById('btnDelComp').addEventListener('click',deleteComp);
+  document.getElementById('btnDownloadPdf').addEventListener('click',downloadRapportPDF);
   document.getElementById('btnDownloadRap').addEventListener('click',downloadRapportHTML);
   document.getElementById('btnPrint').addEventListener('click',printPreviewRapport);
   document.getElementById('btnGenRap').addEventListener('click',generateRapport);
@@ -512,11 +513,6 @@ document.addEventListener('DOMContentLoaded',function(){
     bar.style.width=Math.min(n*8,100)+'%';
     bar.style.background=n<8?'#e74c3c':n<14?'#f39c12':'#46962b';
   });
-  // Zoom
-  document.getElementById('btnZoomIn').addEventListener('click',function(){_jZoom=Math.max(0.03,_jZoom*0.5);panJ();});
-  document.getElementById('btnZoomUit').addEventListener('click',function(){_jZoom=Math.min(1,_jZoom*2);panJ();});
-  document.getElementById('btnZoomReset').addEventListener('click',function(){_jZoom=1;document.getElementById('jPan').value=0;panJ();});
-  document.getElementById('jPan').addEventListener('input',panJ);
   document.getElementById('simSlider').addEventListener('input',updateSim);
   // Pieklijst filters
   document.getElementById('peakLimitA').addEventListener('change',function(){

@@ -26,8 +26,21 @@ function initScenarios() {
   });
   document.querySelectorAll('input[name="sBatStrat"]').forEach(function(r){
     r.addEventListener('change', function(){
-      document.getElementById('sfBatCycles').style.display = this.value === 'peakshaving' ? '' : 'none';
+      var ps = this.value === 'peakshaving';
+      document.getElementById('sfBatCycles').style.display = ps ? '' : 'none';
+      document.getElementById('sfBatAggr').style.display = ps ? '' : 'none';
+      document.getElementById('sfBatHorizon').style.display = ps ? '' : 'none';
     });
+  });
+  var aggrLbls = ['1 (zeer rustig)','2 (rustig)','3 (gemiddeld)','4 (actief)','5 (agressief)'];
+  document.getElementById('sBatAggr').addEventListener('input', function(){
+    document.getElementById('sBatAggrLbl').textContent = aggrLbls[parseInt(this.value,10)-1] || this.value;
+  });
+  document.getElementById('sBatHorizon').addEventListener('input', function(){
+    var q = parseInt(this.value,10);
+    var hours = (q*0.25);
+    var txt = q===0 ? 'puur reactief' : (q + ' kwartieren ('+(hours%1===0?hours.toFixed(0):hours.toFixed(2))+' uur)');
+    document.getElementById('sBatHorizonLbl').textContent = txt;
   });
 
   document.getElementById('scenList').addEventListener('click', function (e) {
@@ -140,7 +153,16 @@ function openEditScen(id) {
     var r = document.querySelector('input[name="sBatStrat"][value="' + strat + '"]');
     if (r) r.checked = true;
     document.getElementById('sBatMaxCycles').value = sc.bat.maxCycles || 600;
-    document.getElementById('sfBatCycles').style.display = strat === 'peakshaving' ? '' : 'none';
+    var aggr = sc.bat.aggressiveness != null ? sc.bat.aggressiveness : 3;
+    var horizon = sc.bat.horizon != null ? sc.bat.horizon : 8;
+    document.getElementById('sBatAggr').value = aggr;
+    document.getElementById('sBatHorizon').value = horizon;
+    document.getElementById('sBatAggr').dispatchEvent(new Event('input'));
+    document.getElementById('sBatHorizon').dispatchEvent(new Event('input'));
+    var ps = strat === 'peakshaving';
+    document.getElementById('sfBatCycles').style.display = ps ? '' : 'none';
+    document.getElementById('sfBatAggr').style.display = ps ? '' : 'none';
+    document.getElementById('sfBatHorizon').style.display = ps ? '' : 'none';
   }
   showM('mScen');
 }
@@ -159,7 +181,13 @@ function _resetModalFields() {
   var r = document.querySelector('input[name="sBatStrat"][value="peakshaving"]');
   if (r) r.checked = true;
   document.getElementById('sBatMaxCycles').value = 600;
+  document.getElementById('sBatAggr').value = 3;
+  document.getElementById('sBatHorizon').value = 8;
+  document.getElementById('sBatAggr').dispatchEvent(new Event('input'));
+  document.getElementById('sBatHorizon').dispatchEvent(new Event('input'));
   document.getElementById('sfBatCycles').style.display = '';
+  document.getElementById('sfBatAggr').style.display = '';
+  document.getElementById('sfBatHorizon').style.display = '';
 }
 
 function _setToggle(togId, fieldsId, on) {
@@ -205,7 +233,9 @@ function saveScen() {
       socMin: parseFloat(document.getElementById('sSocMin').value) || 10,
       socMax: parseFloat(document.getElementById('sSocMax').value) || 90,
       strategy: (document.querySelector('input[name="sBatStrat"]:checked') || {}).value || 'peakshaving',
-      maxCycles: parseFloat(document.getElementById('sBatMaxCycles').value) || 600
+      maxCycles: parseFloat(document.getElementById('sBatMaxCycles').value) || 600,
+      aggressiveness: parseInt(document.getElementById('sBatAggr').value, 10) || 3,
+      horizon: (function(){var h=parseInt(document.getElementById('sBatHorizon').value,10);return isNaN(h)?8:h;})()
     }
   };
 
@@ -336,7 +366,7 @@ function calcScenario(sc) {
   }
 
   if (sc.bat && sc.bat.enabled) {
-    var bRes = calcBattery(grpKw, solar_kw, sc.bat);
+    var bRes = calcBattery(grpKw, solar_kw, sc.bat, gtvA, gtvT);
     grpKw = bRes.kw;
     batProfile = bRes.batProfile;
     socProfile = bRes.socProfile;
@@ -423,7 +453,7 @@ function calcSolar(p) {
 
 // ─── Batterijopslag ──────────────────────────────────────────────────────────
 
-function calcBattery(baseKw, solar_kw, p) {
+function calcBattery(baseKw, solar_kw, p, gtvA, gtvT) {
   var cap = p.cap, pMax = p.pMax;
   var etaC = (p.etaC || 95) / 100, etaD = (p.etaD || 95) / 100;
   var socMin = (p.socMin || 10) / 100 * cap, socMax = (p.socMax || 90) / 100 * cap;
@@ -431,97 +461,293 @@ function calcBattery(baseKw, solar_kw, p) {
   var maxCycles = p.maxCycles || 600;
   var r;
 
-  if (strategy === 'peakshaving') r = simPeakShavingSymmetric(baseKw, cap, pMax, etaC, etaD, socMin, socMax, maxCycles);
+  if (strategy === 'peakshaving') {
+    var aggr = p.aggressiveness != null ? p.aggressiveness : 3;
+    var horizon = p.horizon != null ? p.horizon : 8;
+    r = simPeakShavingV2(baseKw, _optim.allTs, cap, pMax, etaC, etaD, socMin, socMax, {
+      aggressiveness: aggr, horizon: horizon, maxCycles: maxCycles,
+      gtvA: gtvA > 0 ? gtvA : 0, gtvT: gtvT > 0 ? gtvT : 0
+    });
+  }
   else if (strategy === 'onafhankelijkheid' || strategy === 'autarkie' || strategy === 'maxsolar') r = simAutarkie(baseKw, cap, pMax, etaC, etaD, socMin, socMax);
   else { r = { kw: baseKw.slice(), batProfile: new Array(baseKw.length).fill(0), socProfile: new Array(baseKw.length).fill(50), monthLog: [], totalEnergyThrough: 0 }; }
 
   var estCycles = cap > 0 ? r.totalEnergyThrough / cap / 2 : 0;
   return {
     kw: r.kw, batProfile: r.batProfile, socProfile: r.socProfile,
-    log: { cap: cap, pMax: pMax, etaC: p.etaC, etaD: p.etaD, socMin: p.socMin, socMax: p.socMax, strategy: strategy, maxCycles: maxCycles, monthLog: r.monthLog, estCycles: estCycles, totalEnergyThrough: r.totalEnergyThrough }
+    log: { cap: cap, pMax: pMax, etaC: p.etaC, etaD: p.etaD, socMin: p.socMin, socMax: p.socMax, strategy: strategy, maxCycles: maxCycles, aggressiveness: p.aggressiveness, horizon: p.horizon, monthLog: r.monthLog, estCycles: estCycles, totalEnergyThrough: r.totalEnergyThrough, actionCount: r.actionCount || 0 }
   };
 }
 
-// Strategie A — Symmetrische peak shaving met cycluslimiet
-function simPeakShavingSymmetric(baseKw, cap, pMax, etaC, etaD, socMin, socMax, maxCycles) {
+// ─── Peak shaving v2 — hybride: piek-shaven (primair) + nullijn-sturing (secundair)
+// Fase 1: per maand binaire zoek naar laagst haalbare drempel pStar zodat de batterij
+//   het profiel binnen ±pStar kan houden, met cycli-budget en GTV als plafond.
+// Fase 2: forward pass — boven ±pStar HARD ontladen/laden (peak shaving heeft
+//   onvoorwaardelijke prioriteit). Binnen ±pStar zachte sturing richting nullijn
+//   met dode band, min-actie, pendel-preventie en lookahead.
+function simPeakShavingV2(baseKw, allTs, cap, pMax, etaC, etaD, socMin, socMax, opts) {
+  opts = opts || {};
+  var dt = 0.25;
+  var aggr = Math.max(1, Math.min(5, parseInt(opts.aggressiveness, 10) || 3));
+  var horizon = Math.max(0, Math.min(96, parseInt(opts.horizon, 10) || 0));
+  var maxCycles = opts.maxCycles > 0 ? opts.maxCycles : 600;
+  var gtvA = opts.gtvA > 0 ? opts.gtvA : Infinity;
+  var gtvT = opts.gtvT > 0 ? opts.gtvT : Infinity;
+
+  // ── Fase 1: per-maand drempelberekening ────────────────────────────────────
+  var hasTs = allTs && allTs.length === baseKw.length;
   var monthMap = {};
-  _optim.allTs.forEach(function (ts, i) { var mn = ts.slice(0, 7); if (!monthMap[mn]) monthMap[mn] = []; monthMap[mn].push(i); });
-  var result = baseKw.slice(), batProfile = new Array(baseKw.length).fill(0), socProfile = new Array(baseKw.length).fill(0);
-  var monthLog = [], totalEnergyThrough = 0;
+  if (hasTs) {
+    allTs.forEach(function (ts, i) {
+      var mn = ts.slice(0, 7);
+      if (!monthMap[mn]) monthMap[mn] = [];
+      monthMap[mn].push(i);
+    });
+  } else {
+    monthMap['_all'] = baseKw.map(function (_, i) { return i; });
+  }
   var mnds = Object.keys(monthMap).sort();
-  // 1 cyclus = cap kWh ontladen + cap kWh geladen = 2*cap kWh doorvoer
-  var maxMonthThrough = (maxCycles > 0 && cap > 0) ? maxCycles * 2 * cap / 12 : Infinity;
+
+  // Proportionele cyclusbudget-allocatie: maanden met hogere pieken krijgen meer budget
+  var monthPeakScore = {}, totalPeakScore = 0;
+  mnds.forEach(function (mn) {
+    var idxs = monthMap[mn];
+    var absMax = idxs.reduce(function (acc, i) {
+      return Math.abs(baseKw[i]) > acc ? Math.abs(baseKw[i]) : acc;
+    }, 0);
+    monthPeakScore[mn] = absMax;
+    totalPeakScore += absMax;
+  });
+  var totalBudget = (maxCycles > 0 && cap > 0) ? maxCycles * 2 * cap : Infinity;
+  var maxMonthThrough = {};
+  mnds.forEach(function (mn) {
+    maxMonthThrough[mn] = (totalPeakScore > 0 && totalBudget < Infinity)
+      ? totalBudget * (monthPeakScore[mn] / totalPeakScore)
+      : Infinity;
+  });
+
+  var monthThresh = {};
 
   mnds.forEach(function (mn) {
-    var idxs = monthMap[mn], profile = idxs.map(function (i) { return baseKw[i]; });
-    var absMax = Math.max.apply(null, profile.map(function (v) { return Math.abs(v); }));
-    var lo = 0, hi = absMax, pStar = hi;
+    var idxs = monthMap[mn];
+    var profile = idxs.map(function (i) { return baseKw[i]; });
+    var maxA = profile.reduce(function (m, v) { return v > m ? v : m; }, 0);
+    var maxT = profile.reduce(function (m, v) { return -v > m ? -v : m; }, 0);
+    var absMax = Math.max(maxA, maxT);
+    if (absMax < 0.5) { monthThresh[mn] = 0; return; }
+
+    // Binaire zoek naar laagste haalbare symmetrische drempel
+    var lo = 0, hi = absMax, pStar = absMax;
     for (var iter = 0; iter < 22; iter++) {
       var mid = (lo + hi) / 2;
-      if (_fwdPassSymm(profile, mid, cap, pMax, etaC, etaD, socMin, socMax).feasible) { hi = mid; pStar = mid; } else lo = mid;
+      var fs = _fwdPassPeakOnly(profile, mid, mid, cap, pMax, etaC, etaD, socMin, socMax);
+      if (fs.feasible) { hi = mid; pStar = mid; } else lo = mid;
     }
-    var fs = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax);
-    if (maxMonthThrough < Infinity && fs.energyThrough > maxMonthThrough) {
+
+    // Cycli-budget: als haalbare drempel meer energie kost dan budget, drempel verhogen
+    var fsBest = _fwdPassPeakOnly(profile, pStar, pStar, cap, pMax, etaC, etaD, socMin, socMax);
+    if (maxMonthThrough[mn] < Infinity && fsBest.energyThrough > maxMonthThrough[mn]) {
       lo = pStar; hi = absMax;
       for (var iter2 = 0; iter2 < 22; iter2++) {
         var mid2 = (lo + hi) / 2;
-        if (_fwdPassSymm(profile, mid2, cap, pMax, etaC, etaD, socMin, socMax).energyThrough <= maxMonthThrough) { hi = mid2; pStar = mid2; } else lo = mid2;
+        var fs2 = _fwdPassPeakOnly(profile, mid2, mid2, cap, pMax, etaC, etaD, socMin, socMax);
+        if (fs2.energyThrough <= maxMonthThrough[mn]) { hi = mid2; pStar = mid2; } else lo = mid2;
       }
-      fs = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax);
     }
-    // Fase 3: secundaire drempel — gebruik resterend cyclusbudget voor sub-piek afvlakking
-    var pStar2 = pStar;
-    var budget2 = maxMonthThrough === Infinity ? Infinity : maxMonthThrough - fs.energyThrough;
-    if (budget2 > cap * 0.1) {
-      var lo3 = 0, hi3 = pStar;
-      for (var iter3 = 0; iter3 < 22; iter3++) {
-        var mid3 = (lo3 + hi3) / 2;
-        var fs3 = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax, mid3);
-        if (fs3.feasible && fs3.energyThrough <= maxMonthThrough) { hi3 = mid3; pStar2 = mid3; } else lo3 = mid3;
-      }
-      fs = _fwdPassSymm(profile, pStar, cap, pMax, etaC, etaD, socMin, socMax, pStar2);
-    }
-    idxs.forEach(function (gi, li) { result[gi] = fs.kw[li]; batProfile[gi] = fs.bp[li]; socProfile[gi] = fs.soc[li] / cap * 100; });
-    totalEnergyThrough += fs.energyThrough;
-    monthLog.push({ month: mn, threshold: pStar, threshLow: pStar2, origPeak: Math.max.apply(null, profile.map(function(v){return Math.max(0,v);})), newPeak: Math.max.apply(null, fs.kw.map(function(v){return Math.max(0,v);})), energyThrough: fs.energyThrough });
+    monthThresh[mn] = pStar;
   });
 
-  return { kw: result, batProfile: batProfile, socProfile: socProfile, monthLog: monthLog, totalEnergyThrough: totalEnergyThrough };
+  // ── Fase 2: forward pass ──────────────────────────────────────────────────
+  var absMaxAll = baseKw.length ? Math.max.apply(null, baseKw.map(function (v) { return Math.abs(v); })) : 100;
+  var dbBaseline = Math.max(5, absMaxAll * 0.02);
+  var dbScale =   [3.0, 2.0, 1.0, 0.7, 0.5 ][aggr - 1];
+  var minAScale = [1.4, 1.2, 1.0, 0.8, 0.6 ][aggr - 1];
+  var aggrFactor =[0.0, 0.1, 0.3, 0.6, 1.0 ][aggr - 1]; // dal-vulfactor zonder aankomende pieken; altijd 1.0 als rsvDis > 0
+  var dbBase = dbBaseline * dbScale;
+  var minABase = dbBase * 0.5 * minAScale;
+
+  // Lookahead-venster voor SoC-reservering. Minimaal 32 kwartieren (8u) zodat
+  // nachtdalen worden benut voor de ochtendpiek.
+  var rsvHorizon = Math.max(horizon, 32);
+
+  var result = new Array(baseKw.length);
+  var batProfile = new Array(baseKw.length);
+  var socProfile = new Array(baseKw.length);
+  var soc = (socMin + socMax) / 2;
+  var prevAction = 0;
+  var energyThrough = 0;
+  var actionCount = 0;
+  var doyStart = _doyFromTs(hasTs ? allTs[0] : null);
+
+  for (var i = 0; i < baseKw.length; i++) {
+    var net = baseKw[i];
+    var mn = hasTs ? allTs[i].slice(0, 7) : '_all';
+    var pStar = monthThresh[mn] != null ? monthThresh[mn] : Infinity;
+    // Effectieve drempels per richting: laagste van pStar en GTV
+    var threshA = Math.min(pStar, gtvA);
+    var threshT = Math.min(pStar, gtvT);
+
+    // SoC-reservering op basis van lookahead. Sommeert benodigde energie voor
+    // alle pieken in de komende rsvHorizon kwartieren, beide richtingen.
+    var rsvDis = 0, rsvChg = 0;
+    var rsvEnd = Math.min(baseKw.length, i + 1 + rsvHorizon);
+    for (var k = i + 1; k < rsvEnd; k++) {
+      var fv = baseKw[k];
+      if (fv > threshA) rsvDis += (fv - threshA) * dt / Math.max(0.01, etaD);
+      else if (fv < -threshT) rsvChg += (-fv - threshT) * dt * etaC;
+    }
+    rsvDis = Math.min(rsvDis, socMax - socMin);
+    rsvChg = Math.min(rsvChg, socMax - socMin);
+    var minSocAllowed = socMin + rsvDis;     // niet onder zakken (afnamepieken komen)
+    var maxSocAllowed = socMax - rsvChg;     // niet boven gaan (terugleverpieken komen)
+
+    // Cycli-governor — schaalt alleen de zachte zero-drive, niet het peak shaving
+    var daysElapsed = hasTs ? Math.max(0.001, _doyFromTs(allTs[i]) - doyStart + 0.001) : Math.max(0.001, i * dt / 24);
+    var actualCycles = cap > 0 ? energyThrough / (cap * 2) : 0;
+    var expectedCycles = maxCycles * daysElapsed / 365;
+    var ratio = expectedCycles > 0.05 ? actualCycles / expectedCycles : 1;
+    var govScale = Math.min(1.6, Math.max(0.85, Math.pow(ratio, 1.5)));
+    var dbEff = dbBase * govScale;
+    var minAEff = minABase * govScale;
+    var aggrEff = aggrFactor / govScale;
+
+    var action = 0;
+    var inPeakShave = false;
+
+    // ── PRIMAIR: peak shaving — onvoorwaardelijk, ALTIJD volle kracht ──
+    if (net > threshA) {
+      action = -(net - threshA);     // ontlaad om naar threshA te brengen
+      inPeakShave = true;
+    } else if (net < -threshT) {
+      action = (-net - threshT);     // laad om naar -threshT te brengen
+      inPeakShave = true;
+    } else {
+      // ── SECUNDAIR: actieve dal-vulling ──
+      // Laad zo agressief mogelijk wanneer net < threshA zodat de accu vol is
+      // bij de volgende piek. Kracht volledig als er aankomende pieken zijn (rsvDis > 0),
+      // aggrFactor-geschaald als preventieve vulling.
+      var fillStrength = rsvDis > 0 ? 1.0 : aggrFactor;
+      if (fillStrength > 0 && soc < maxSocAllowed - 0.5) {
+        var headroom = Math.max(0, threshA - net);
+        var maxChgKw = Math.min(pMax, headroom, (maxSocAllowed - soc) * 4 / Math.max(0.01, etaC));
+        if (maxChgKw > minAEff) {
+          action = maxChgKw * fillStrength;
+          if (action < minAEff) action = 0;
+        }
+      }
+      // Pre-ontlaad als teruglever-pieken komen en accu te vol is
+      if (action === 0 && soc > maxSocAllowed + 0.5) {
+        var excess = soc - maxSocAllowed;
+        var rampDis = Math.min(pMax * 0.7, excess * 4 * etaD);
+        if (rampDis > minAEff) action = -rampDis;
+      }
+    }
+
+    // Min-actie + pendel-preventie alleen voor zachte modes; piek-shave is hard
+    if (!inPeakShave) {
+      if (Math.abs(action) < minAEff) action = 0;
+      if (action !== 0 && prevAction !== 0 && _sign(action) !== _sign(prevAction)) {
+        if (Math.abs(action) < 2 * minAEff) action = 0;
+      }
+    }
+
+    // Technische grenzen
+    if (action > 0) {
+      var maxChg = (socMax - soc) * 4 / Math.max(0.01, etaC);
+      action = Math.min(action, pMax, maxChg);
+    } else if (action < 0) {
+      var maxDis = (soc - socMin) * 4 * etaD;
+      action = Math.max(action, -pMax, -maxDis);
+    }
+
+    // Pieksveiligheid: actie mag geen tegenovergestelde piek creëren
+    var newNet = net + action;
+    if (action > 0 && newNet > threshA) action = Math.max(0, threshA - net);
+    else if (action < 0 && newNet < -threshT) action = Math.min(0, -threshT - net);
+    if (Math.abs(action) < 0.05) action = 0;
+
+    // Accu-status bijwerken
+    if (action > 0)      soc += action * dt * etaC;
+    else if (action < 0) soc += action * dt / Math.max(0.01, etaD);
+    soc = Math.max(socMin, Math.min(socMax, soc));
+
+    energyThrough += Math.abs(action) * dt;
+    if (action !== 0) { actionCount++; prevAction = action; }
+    else prevAction = 0;
+
+    result[i] = net + action;
+    batProfile[i] = action;
+    socProfile[i] = cap > 0 ? (soc / cap * 100) : 0;
+  }
+
+  var monthLog = _buildMonthLogV2(baseKw, result, batProfile, dt);
+  // Annoteer met de drempel die per maand is berekend (transparantie in rapport)
+  monthLog.forEach(function (m) { m.threshold = monthThresh[m.month] != null ? monthThresh[m.month] : 0; });
+
+  return {
+    kw: result, batProfile: batProfile, socProfile: socProfile,
+    monthLog: monthLog, totalEnergyThrough: energyThrough, actionCount: actionCount
+  };
 }
 
-function _fwdPassSymm(profile, threshold, cap, pMax, etaC, etaD, socMin, socMax, threshLow) {
-  if (threshLow === undefined) threshLow = threshold;
+// Pure peak-shave forward pass — gebruikt door Fase 1 binaire zoek.
+// Asymmetrische drempels per richting; geen zero-drive, geen lookahead.
+function _fwdPassPeakOnly(profile, threshA, threshT, cap, pMax, etaC, etaD, socMin, socMax) {
   var soc = (socMin + socMax) / 2;
-  var kw = [], bp = [], socArr = [], feasible = true, energyThrough = 0;
+  var feasible = true, energyThrough = 0;
   for (var i = 0; i < profile.length; i++) {
-    var v = profile[i], b = 0;
-    if (v > threshold && soc > socMin) {
-      // Primair: ontlaad bij hoge afname piek
-      var dis = Math.min(pMax, (soc - socMin) * 4 * etaD, v - threshold);
-      v -= dis; soc -= dis / 4 / etaD; b = -dis; energyThrough += dis * 0.25;
-    } else if (v < -threshold && soc < socMax) {
-      // Primair: laad bij hoge teruglevering (boven threshold)
-      var chg = Math.min(pMax, (socMax - soc) * 4 / etaC, -v - threshold);
-      v += chg; soc += chg * etaC / 4; b = chg; energyThrough += chg * 0.25;
-    } else if (v > threshLow && soc > socMin) {
-      // Secundair: ontlaad bij sub-piek afname (threshLow < v ≤ threshold)
-      var dis2 = Math.min(pMax, (soc - socMin) * 4 * etaD, v - threshLow);
-      if (dis2 > 0.01) { v -= dis2; soc -= dis2 / 4 / etaD; b = -dis2; energyThrough += dis2 * 0.25; }
-    } else if (v < -threshLow && soc < socMax) {
-      // Secundair: laad bij sub-drempel teruglevering (-threshold ≤ v < -threshLow)
-      var chg2 = Math.min(pMax, (socMax - soc) * 4 / etaC, -v - threshLow);
-      if (chg2 > 0.01) { v += chg2; soc += chg2 * etaC / 4; b = chg2; energyThrough += chg2 * 0.25; }
-    } else if (v < threshLow && soc < socMax) {
-      // Laad in rustige periodes: breng netto vermogen omhoog naar threshLow
-      var headroom = v < 0 ? -v : threshLow - v;
-      var chg3 = Math.min(pMax, (socMax - soc) * 4 / etaC, headroom);
-      if (chg3 > 0.01) { v += chg3; soc += chg3 * etaC / 4; b = chg3; energyThrough += chg3 * 0.25; }
+    var v = profile[i];
+    if (v > threshA && soc > socMin) {
+      var dis = Math.min(pMax, (soc - socMin) * 4 * etaD, v - threshA);
+      v -= dis;
+      soc -= dis * 0.25 / Math.max(0.01, etaD);
+      energyThrough += dis * 0.25;
+    } else if (v < -threshT && soc < socMax) {
+      var chg = Math.min(pMax, (socMax - soc) * 4 / Math.max(0.01, etaC), -v - threshT);
+      v += chg;
+      soc += chg * 0.25 * etaC;
+      energyThrough += chg * 0.25;
     }
     soc = Math.max(socMin, Math.min(socMax, soc));
-    if (v > threshold + 0.6 || v < -(threshold + 0.6)) feasible = false;
-    kw.push(v); bp.push(b); socArr.push(soc);
+    if (v > threshA + 0.6 || v < -(threshT + 0.6)) feasible = false;
   }
-  return { feasible: feasible, kw: kw, bp: bp, soc: socArr, energyThrough: energyThrough };
+  return { feasible: feasible, energyThrough: energyThrough };
+}
+
+function _sign(x) { return x > 0 ? 1 : (x < 0 ? -1 : 0); }
+
+function _doyFromTs(ts) {
+  if (!ts) return 1;
+  var p = String(ts).split('T')[0].split('-');
+  if (p.length < 3) return 1;
+  var y = parseInt(p[0], 10), m = parseInt(p[1], 10) - 1, d = parseInt(p[2], 10);
+  var t = parseInt(String(ts).split('T')[1] || '00:00', 10) || 0;
+  var date = new Date(y, m, d);
+  var y0 = new Date(y, 0, 1);
+  return Math.floor((date - y0) / 86400000) + 1 + t / 24;
+}
+
+function _buildMonthLogV2(baseKw, result, batProfile, dt) {
+  var allTs = _optim.allTs;
+  if (!allTs || allTs.length !== baseKw.length) return [];
+  var mndSet = {};
+  allTs.forEach(function (ts) { mndSet[ts.slice(0, 7)] = 1; });
+  var mnds = Object.keys(mndSet).sort();
+  return mnds.map(function (mn) {
+    var oP = 0, nP = 0, oN = 0, nN = 0, eThr = 0, acts = 0;
+    allTs.forEach(function (ts, idx) {
+      if (ts.slice(0, 7) === mn) {
+        var bv = baseKw[idx], nv = result[idx], a = batProfile[idx];
+        if (bv > oP) oP = bv;
+        if (nv > nP) nP = nv;
+        if (-bv > oN) oN = -bv;
+        if (-nv > nN) nN = -nv;
+        eThr += Math.abs(a) * dt;
+        if (a !== 0) acts++;
+      }
+    });
+    return { month: mn, origPeak: oP, newPeak: nP, origPeakT: oN, newPeakT: nN, energyThrough: eThr, actions: acts };
+  });
 }
 
 // Strategie B — Onafhankelijkheid/Zon PV: laad op surplus, ontlaad op afname
