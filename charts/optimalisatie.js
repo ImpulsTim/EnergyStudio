@@ -80,13 +80,13 @@ function renderScenarioSidebar() {
       tags.push('👥 ' + sc.connectionIds.length + '/' + totalCos);
     var scRes = _optim.scenResults[sc.id];
     var gtvLine = scRes ? ('GTV ' + scRes.gtvA + ' / ' + scRes.gtvT + ' kW') :
-                  (sc.gtvA ? 'GTV ' + sc.gtvA + ' / ' + sc.gtvT + ' kW' : '');
+                  (sc.gtvA != null ? 'GTV ' + sc.gtvA + ' / ' + sc.gtvT + ' kW' : '');
     if (gtvLine) tags.push(gtvLine);
     if (sc.solar && sc.solar.enabled) tags.push('☀ ' + sc.solar.kWp + ' kWp');
     if (sc.bat && sc.bat.enabled) tags.push('⚡ ' + sc.bat.cap + ' kWh');
     html += '<div class="ci ' + (isActive ? 's' : '') + '">' +
       '<div class="cn"><div class="sck ' + (isActive ? 'on' : '') + '" data-scen-id="' + sc.id + '"></div>' +
-      '<span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + sc.name + '</span>' +
+      '<span style="flex:1;min-width:0;word-break:break-word">' + sc.name + '</span>' +
       '<button style="background:none;border:none;cursor:pointer;font-size:12px;color:#888;padding:0 3px;flex-shrink:0" data-scen-edit="' + sc.id + '" title="Bewerken">✎</button>' +
       '<button style="background:none;border:none;cursor:pointer;font-size:12px;color:#c0392b;padding:0 3px;flex-shrink:0" data-scen-del="' + sc.id + '" title="Verwijderen">✕</button>' +
       '</div>' +
@@ -128,8 +128,8 @@ function openEditScen(id) {
   if (!sc) return;
   _editScenId = id;
   document.getElementById('sName').value = sc.name;
-  document.getElementById('sGtvA').value = sc.gtvA || '';
-  document.getElementById('sGtvT').value = sc.gtvT || '';
+  document.getElementById('sGtvA').value = sc.gtvA != null ? sc.gtvA : '';
+  document.getElementById('sGtvT').value = sc.gtvT != null ? sc.gtvT : '';
   renderScenCosList(sc.connectionIds || []);
   var hasSolar = !!(sc.solar && sc.solar.enabled);
   var hasBat = !!(sc.bat && sc.bat.enabled);
@@ -215,8 +215,8 @@ function saveScen() {
     id: _editScenId || uid(),
     name: name,
     connectionIds: connectionIds,
-    gtvA: isNaN(rawGA) ? 0 : rawGA,
-    gtvT: isNaN(rawGT) ? 0 : rawGT,
+    gtvA: isNaN(rawGA) ? null : rawGA,
+    gtvT: isNaN(rawGT) ? null : rawGT,
     solar: {
       enabled: hasSolar,
       kWp: parseFloat(document.getElementById('sKwp').value) || 100,
@@ -353,8 +353,8 @@ function calcScenario(sc) {
   });
 
   // GTV voor dit scenario
-  var gtvA = sc.gtvA || subset.reduce(function (s, c) { return s + (c.gtvA || 0); }, 0);
-  var gtvT = sc.gtvT || subset.reduce(function (s, c) { return s + (c.gtvT || 0); }, 0);
+  var gtvA = sc.gtvA != null ? sc.gtvA : subset.reduce(function (s, c) { return s + (c.gtvA || 0); }, 0);
+  var gtvT = sc.gtvT != null ? sc.gtvT : subset.reduce(function (s, c) { return s + (c.gtvT || 0); }, 0);
 
   var solar_kw = null, solarLog = null, batProfile = null, socProfile = null, batLog = null;
 
@@ -974,7 +974,7 @@ function renderComparison() {
 var _batState = null, _batZoom = 1;
 
 function renderAssetAnalysis(scenId) {
-  ['cPVYear', 'cPVMonth', 'cPVWeek', 'cBatYear', 'cBatWeek', 'cBatSoC', 'cBatMonth'].forEach(function (id) { dC(id); });
+  ['cPVYear', 'cPVMonth', 'cPVWeek', 'cBatYear', 'cBatSoC'].forEach(function (id) { dC(id); });
   var el = document.getElementById('vergAssets');
   el.innerHTML = ''; _batState = null;
   if (!scenId || scenId === 'basis') return;
@@ -990,31 +990,57 @@ function renderAssetAnalysis(scenId) {
 function _panBat() {
   if (!_batState) return;
   var allTs = _batState.allTs, batProfile = _batState.batProfile;
+  var socProfile = _batState.socProfile, socMin = _batState.socMin, socMax = _batState.socMax;
   var total = allTs.length;
   var win = Math.max(4, Math.round(total * _batZoom));
   var panEl = document.getElementById('batPan'); if (!panEl) return;
   var pct = parseInt(panEl.value) / 100;
   var maxStart = total - win;
   var si = Math.min(Math.max(0, Math.round(pct * maxStart)), maxStart);
-  var slTs = allTs.slice(si, si + win), slBat = batProfile.slice(si, si + win);
-  var labels = buildJaarLabels(slTs, win);
+  var slTs = allTs.slice(si, si + win);
+  var slBat = batProfile.slice(si, si + win);
+  var slSoC = socProfile ? socProfile.slice(si, si + win) : [];
+  var span = slTs.length > 1 ? new Date(slTs[slTs.length - 1]).getTime() - new Date(slTs[0]).getTime() : 86400000;
   var days = Math.round(win / 96);
   var lbl = win <= 96 ? win + ' kwartieren' : days <= 1 ? '1 dag' : days <= 14 ? days + ' dagen' : Math.round(days / 30.5) + ' mnd';
   var lblEl = document.getElementById('batZoomLbl'); if (lblEl) lblEl.textContent = lbl;
-  var N = Math.min(slTs.length, 600), step = Math.max(1, Math.floor(slTs.length / N));
-  var sBat = slBat.filter(function (_, i) { return i % step === 0; });
-  var sL = labels.filter(function (_, i) { return i % step === 0; });
+  var N = Math.min(slTs.length, 800), step = Math.max(1, Math.floor(slTs.length / N));
+  var sTs = [], sBat = [], sSoC = [];
+  for (var i = 0; i < slTs.length; i += step) {
+    sTs.push(slTs[i]);
+    sBat.push(slBat[i]);
+    if (slSoC.length) sSoC.push(slSoC[i]);
+  }
   dC('cBatYear');
   var canvas = document.getElementById('cBatYear'); if (!canvas) return;
-  CH['cBatYear'] = new Chart(canvas, { type: 'line', data: { labels: sL, datasets: [{
+  CH['cBatYear'] = new Chart(canvas, { type: 'line', data: { labels: sTs, datasets: [{
     label: 'Laden (+) / Ontladen (−) kW', data: sBat,
-    borderColor: function (ctx) { return (ctx.raw || 0) >= 0 ? '#3498db' : '#e67e22'; },
-    segment: { borderColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? '#3498db' : '#e67e22'; }, backgroundColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? 'rgba(52,152,219,.1)' : 'rgba(230,126,34,.1)'; } },
+    segment: { borderColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? '#3498db' : '#e67e22'; }, backgroundColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? 'rgba(52,152,219,.08)' : 'rgba(230,126,34,.08)'; } },
     backgroundColor: 'transparent', fill: true, tension: 0, pointRadius: 0, borderWidth: 1.5
   }]}, options: { responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
-    scales: { x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxRotation: 0, autoSkip: false, callback: function (v, i) { return sL[i] || null; } }, grid: { color: '#f3f7f4' } },
-      y: Object.assign(ax('kW'), { grid: { color: function (ctx) { return ctx.tick.value === 0 ? '#242b38' : '#f3f7f4'; }, lineWidth: function (ctx) { return ctx.tick.value === 0 ? 2 : 0.5; } } }) }
+    scales: {
+      x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10,
+        callback: function (value) { var ts = this.getLabelForValue(value); return ts ? _jFormatTick(ts, span) : null; }
+      }, grid: { color: '#f3f7f4' } },
+      y: Object.assign(ax('kW'), { grid: { color: function (ctx) { return ctx.tick.value === 0 ? '#242b38' : '#f3f7f4'; }, lineWidth: function (ctx) { return ctx.tick.value === 0 ? 2 : 0.5; } } })
+    }
+  }});
+  if (!sSoC.length) return;
+  dC('cBatSoC');
+  var socCanvas = document.getElementById('cBatSoC'); if (!socCanvas) return;
+  CH['cBatSoC'] = new Chart(socCanvas, { type: 'line', data: { labels: sTs, datasets: [
+    { label: 'SoC (%)', data: sSoC.map(function (v) { return +v.toFixed(1); }), borderColor: '#46962b', backgroundColor: 'rgba(70,150,43,.1)', fill: true, tension: 0, pointRadius: 0, borderWidth: 1.5 },
+    { label: 'Min ' + socMin + '%', data: new Array(sTs.length).fill(socMin), borderColor: '#e74c3c', borderDash: [4, 3], pointRadius: 0, fill: false, borderWidth: 1 },
+    { label: 'Max ' + socMax + '%', data: new Array(sTs.length).fill(socMax), borderColor: '#3498db', borderDash: [4, 3], pointRadius: 0, fill: false, borderWidth: 1 }
+  ]}, options: { responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
+    scales: {
+      x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 10,
+        callback: function (value) { var ts = this.getLabelForValue(value); return ts ? _jFormatTick(ts, span) : null; }
+      }, grid: { color: '#f3f7f4' } },
+      y: Object.assign(ax('SoC (%)'), { min: 0, max: 100 })
+    }
   }});
 }
 
@@ -1084,16 +1110,14 @@ function _buildBatSection(res, sc) {
     '<span style="font-size:10px;color:#888;min-width:70px;text-align:right" id="batZoomLbl">Volledig</span>' +
     '</div>' +
     '<div class="cw" style="height:200px"><canvas id="cBatYear"></canvas></div>' +
-    '<div class="ct2" style="font-size:11px;margin-top:14px">Gemiddeld weekprofiel laden/ontladen per seizoen (kW)</div>' +
-    '<div class="cw" style="height:200px"><canvas id="cBatWeek"></canvas></div>' +
-    '<div class="ct2" style="font-size:11px;margin-top:14px">SoC-verloop — gemiddeld weekprofiel per seizoen (%)</div>' +
-    '<div class="cw" style="height:180px"><canvas id="cBatSoC"></canvas></div>' +
-    '<div class="ct2" style="font-size:11px;margin-top:14px">Maandelijkse energiedoorvoer (kWh)</div>' +
-    '<div class="cw" style="height:180px"><canvas id="cBatMonth"></canvas></div>' +
+    '<div class="ct2" style="font-size:11px;margin-top:14px">SoC-verloop (%)</div>' +
+    '<div class="cw" style="height:160px"><canvas id="cBatSoC"></canvas></div>' +
+    '<div class="ct2" style="font-size:11px;margin-top:14px">Cyclus-activiteit per dag</div>' +
+    '<div id="cBatHeatmap" style="margin-top:4px;overflow-x:auto"></div>' +
     '</div>';
 
   setTimeout(function () {
-    _batState = { allTs: allTs, batProfile: batProfile };
+    _batState = { allTs: allTs, batProfile: batProfile, socProfile: socProfile, socMin: log.socMin, socMax: log.socMax };
     _batZoom = 1;
     document.getElementById('batPan').value = 0;
     _panBat();
@@ -1101,9 +1125,7 @@ function _buildBatSection(res, sc) {
     document.getElementById('batZoomOut').addEventListener('click', function () { _batZoom = Math.min(1, _batZoom * 2); _panBat(); });
     document.getElementById('batZoomReset').addEventListener('click', function () { _batZoom = 1; document.getElementById('batPan').value = 0; _panBat(); });
     document.getElementById('batPan').addEventListener('input', _panBat);
-    _drawBatWeek(allTs, batProfile);
-    _drawBatSoC(allTs, socProfile, log.socMin, log.socMax);
-    _drawBatMonth(allTs, batProfile);
+    _drawCycleHeatmap(allTs, batProfile, log.cap);
   }, 30);
 
   return div;
@@ -1256,6 +1278,89 @@ function _drawBatMonth(allTs, batProfile) {
     ]},
     options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } }, scales: { x: Object.assign(ax(), { grid: { display: false } }), y: ax('kWh') } }
   });
+}
+
+function _drawCycleHeatmap(allTs, batProfile, batCap) {
+  var container = document.getElementById('cBatHeatmap');
+  if (!container || !allTs.length) return;
+
+  // Bereken dagelijks geladen kWh per dag
+  var daily = {};
+  allTs.forEach(function (ts, i) {
+    var d = ts.slice(0, 10);
+    var bp = batProfile[i] || 0;
+    if (bp > 0) daily[d] = (daily[d] || 0) + bp * 0.25;
+  });
+
+  var startStr = allTs[0].slice(0, 10);
+  var endStr = allTs[allTs.length - 1].slice(0, 10);
+  var startDate = new Date(startStr + 'T00:00:00');
+  var endDate = new Date(endStr + 'T00:00:00');
+
+  // Begin op de maandag van de startweek
+  var startDow = (startDate.getDay() + 6) % 7; // 0=Ma, 6=Zo
+  var gridStart = new Date(startDate.getTime() - startDow * 86400000);
+  var totalDays = Math.round((endDate.getTime() - gridStart.getTime()) / 86400000) + 1;
+  var nWeeks = Math.ceil(totalDays / 7);
+  var cap = batCap || 1;
+
+  function cellColor(frac) {
+    if (frac <= 0)    return '#eee';
+    if (frac <= 0.25) return 'rgba(230,126,34,.25)';
+    if (frac <= 0.5)  return 'rgba(230,126,34,.50)';
+    if (frac <= 0.75) return 'rgba(230,126,34,.75)';
+    return '#e67e22';
+  }
+
+  var DAYS_NL = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+  // Maandlabels: donderdag van de week bepaalt de maand (ISO-conventie)
+  var monthLbls = new Array(nWeeks).fill('');
+  var prevMonth = -1;
+  for (var w = 0; w < nWeeks; w++) {
+    var thu = new Date(gridStart.getTime() + (w * 7 + 3) * 86400000);
+    if (thu.getMonth() !== prevMonth) {
+      monthLbls[w] = MND[thu.getMonth()];
+      prevMonth = thu.getMonth();
+    }
+  }
+
+  var html = '<div style="display:inline-flex;flex-direction:column;gap:2px;font-family:Barlow,sans-serif">';
+
+  // Maandlabels rij
+  html += '<div style="display:flex;padding-left:26px;gap:2px">';
+  for (var w = 0; w < nWeeks; w++) {
+    html += '<div style="width:9px;font-size:9px;color:#888;overflow:visible;white-space:nowrap">' + (monthLbls[w] || '') + '</div>';
+  }
+  html += '</div>';
+
+  // Dag-rijen
+  for (var d = 0; d < 7; d++) {
+    html += '<div style="display:flex;align-items:center;gap:2px">';
+    html += '<div style="width:22px;font-size:9px;color:#888;text-align:right;flex-shrink:0">' + DAYS_NL[d] + '</div>';
+    for (var w = 0; w < nWeeks; w++) {
+      var cellDate = new Date(gridStart.getTime() + (w * 7 + d) * 86400000);
+      var cellStr = cellDate.toISOString().slice(0, 10);
+      var inRange = cellDate >= startDate && cellDate <= endDate;
+      var frac = inRange ? ((daily[cellStr] || 0) / cap) : -1;
+      var color = inRange ? cellColor(frac) : '#f8f8f8';
+      var tip = inRange ? (DAYS_NL[d] + ' ' + cellStr + ': ' + (frac > 0 ? frac.toFixed(2) : '0') + ' cycli') : '';
+      html += '<div style="width:9px;height:9px;background:' + color + ';border-radius:2px;flex-shrink:0" title="' + tip + '"></div>';
+    }
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // Legenda
+  html += '<div style="display:flex;align-items:center;gap:5px;margin-top:5px;font-size:9px;color:#888;padding-left:26px">';
+  html += '<span>Minder</span>';
+  ['#eee', 'rgba(230,126,34,.25)', 'rgba(230,126,34,.50)', 'rgba(230,126,34,.75)', '#e67e22'].forEach(function (c) {
+    html += '<div style="width:9px;height:9px;background:' + c + ';border-radius:2px;flex-shrink:0"></div>';
+  });
+  html += '<span>Meer &nbsp;(cycli/dag, 1 = vol geladen)</span>';
+  html += '</div>';
+
+  container.innerHTML = html;
 }
 
 // ─── Hulpfuncties ────────────────────────────────────────────────────────────

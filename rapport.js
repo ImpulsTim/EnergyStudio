@@ -70,9 +70,9 @@ async function downloadRapportPDF(){
       margin:[10,10,10,10],
       filename:fname,
       image:{type:'jpeg',quality:0.95},
-      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:element.scrollWidth},
+      html2canvas:{scale:2,useCORS:true,backgroundColor:'#ffffff',windowWidth:794,logging:false},
       jsPDF:{unit:'mm',format:'a4',orientation:'portrait',compress:true},
-      pagebreak:{mode:['css','legacy'],before:'.pb',avoid:['.no-break','.rchart','.kg','table','.rsh']}
+      pagebreak:{mode:['css'],avoid:['.no-break','.rchart','.kg','table','.rsh']}
     };
     var blob=await html2pdf().set(opt).from(element).outputPdf('blob');
     if(_rapMethod()==='link')triggerDownloadAsLink(blob,fname);
@@ -123,7 +123,7 @@ async function buildRapport(opts){
     '@media print{.pb{page-break-before:always}.no-break,.kg,.rchart,table,.rsh,.kpi-row{page-break-inside:avoid}img{max-width:100%!important}}',
     'a{color:#46962b;text-decoration:none}',
     // Page wrappers (each .page is an A4 unit)
-    '.page{padding:8mm 6mm 6mm;min-height:280mm;position:relative}',
+    '.page{padding:8mm 6mm 6mm;position:relative}',
     '.page.pb{page-break-before:always}',
     // Top header bar (used on content pages, not on cover/end)
     '.hdr{background:#46962b;padding:9px 16px;display:flex;align-items:center;justify-content:space-between;-webkit-print-color-adjust:exact;print-color-adjust:exact;margin:-8mm -6mm 12px}',
@@ -255,6 +255,7 @@ async function buildRapport(opts){
     try{
       chart.options.devicePixelRatio=2;
       chart.resize(displayW,h);
+      chart.update('none'); // forceer synchrone render, sla animatie over
       uri=src.toDataURL('image/png');
     }catch(e){console.error('ci '+id+':',e);}
     try{
@@ -404,18 +405,11 @@ async function buildRapport(opts){
     await new Promise(function(r){setTimeout(r,180);});
 
     var imgs={
-      jaar:ci('cJaarG',360),
-      week:ci('cWeek',340),
-      bdkA:ci('cBdk',300,false),
-      bdkT:ci('cBdkT',300,false),
-      ovsch:ci('cOvsch',320),
-      piekA:ci('cPiekA',320,false),
-      piekT:ci('cPiekT',320,false),
-      kost:ci('cKost',360),
-      pvYear:hasPV?ci('cPVYear',320):'',
-      pvMonth:hasPV?ci('cPVMonth',280,false):'',
-      batYear:hasBat?ci('cBatYear',320):'',
-      batSoC:hasBat?ci('cBatSoC',280,false):''
+      week:ci('cWeek',380),
+      pvYear:hasPV?ci('cPVYear',300):'',
+      pvMonth:hasPV?ci('cPVMonth',240,false):'',
+      batYear:hasBat?ci('cBatYear',300):'',
+      batSoC:hasBat?ci('cBatSoC',240,false):''
     };
     imgsByScen.push(imgs);
 
@@ -484,16 +478,11 @@ async function buildRapport(opts){
   // ────────────────────────────────────────────────────────────
   // PAGINA 2 — INHOUDSOPGAVE
   // ────────────────────────────────────────────────────────────
+  var basis0=scenDataArr[0];
   var tocRows=[
     {n:'1',t:'Samenvatting'},
     {n:'2',t:'Project & deelnemers'},
-    {n:'3',t:'Analyse'},
-    {n:'3.1',t:'Jaarprofiel',sub:true},
-    {n:'3.2',t:'Weekprofiel',sub:true},
-    {n:'3.3',t:'Belastingsduurkromme',sub:true},
-    {n:'3.4',t:'GTV-overschrijdingen',sub:true},
-    {n:'3.5',t:'Piekanalyse & GTO',sub:true},
-    {n:'3.6',t:'Kostenanalyse',sub:true}
+    {n:'3',t:'Analyse — '+(basis0?basis0.scenName:'Basis')}
   ];
   if(scenDataArr.length>1){
     tocRows.push({n:'4',t:'Scenario\'s & vergelijking'});
@@ -615,85 +604,32 @@ async function buildRapport(opts){
       return'<div class="rsub"><span class="rsub-num">'+num+'</span>'+title+'</div>';
     }
 
+    var pvNum=scenIdx===0?'3.1':('4.'+scenIdx+'.1');
+    var batNum=scenIdx===0?'3.2':('4.'+scenIdx+'.2');
+
     var html='<div class="page pb">'+
       pageHdr+
-      '<div class="rsh"><div class="rsh-n">'+sectionNum+'</div><div class="rsh-t">'+sectionTitle+' '+badges+'</div></div>';
+      '<div class="rsh"><div class="rsh-n">'+sectionNum+'</div><div class="rsh-t">'+sectionTitle+' '+badges+'</div></div>'+
 
-    // 3.1 Jaarprofiel
-    if(imgs.jaar){
-      html+=subHdr(sectionNum+'.1','Jaarprofiel')+
-        '<p class="rintro">Het collectieve vermogen over de gehele meetperiode (15-minuutwaarden). Zichtbaar zijn seizoenspatronen, piekvensters en de positie ten opzichte van de GTV-grenzen.</p>'+
-        '<div class="rchart">'+imgs.jaar+'</div>'+
-        '<div class="kg k4">'+
-          kpiCard('Piekafname',_fmtN(k.maxA,0)+' kW','GTV: '+gtvA+' kW',k.maxA>gtvA?'red':'dark')+
-          kpiCard('Piek terug',_fmtN(k.maxT,0)+' kW','GTV-T: '+gtvT+' kW',k.maxT>gtvT?'red':'dark')+
-          kpiCard('Volume afname',_fmtN(k.volA,1)+' MWh','',' dark')+
-          kpiCard('Volume terug',_fmtN(k.volT,1)+' MWh','',' dark')+
-        '</div>';
-    }
+      // 6 KPI-kaarten: 3 kolommen × 2 rijen
+      '<div class="kg">'+
+        kpiCard('Piekafname',_fmtN(k.maxA,0)+' kW','GTV-A: '+gtvA+' kW',k.maxA>gtvA?'red':'grn')+
+        kpiCard('Piek teruglevering',_fmtN(k.maxT,0)+' kW','GTV-T: '+gtvT+' kW',k.maxT>gtvT?'red':'grn')+
+        kpiCard('GTV-A overschrijdingen',_fmtI(k.ovA),'kwartierwaarden boven GTV',k.ovA>0?'red':'grn')+
+        kpiCard('GTV-T overschrijdingen',_fmtI(k.ovT),'kwartierwaarden boven GTV-T',k.ovT>0?'red':'grn')+
+        kpiCard('Volume afname',_fmtN(k.volA,1)+' MWh','meetperiode',' dark')+
+        kpiCard('Volume teruglevering',_fmtN(k.volT,1)+' MWh','meetperiode',' dark')+
+      '</div>';
 
-    // 3.2 Weekprofiel
+    // Weekprofiel
     if(imgs.week){
-      html+=subHdr(sectionNum+'.2','Weekprofiel')+
-        '<p class="rintro">Gemiddeld dag-/uurpatroon over een hele week — toont werkdagritme en weekend-effect met min/max-bandbreedte.</p>'+
+      html+='<p class="rintro" style="margin-top:4px">Gemiddeld dag-/uurpatroon over een hele week — werkdagritme en weekend-effect met min/max-bandbreedte.</p>'+
         '<div class="rchart">'+imgs.week+'</div>';
     }
 
-    // 3.3 BDK
-    if(imgs.bdkA||imgs.bdkT){
-      html+=subHdr(sectionNum+'.3','Belastingsduurkromme')+
-        '<p class="rintro">Cumulatieve verdeling van vermogen over de tijd. Hoe vlakker de curve, hoe gelijkmatiger het verbruik. De top-percentielen tonen het peak shaving-potentieel.</p>'+
-        '<div class="r2col">'+
-          (imgs.bdkA?'<div class="rchart"><h3>BDK — afname</h3>'+imgs.bdkA+'</div>':'')+
-          (imgs.bdkT?'<div class="rchart"><h3>BDK — teruglevering</h3>'+imgs.bdkT+'</div>':'')+
-        '</div>';
-    }
-
-    // 3.4 Overschrijdingen
-    if(imgs.ovsch){
-      html+=subHdr(sectionNum+'.4','GTV-overschrijdingen')+
-        '<p class="rintro">Aantal kwartierwaarden per maand boven de gecontracteerde GTV. Concentraties geven aan in welke periode aanvullende capaciteit of peak shaving nodig is.</p>'+
-        '<div class="rchart">'+imgs.ovsch+'</div>'+
-        '<div class="kg">'+
-          kpiCard('Overschrijdingen afname',k.ovA,'kwartierwaarden',k.ovA>0?'red':'grn')+
-          kpiCard('Overschrijdingen teruglev.',k.ovT,'kwartierwaarden',k.ovT>0?'red':'grn')+
-          kpiCard('Hoogste piek',_fmtN(k.maxA,0)+' kW',k.maxA>gtvA?'+'+_fmtN((k.maxA-gtvA)/gtvA*100,0)+'% boven GTV':'binnen contract',k.maxA>gtvA?'red':'grn')+
-        '</div>';
-    }
-
-    // 3.5 Piekanalyse & GTO
-    if(imgs.piekA||imgs.piekT){
-      html+=subHdr(sectionNum+'.5','Piekanalyse & GTO')+
-        '<p class="rintro">Vergelijking van som individuele maandpieken versus collectieve maandpiek. Het verschil (diversiteitswinst) is de basis voor besparing via een collectief transportcontract.</p>'+
-        '<div class="r2col">'+
-          (imgs.piekA?'<div class="rchart"><h3>Pieken — afname</h3>'+imgs.piekA+'</div>':'')+
-          (imgs.piekT?'<div class="rchart"><h3>Pieken — teruglevering</h3>'+imgs.piekT+'</div>':'')+
-        '</div>';
-      if(scenData.isBasis){
-        var divP=calcDiversityPct(),gtoB=calcGtoSavingBasis();
-        html+='<div class="kg">'+
-          kpiCard('Diversiteitswinst',divP!=null?_fmtN(divP,0)+'%':'—','collectief vs. individueel',divP!=null&&divP>15?'grn':'dark')+
-          kpiCard('GTO besparing',gtoB!=null?_fmtE(gtoB):'—','per jaar',gtoB!=null&&gtoB>0?'grn':'dark')+
-          kpiCard('Hoogste maandpiek',_fmtN(k.maxA,0)+' kW','op groepsniveau','dark')+
-        '</div>';
-      }else if(scenData.gtoSaving!=null){
-        html+='<div class="kg k2">'+
-          kpiCard('kW-max besparing vs. basis',_fmtE(scenData.gtoSaving),'per jaar',scenData.gtoSaving>0?'grn':'dark')+
-          kpiCard('Pieksverschuiving',_fmtN(basis.kpis.maxA-k.maxA,0)+' kW','t.o.v. basisscenario',basis.kpis.maxA-k.maxA>0?'grn':'dark')+
-        '</div>';
-      }
-    }
-
-    // 3.6 Kosten
-    if(imgs.kost){
-      html+=subHdr(sectionNum+'.6','Kostenanalyse')+
-        '<p class="rintro">Uitsplitsing van energie- en netwerkkosten per aansluiting. De kW-max-component (rood) is meestal de grootste hefboom voor besparing via diversiteit of peak shaving.</p>'+
-        '<div class="rchart">'+imgs.kost+'</div>';
-    }
-
-    // PV & Bat (alleen als geconfigureerd)
+    // PV & Batterij (alleen als geconfigureerd)
     if(imgs.pvYear||imgs.pvMonth){
-      html+=subHdr(sectionNum+'.7','Zonnepanelen')+
+      html+=subHdr(pvNum,'Zonnepanelen')+
         '<p class="rintro">Gemodelleerde opwek met astronomische zonpositie en KNMI-bewolkingsdata.</p>'+
         '<div class="r2col">'+
           (imgs.pvYear?'<div class="rchart"><h3>PV — jaarprofiel</h3>'+imgs.pvYear+'</div>':'')+
@@ -701,7 +637,7 @@ async function buildRapport(opts){
         '</div>';
     }
     if(imgs.batYear||imgs.batSoC){
-      html+=subHdr(sectionNum+'.8','Batterij')+
+      html+=subHdr(batNum,'Batterij')+
         '<p class="rintro">Gedrag en laadstatus van de batterij over de meetperiode.</p>'+
         '<div class="r2col">'+
           (imgs.batYear?'<div class="rchart"><h3>Batterij — vermogen (kW)</h3>'+imgs.batYear+'</div>':'')+

@@ -197,7 +197,7 @@ function panJ() {
           ticks: {
             color: '#999', font: { family: 'Barlow', size: 11 },
             maxRotation: 0, autoSkip: true, maxTicksLimit: 10,
-            callback: function (value) { return value ? _jFormatTick(value, span) : null; }
+            callback: function (value) { var ts = this.getLabelForValue(value); return ts ? _jFormatTick(ts, span) : null; }
           },
           grid: { color: '#f3f7f4' }
         },
@@ -233,7 +233,7 @@ function panJ() {
           ticks: {
             color: '#999', font: { family: 'Barlow', size: 11 },
             maxRotation: 0, autoSkip: true, maxTicksLimit: 10,
-            callback: function (value) { return value ? _jFormatTick(value, span) : null; }
+            callback: function (value) { var ts = this.getLabelForValue(value); return ts ? _jFormatTick(ts, span) : null; }
           },
           grid: { color: '#f3f7f4' }
         },

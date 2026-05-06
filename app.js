@@ -158,7 +158,7 @@ async function openEditComp(id){
   document.getElementById('btnDelComp').style.display='';
   document.getElementById('cN').value=c.name;document.getElementById('cE').value=c.ean||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
-  document.getElementById('cGA').value=c.gtvA||150;document.getElementById('cGT').value=c.gtvT||80;
+  document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:80;
   document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';document.getElementById('cST').value=c.stedinT||'TrafoMSLS';
   document.getElementById('cPA').value=c.priceA!=null?c.priceA:0.12;document.getElementById('cPT2').value=c.priceT!=null?c.priceT:0.08;
   document.getElementById('cPD').value=c.priceDyn||'';
@@ -172,7 +172,7 @@ async function saveComp(){
   if(!name){notify('Vul een naam in',false);return;}
   var p=ap();var id=editId||uid();
   var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),category:document.getElementById('cCat').value,
-    gtvA:parseFloat(document.getElementById('cGA').value)||150,gtvT:parseFloat(document.getElementById('cGT').value)||80,
+    gtvA:(function(){var v=parseFloat(document.getElementById('cGA').value);return isNaN(v)?150:v;})(),gtvT:(function(){var v=parseFloat(document.getElementById('cGT').value);return isNaN(v)?80:v;})(),
     stedinA:document.getElementById('cSA').value,stedinT:document.getElementById('cST').value,
     priceType:pType,priceA:parseFloat(document.getElementById('cPA').value)||0.12,
     priceT:parseFloat(document.getElementById('cPT2').value)||0.08,
