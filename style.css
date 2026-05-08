@@ -44,6 +44,18 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .kv{font-size:18px;font-weight:900;color:#242b38;line-height:1}
 .ku{font-size:10px;color:#aaa;margin-top:1px}
 .kb.red .kv{color:#c0392b}.kb.grn .kv{color:#46962b}
+.ov-kpi-wrap{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.ov-kpi-row{display:flex;gap:14px;align-items:stretch}
+.ov-sec{display:flex;flex-direction:column;gap:6px}
+.ov-sec-lbl{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:#2c302e;padding-left:1px}
+.ov-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:7px;flex:1}
+.ov-sec-gen{align-self:flex-start}
+.ov-sec-gen .kb{padding:7px 10px}
+.ov-sec-piek{flex:1}
+.ov-sec-piek .kb{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:12px 14px}
+.ov-sec-piek .kv{font-size:50px}
+.ov-row-lg .kb{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:14px 16px}
+.ov-row-lg .kv{font-size:26px}
 .fg{display:flex;flex-direction:column;gap:3px}
 .fg label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:#555}
 .fg input,.fg select,.fg textarea{border:1.5px solid #dce6e0;border-radius:6px;padding:6px 8px;font-family:'Barlow',sans-serif;font-size:12px;color:#242b38;background:#fff;outline:none}

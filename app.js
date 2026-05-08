@@ -77,6 +77,12 @@ function updateKpisForRes(res){
   var ovA=gA.filter(function(v){return v>gtvA;}).length;
   var ovT=gT.filter(function(v){return v>gtvT;}).length;
   var vol=grpKw.reduce(function(s,v){return s+Math.abs(v);},0)*0.25/1000;
+  var volAkwh=0,volTkwh=0,volADal=0,volAHoog=0,volTDal=0,volTHoog=0;
+  for(var j=0;j<grpKw.length;j++){
+    var vj=grpKw[j],tsj=_optim.allTs[j],kwh=Math.abs(vj)*0.25;
+    if(vj>0){volAkwh+=kwh;if(isDL(tsj))volADal+=kwh;else volAHoog+=kwh;}
+    else if(vj<0){volTkwh+=kwh;if(isDL(tsj))volTDal+=kwh;else volTHoog+=kwh;}
+  }
   document.getElementById('kOvlp').textContent=_optim.allTs.length;
   document.getElementById('kN').textContent=wd.length;
   setKpi('kPA',maxA.toFixed(0),maxA>gtvA);
@@ -84,7 +90,23 @@ function updateKpisForRes(res){
   setKpi('kOA',ovA,ovA>0);
   setKpi('kOT',ovT,ovT>0);
   document.getElementById('kVol').textContent=vol.toFixed(1);
+  document.getElementById('kVerbrA').textContent=fmt(volAkwh);
+  document.getElementById('kVerbrADal').textContent=fmt(volADal);
+  document.getElementById('kVerbrAHoog').textContent=fmt(volAHoog);
+  document.getElementById('kVerbrT').textContent=fmt(volTkwh);
+  document.getElementById('kVerbrTDal').textContent=fmt(volTDal);
+  document.getElementById('kVerbrTHoog').textContent=fmt(volTHoog);
   document.getElementById('gtvHint').textContent='Afname: '+gtvA+' kW | Teruglevering: '+gtvT+' kW';
+  var nPts=grpKw.length;
+  var maxKwhA=gtvA*nPts*0.25;
+  var maxKwhT=gtvT*nPts*0.25;
+  var benutA=maxKwhA>0?(volAkwh/maxKwhA*100):0;
+  var benutT=maxKwhT>0?(volTkwh/maxKwhT*100):0;
+  var bdkKpis=document.getElementById('bdkKpis');
+  if(bdkKpis){
+    bdkKpis.innerHTML=
+      '<div class="kb"><div class="kl">GTV-benutting afname</div><div class="kv">'+benutA.toFixed(1)+'%</div><div class="ku">van max. '+fmt(maxKwhA/1000)+' MWh bij GTV '+gtvA+' kW</div></div>'+
+      '<div class="kb"><div class="kl">GTV-benutting teruglevering</div><div class="kv">'+benutT.toFixed(1)+'%</div><div class="ku">van max. '+fmt(maxKwhT/1000)+' MWh bij GTV-T '+gtvT+' kW</div></div>';}
 }
 
 function renderOverzicht(){
@@ -92,7 +114,7 @@ function renderOverzicht(){
   document.getElementById('kProj').textContent=p?p.name:'—';
   document.getElementById('kN').textContent=p?p.companies.length:0;
   var body=document.getElementById('ovBody');
-  if(!p||!p.companies.length){body.innerHTML='<tr><td colspan="8" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr>';return;}
+  if(!p||!p.companies.length){body.innerHTML='<tr><td colspan="10" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr>';return;}
   var html='';
   for(var i=0;i<p.companies.length;i++){
     var c=p.companies[i];
@@ -100,6 +122,8 @@ function renderOverzicht(){
     html+='<td><strong>'+c.name+'</strong></td><td style="font-family:monospace;font-size:10px">'+(c.ean||'—')+'</td>';
     html+='<td><span class="bdg bg">'+c.category+'</span></td>';
     html+='<td>'+c.gtvA+'kW</td><td>'+c.gtvT+'kW</td>';
+    html+='<td>'+(c.kva!=null?c.kva+' kVA':'—')+'</td>';
+    html+='<td>'+(c.zekering||'—')+'</td>';
     html+='<td id="op_'+c.id+'">…</td>';
     html+='<td><button class="b" style="font-size:9px;padding:2px 6px" data-editid="'+c.id+'">Bewerken</button></td></tr>';
   }
@@ -139,6 +163,7 @@ function openAddComp(){
   document.getElementById('mCT').textContent='Aansluiting toevoegen';
   document.getElementById('btnDelComp').style.display='none';
   document.getElementById('cN').value='';document.getElementById('cE').value='';
+  document.getElementById('cKva').value='';document.getElementById('cZek').value='';
   document.getElementById('cCat').value='Grootverbruik';
   document.getElementById('cGA').value='150';document.getElementById('cGT').value='80';
   document.getElementById('cSA').value='TrafoMSLS';document.getElementById('cST').value='TrafoMSLS';
@@ -157,6 +182,7 @@ async function openEditComp(id){
   document.getElementById('mCT').textContent='Aansluiting bewerken';
   document.getElementById('btnDelComp').style.display='';
   document.getElementById('cN').value=c.name;document.getElementById('cE').value=c.ean||'';
+  document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cZek').value=c.zekering||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
   document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:80;
   document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';document.getElementById('cST').value=c.stedinT||'TrafoMSLS';
@@ -173,6 +199,8 @@ async function saveComp(){
   var p=ap();var id=editId||uid();
   var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),category:document.getElementById('cCat').value,
     gtvA:(function(){var v=parseFloat(document.getElementById('cGA').value);return isNaN(v)?150:v;})(),gtvT:(function(){var v=parseFloat(document.getElementById('cGT').value);return isNaN(v)?80:v;})(),
+    kva:(function(){var v=parseFloat(document.getElementById('cKva').value);return isNaN(v)?null:v;})(),
+    zekering:document.getElementById('cZek').value.trim(),
     stedinA:document.getElementById('cSA').value,stedinT:document.getElementById('cST').value,
     priceType:pType,priceA:parseFloat(document.getElementById('cPA').value)||0.12,
     priceT:parseFloat(document.getElementById('cPT2').value)||0.08,

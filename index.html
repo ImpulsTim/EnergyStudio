@@ -353,19 +353,51 @@
     </div>
     <!-- OVERZICHT -->
     <div class="pn on" id="tOv">
-      <div class="kg">
-        <div class="kb"><div class="kl">Project</div><div class="kv" id="kProj" style="font-size:11px">Mijn eerste project</div></div>
-        <div class="kb"><div class="kl">Aansluitingen</div><div class="kv" id="kN">0</div></div>
-        <div class="kb"><div class="kl">Overlap punten</div><div class="kv" id="kOvlp">—</div><div class="ku">kwartierwaarden</div></div>
-        <div class="kb"><div class="kl">Piek afname</div><div class="kv" id="kPA">—</div><div class="ku">kW</div></div>
-        <div class="kb"><div class="kl">Piek teruglevering</div><div class="kv" id="kPT">—</div><div class="ku">kW</div></div>
-        <div class="kb"><div class="kl">GTV overschr.</div><div class="kv" id="kOA">—</div><div class="ku">kwartierwaarden</div></div>
-        <div class="kb"><div class="kl">GTV-T overschr.</div><div class="kv" id="kOT">—</div><div class="ku">kwartierwaarden</div></div>
-        <div class="kb"><div class="kl">Totaal volume</div><div class="kv" id="kVol">—</div><div class="ku">MWh</div></div>
+      <div class="ov-kpi-wrap">
+        <!-- Rij 1: Algemeen + Pieken & GTV -->
+        <div class="ov-kpi-row ov-row-sm">
+          <div class="ov-sec ov-sec-gen">
+            <div class="ov-sec-lbl">Algemeen</div>
+            <div class="ov-cards">
+              <div class="kb"><div class="kl">Project</div><div class="kv" id="kProj" style="font-size:11px">Mijn eerste project</div></div>
+              <div class="kb"><div class="kl">Aansluitingen</div><div class="kv" id="kN">0</div></div>
+              <div class="kb"><div class="kl">Overlap punten</div><div class="kv" id="kOvlp">—</div><div class="ku">kwartierwaarden</div></div>
+            </div>
+          </div>
+          <div class="ov-sec ov-sec-piek">
+            <div class="ov-sec-lbl">Pieken &amp; GTV</div>
+            <div class="ov-cards">
+              <div class="kb"><div class="kl">Piek afname</div><div class="kv" id="kPA">—</div><div class="ku">kW</div></div>
+              <div class="kb"><div class="kl">Piek teruglevering</div><div class="kv" id="kPT">—</div><div class="ku">kW</div></div>
+              <div class="kb"><div class="kl">GTV overschr.</div><div class="kv" id="kOA">—</div><div class="ku">kwartierwaarden</div></div>
+              <div class="kb"><div class="kl">GTV-T overschr.</div><div class="kv" id="kOT">—</div><div class="ku">kwartierwaarden</div></div>
+              <div class="kb"><div class="kl">Totaal volume</div><div class="kv" id="kVol">—</div><div class="ku">MWh</div></div>
+            </div>
+          </div>
+        </div>
+        <!-- Rij 2: Verbruik + Teruglevering -->
+        <div class="ov-kpi-row ov-row-lg">
+          <div class="ov-sec" style="flex:1">
+            <div class="ov-sec-lbl">Afname (verbruik)</div>
+            <div class="ov-cards">
+              <div class="kb"><div class="kl">Totaal</div><div class="kv" id="kVerbrA">—</div><div class="ku">kWh</div></div>
+              <div class="kb"><div class="kl">Dal</div><div class="kv" id="kVerbrADal">—</div><div class="ku">kWh</div></div>
+              <div class="kb"><div class="kl">Hoog</div><div class="kv" id="kVerbrAHoog">—</div><div class="ku">kWh</div></div>
+            </div>
+          </div>
+          <div class="ov-sec" style="flex:1">
+            <div class="ov-sec-lbl">Teruglevering</div>
+            <div class="ov-cards">
+              <div class="kb"><div class="kl">Totaal</div><div class="kv" id="kVerbrT">—</div><div class="ku">kWh</div></div>
+              <div class="kb"><div class="kl">Dal</div><div class="kv" id="kVerbrTDal">—</div><div class="ku">kWh</div></div>
+              <div class="kb"><div class="kl">Hoog</div><div class="kv" id="kVerbrTHoog">—</div><div class="ku">kWh</div></div>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="cd"><div class="ct2"><div class="ac"></div>Aansluitingen</div>
-        <table class="tbl"><thead><tr><th></th><th>Naam</th><th>EAN</th><th>Cat.</th><th>GTV</th><th>GTV-T</th><th>Punten</th><th></th></tr></thead>
-        <tbody id="ovBody"><tr><td colspan="8" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr></tbody></table></div>
+        <table class="tbl"><thead><tr><th></th><th>Naam</th><th>EAN</th><th>Cat.</th><th>GTV</th><th>GTV-T</th><th>Capaciteit</th><th>Zekering</th><th>Punten</th><th></th></tr></thead>
+        <tbody id="ovBody"><tr><td colspan="10" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr></tbody></table></div>
     </div>
     <!-- JAARPROFIEL -->
     <div class="pn" id="tJaar">
@@ -424,6 +456,7 @@
     </div>
     <!-- BDK -->
     <div class="pn" id="tBdk">
+      <div class="kg" id="bdkKpis"></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme — afname</div>
         <div class="lg" id="bdkLeg"></div>
         <div class="cw" style="height:380px"><canvas id="cBdk" role="img" aria-label="BDK afname"></canvas></div></div>
@@ -558,6 +591,10 @@
     <div class="fg2" style="margin-bottom:8px">
       <div class="fg"><label>Naam</label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
       <div class="fg"><label>EAN</label><input type="text" id="cE" placeholder="18 cijfers"></div>
+    </div>
+    <div class="fg2" style="margin-bottom:8px">
+      <div class="fg"><label>Fysieke capaciteit (kVA)</label><input type="number" id="cKva" min="0" placeholder="bijv. 250"></div>
+      <div class="fg"><label>Zekering</label><input type="text" id="cZek" placeholder="bijv. 3x80A"></div>
     </div>
     <div class="fg3" style="margin-bottom:8px">
       <div class="fg"><label>Categorie</label><select id="cCat"><option>Kleinverbruik</option><option selected>Grootverbruik</option></select></div>
