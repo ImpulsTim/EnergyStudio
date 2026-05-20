@@ -249,6 +249,61 @@ async function calcEHP(){
     totNet+=R[r].net;totBaseEur+=R[r].baseEur;totSavings+=R[r].savings;
   }
 
+  // EHP-netto per kwartier: positief = platform importeert van net (tekort)
+  var ehpNetKw=allTs.map(function(ts,i){return perKw.reduce(function(s,a){return s+(a[i]||0);},0);});
+  var ehpImportCount=ehpNetKw.filter(function(v){return v>0;}).length;
+
+  // Aansluitingen in dit project die geen lid zijn van dit platform
+  var memberSet={};members.forEach(function(mem){memberSet[mem.cid]=1;});
+  var nonMembers=[];
+  for(var ni=0;ni<p.companies.length;ni++){
+    var nc=p.companies[ni];
+    if(memberSet[nc.id])continue;
+    var nd=await dbGet('ts',nc.id)||[];
+    if(!nd.length)continue;
+    var ndMap={};nd.forEach(function(rec){ndMap[rec.ts]=rec.kw;});
+    var nmProd=0,nmCons=0,nmPeak=0,nmSim=0;
+    var nmWeekSum=new Array(672).fill(0),nmWeekCnt=new Array(672).fill(0),nmMonthProd={};
+    nd.forEach(function(rec){
+      if(rec.kw<0){
+        var prod=-rec.kw;
+        nmProd+=prod*0.25;if(prod>nmPeak)nmPeak=prod;
+        var d=new Date(rec.ts);
+        var dow=(d.getDay()+6)%7;
+        var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+        nmWeekSum[sl]+=prod;nmWeekCnt[sl]++;
+        var mn=rec.ts.slice(0,7);nmMonthProd[mn]=(nmMonthProd[mn]||0)+prod*0.25;
+      } else if(rec.kw>0){nmCons+=rec.kw*0.25;}
+    });
+    var nmWeekProd=nmWeekSum.map(function(s,i){return nmWeekCnt[i]>0?s/nmWeekCnt[i]:0;});
+    // Gelijktijdigheid: % van importkwartieren van het platform waarop dit niet-lid opwek heeft
+    if(ehpImportCount>0){
+      allTs.forEach(function(ts,i){
+        if(ehpNetKw[i]>0&&ndMap[ts]!==undefined&&ndMap[ts]<0)nmSim++;
+      });
+    }
+    nonMembers.push({id:nc.id,name:nc.name,prodKwh:nmProd,consKwh:nmCons,peakProd:nmPeak,
+      simScore:ehpImportCount>0?nmSim/ehpImportCount*100:0,
+      weekProd:nmWeekProd,monthProd:nmMonthProd});
+  }
+
+  // Platform week/maand statistieken (volledig gesigneerd gemiddelde voor Analyse-tab)
+  var ehpWeekAvgSum=new Array(672).fill(0),ehpWeekAvgCnt=new Array(672).fill(0);
+  var ehpMonthImp={},ehpMonthExp={};
+  allTs.forEach(function(ts,i){
+    var netKw=perKw.reduce(function(s,a){return s+(a[i]||0);},0);
+    var d=new Date(ts);
+    var dow=(d.getDay()+6)%7;
+    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    ehpWeekAvgSum[sl]+=netKw;ehpWeekAvgCnt[sl]++;
+    var mn=ts.slice(0,7);
+    if(netKw>0)ehpMonthImp[mn]=(ehpMonthImp[mn]||0)+netKw*0.25;
+    else if(netKw<0)ehpMonthExp[mn]=(ehpMonthExp[mn]||0)+(-netKw)*0.25;
+  });
+  var ehpWeekAvg=ehpWeekAvgSum.map(function(s,i){return ehpWeekAvgCnt[i]>0?s/ehpWeekAvgCnt[i]:0;});
+  // ehpWeekNet = positief deel van ehpWeekAvg (backward compat voor niet-leden overlay)
+  var ehpWeekNet=ehpWeekAvg.map(function(v){return Math.max(0,v);});
+
   _ehpLast={
     platName:plat.name,ts:allTs,parties:R,cfg:cfg,
     totProdKwh:totProdKwh,totConsKwh:totConsKwh,totMatchedKwh:totMatchedKwh,
@@ -259,7 +314,8 @@ async function calcEHP(){
     selfSuff:totConsKwh>0?totMatchedKwh/totConsKwh*100:0,
     nProdOnly:nProdOnly,nDemOnly:nDemOnly,nBoth:nBoth,nNone:nNone,
     maxMatchKw:maxMatchKw,peakProdKw:peakProdKw,peakDemKw:peakDemKw,
-    skipped:skipped
+    skipped:skipped,nonMembers:nonMembers,
+    ehpWeekAvg:ehpWeekAvg,ehpWeekNet:ehpWeekNet,ehpMonthImp:ehpMonthImp,ehpMonthExp:ehpMonthExp
   };
   renderEhpResults(_ehpLast);
   document.getElementById('btnDlEhp').disabled=false;
@@ -352,9 +408,255 @@ function renderEhpResults(res){
   var partyCards='<div class="cd"><div class="ct2"><div class="ac" style="background:#46962b"></div>Diepteanalyse per deelnemer — huidig vs. EHP</div>'+
     '<div class="ehp-party-grid">'+res.parties.map(function(x){return _ehpPartyCard(x,res);}).join('')+'</div></div>';
 
+  // Niet-leden: aansluitingen in het project buiten dit platform
+  var nm=res.nonMembers||[];
+  var nonMemHtml=_ehpNonMembersHtml(nm);
+  var hasNm=nm.some(function(m){return m.prodKwh>0||m.consKwh>0;});
+
+  // Analyse-tab: platform week/maand patronen
+  var platAnalyseHtml=
+    '<div class="cd">'+
+      '<div class="ct2"><div class="ac" style="background:#2c7fb8"></div>'+
+      'Weekpatroon inkoop &amp; teruglevering — '+_ehpEsc(res.platName)+'</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Gemiddeld nettovermogen per kwartier van de week. '+
+      'Blauw = inkoop van net (vraag &gt; aanbod). Groen = teruglevering aan net (aanbod &gt; vraag).</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpPlatWeek" role="img"></canvas></div>'+
+    '</div>'+
+    '<div class="cd">'+
+      '<div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Maandpatroon inkoop &amp; teruglevering</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Totale kWh inkoop van het net en teruglevering aan het net per maand.</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpPlatMonth" role="img"></canvas></div>'+
+    '</div>';
+
   document.getElementById('ehpResults').innerHTML=
-    headline+skipNote+kpiHtml+simHtml+flowHtml+summaryHtml+partyCards;
+    '<div class="tabs">'+
+      '<button class="tab on" data-ehp-tab="tEhpOv">Overzicht</button>'+
+      '<button class="tab" data-ehp-tab="tEhpAn">Analyse</button>'+
+      '<button class="tab" data-ehp-tab="tEhpDeel">Deelnemers</button>'+
+      (hasNm?'<button class="tab" data-ehp-tab="tEhpNm">Niet-leden</button>':'')+
+    '</div>'+
+    '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+simHtml+'</div>'+
+    '<div id="tEhpAn" class="pn">'+flowHtml+platAnalyseHtml+'</div>'+
+    '<div id="tEhpDeel" class="pn">'+skipNote+summaryHtml+partyCards+'</div>'+
+    (hasNm?'<div id="tEhpNm" class="pn">'+nonMemHtml+'</div>':'');
+
   _ehpAttachFlowDrag();
+  _ehpAttachTabs();
+
+  // Platform grafieken (Analyse-tab — panel hidden, resize bij tab-switch)
+  _ehpDrawPlatWeekChart(res.ehpWeekAvg||[]);
+  _ehpDrawPlatMonthChart(res.ehpMonthImp||{},res.ehpMonthExp||{});
+
+  // Niet-leden grafieken
+  if(hasNm)_ehpDrawNonMemberChart(nm);
+  var nmProd=nm.filter(function(m){return m.prodKwh>0;});
+  if(nmProd.length){_ehpDrawWeekChart(nmProd,res.ehpWeekNet||[]);_ehpDrawMonthChart(nmProd);}
+}
+
+// --- Tab-navigatie EHP -------------------------------------------------------
+
+function _ehpAttachTabs(){
+  var res=document.getElementById('ehpResults');
+  if(!res)return;
+  res.addEventListener('click',function(e){
+    var btn=e.target.closest('[data-ehp-tab]');
+    if(!btn)return;
+    var id=btn.getAttribute('data-ehp-tab');
+    res.querySelectorAll('[data-ehp-tab]').forEach(function(b){b.classList.remove('on');});
+    btn.classList.add('on');
+    res.querySelectorAll('.pn').forEach(function(p){p.classList.remove('on');});
+    var panel=document.getElementById(id);
+    if(panel)panel.classList.add('on');
+    // Charts in hidden panels hadden size 0 bij eerste render — resize na DOM-update
+    setTimeout(function(){
+      ['ehpPlatWeek','ehpPlatMonth','ehpNonMem','ehpWeek','ehpMonth'].forEach(function(k){
+        if(CH[k])try{CH[k].resize();}catch(_){}
+      });
+    },30);
+  });
+}
+
+// --- Platform week/maand grafieken -------------------------------------------
+
+function _ehpDrawPlatWeekChart(ehpWeekAvg){
+  if(CH['ehpPlatWeek']){CH['ehpPlatWeek'].destroy();delete CH['ehpPlatWeek'];}
+  var canvas=document.getElementById('cEhpPlatWeek');
+  if(!canvas||!ehpWeekAvg.length)return;
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  var labels=[];
+  for(var i=0;i<672;i++){
+    var sl=i%96,h=Math.floor(sl/4),mm=(sl%4)*15;
+    if(sl===0)labels.push(DN[Math.floor(i/96)]);
+    else if(h%6===0&&mm===0)labels.push(h+':00');
+    else labels.push('');
+  }
+  CH['ehpPlatWeek']=new Chart(canvas,{type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Inkoop van net (gem. kW)',
+       data:ehpWeekAvg.map(function(v){return+(Math.max(0,v)).toFixed(2);}),
+       borderColor:'#2c7fb8',backgroundColor:'rgba(44,127,184,.15)',
+       fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
+      {label:'Teruglevering aan net (gem. kW)',
+       data:ehpWeekAvg.map(function(v){return+(Math.max(0,-v)).toFixed(2);}),
+       borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.15)',
+       fill:true,tension:0.3,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},autoSkip:false,maxRotation:0},grid:{color:'#f3f7f4'}},y:Object.assign(ax('kW'),{min:0})}}});
+}
+
+function _ehpDrawPlatMonthChart(ehpMonthImp,ehpMonthExp){
+  if(CH['ehpPlatMonth']){CH['ehpPlatMonth'].destroy();delete CH['ehpPlatMonth'];}
+  var canvas=document.getElementById('cEhpPlatMonth');
+  if(!canvas)return;
+  var mnSet={};
+  Object.keys(ehpMonthImp).forEach(function(m){mnSet[m]=1;});
+  Object.keys(ehpMonthExp).forEach(function(m){mnSet[m]=1;});
+  var mnds=Object.keys(mnSet).sort();
+  if(!mnds.length)return;
+  var lbl=function(mn){var p=mn.split('-');return MND[parseInt(p[1])-1]+" '"+p[0].slice(2);};
+  CH['ehpPlatMonth']=new Chart(canvas,{type:'bar',
+    data:{labels:mnds.map(lbl),datasets:[
+      {label:'Inkoop van net (kWh)',
+       data:mnds.map(function(mn){return+((ehpMonthImp[mn]||0)).toFixed(0);}),
+       backgroundColor:'rgba(44,127,184,.65)',borderRadius:3},
+      {label:'Teruglevering aan net (kWh)',
+       data:mnds.map(function(mn){return+((ehpMonthExp[mn]||0)).toFixed(0);}),
+       backgroundColor:'rgba(70,150,43,.65)',borderRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:Object.assign(ax(),{grid:{display:false}}),y:Object.assign(ax('kWh'))}}});
+}
+
+// --- Niet-leden visualisatie -------------------------------------------------
+
+function _ehpNonMembersHtml(nonMembers){
+  var withData=nonMembers.filter(function(m){return m.prodKwh>0||m.consKwh>0;});
+  var header='<div class="cd ehp-grp"><div class="ct2"><div class="ac" style="background:#e67e22"></div>Aansluitingen buiten dit platform</div>';
+  if(!nonMembers.length){
+    return header+'<div class="ku" style="padding:8px 0">Alle aansluitingen in dit project zijn lid van dit platform.</div></div>';
+  }
+  if(!withData.length){
+    return header+'<div class="ku" style="padding:8px 0">Geen niet-leden met meetdata gevonden.</div></div>';
+  }
+  var sorted=withData.slice().sort(function(a,b){return b.prodKwh-a.prodKwh;});
+  var h=Math.max(180,sorted.length*36+70);
+  var typeLbl=function(m){
+    if(m.prodKwh>0&&m.consKwh>0)return '<span class="bdg bg">Beide</span>';
+    if(m.prodKwh>0)return '<span class="bdg" style="background:#d4edda;color:#1d6030">Producent</span>';
+    return '<span class="bdg bg" style="background:#dce6f0;color:#1a3d5c">Verbruiker</span>';
+  };
+  var tblRows=sorted.map(function(m){
+    var sim=m.prodKwh>0?'<span title="Percentage van kwartieren dat dit niet-lid opwek heeft terwijl het platform netto importeert">'+m.simScore.toFixed(0)+'%</span>':'—';
+    return '<tr><td style="font-weight:700">'+_ehpEsc(m.name)+'</td>'+
+      '<td>'+(m.prodKwh>0?fmt(m.prodKwh/1000)+' MWh':'—')+'</td>'+
+      '<td>'+(m.consKwh>0?fmt(m.consKwh/1000)+' MWh':'—')+'</td>'+
+      '<td>'+sim+'</td>'+
+      '<td>'+typeLbl(m)+'</td></tr>';
+  }).join('');
+  return header+
+    '<div class="ib2" style="margin-bottom:10px">'+sorted.length+' aansluiting'+(sorted.length!==1?'en':'')+
+    ' in dit project '+(sorted.length!==1?'zijn':'is')+' geen lid van dit platform. Gesorteerd op opwek naar net (hoog = beste kandidaat). '+
+    'De <strong>gelijktijdigheidscore</strong> geeft aan in hoeveel procent van de kwartieren dat het platform tekort heeft dit niet-lid opwek produceert — hoe hoger, hoe beter de match.</div>'+
+    '<div class="cw" style="height:'+h+'px;margin-bottom:16px"><canvas id="cEhpNonMem" role="img"></canvas></div>'+
+    '<div style="overflow-x:auto"><table class="verg-tbl"><thead><tr>'+
+    '<th>Aansluiting</th><th>Opwek → net</th><th>Afname ← net</th><th title="% van platformtekort-kwartieren met gelijktijdige opwek">Gelijktijdigheid ↑</th><th>Type</th>'+
+    '</tr></thead><tbody>'+tblRows+'</tbody></table></div>'+
+    (sorted.some(function(m){return m.prodKwh>0;})?
+      '<div class="ct2" style="margin-top:18px"><div class="ac" style="background:#46962b"></div>Weekpatroon beschikbare opwek</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Gemiddeld vermogen per kwartier van de week (opwek). Stippellijn = gemiddelde netto-import van het platform op dat kwartier — overlap = matchingkans.</div>'+
+      '<div class="cw" style="height:260px;margin-bottom:18px"><canvas id="cEhpWeekProd" role="img"></canvas></div>'+
+      '<div class="ct2"><div class="ac" style="background:#46962b"></div>Maandelijks opwekpatroon (kWh)</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Totale opwek naar het net per maand per niet-lid-aansluiting.</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpMonthProd" role="img"></canvas></div>'
+    :'')+
+    '</div>';
+}
+
+function _ehpDrawNonMemberChart(nonMembers){
+  if(CH['ehpNonMem']){CH['ehpNonMem'].destroy();delete CH['ehpNonMem'];}
+  var canvas=document.getElementById('cEhpNonMem');
+  if(!canvas)return;
+  var sorted=nonMembers.filter(function(m){return m.prodKwh>0||m.consKwh>0;})
+    .slice().sort(function(a,b){return b.prodKwh-a.prodKwh;});
+  CH['ehpNonMem']=new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:sorted.map(function(m){return m.name;}),
+      datasets:[
+        {label:'Opwek → net (kWh)',
+         data:sorted.map(function(m){return+m.prodKwh.toFixed(0);}),
+         backgroundColor:'rgba(70,150,43,.65)',borderRadius:4},
+        {label:'Afname ← net (kWh)',
+         data:sorted.map(function(m){return+m.consKwh.toFixed(0);}),
+         backgroundColor:'rgba(44,127,184,.35)',borderRadius:4}
+      ]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}},
+        tooltip:{callbacks:{afterLabel:function(ctx){
+          var m=sorted[ctx.dataIndex];
+          return m.prodKwh>0?'Gelijktijdigheid: '+m.simScore.toFixed(0)+'%':'';
+        }}}
+      },
+      scales:{
+        x:Object.assign(ax(),{title:{display:true,text:'kWh',color:'#aaa',font:{family:'Barlow',size:10}}}),
+        y:Object.assign(ax(),{grid:{display:false}})
+      }
+    }
+  });
+}
+
+function _ehpDrawWeekChart(nonMembers,ehpWeekNet){
+  if(CH['ehpWeek']){CH['ehpWeek'].destroy();delete CH['ehpWeek'];}
+  var canvas=document.getElementById('cEhpWeekProd');
+  if(!canvas)return;
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  var labels=[];
+  for(var i=0;i<672;i++){
+    var dow=Math.floor(i/96),sl=i%96,h=Math.floor(sl/4),mm=(sl%4)*15;
+    if(sl===0)labels.push(DN[dow]);
+    else if(h%6===0&&mm===0)labels.push(h+':00');
+    else labels.push('');
+  }
+  var datasets=nonMembers.map(function(m,idx){
+    return {label:m.name,data:m.weekProd,
+      borderColor:PAL[idx%PAL.length],backgroundColor:PAL[idx%PAL.length]+'22',
+      fill:true,tension:0.3,pointRadius:0,borderWidth:1.5};
+  });
+  if(ehpWeekNet&&ehpWeekNet.length){
+    datasets.push({label:'Platform netto-import (gem. kW)',data:ehpWeekNet,
+      borderColor:'#2c7fb8',borderDash:[4,3],backgroundColor:'transparent',
+      fill:false,tension:0.3,pointRadius:0,borderWidth:1.5});
+  }
+  CH['ehpWeek']=new Chart(canvas,{type:'line',data:{labels:labels,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},autoSkip:false,maxRotation:0},grid:{color:'#f3f7f4'}},y:Object.assign(ax('kW'),{min:0})}}});
+}
+
+function _ehpDrawMonthChart(nonMembers){
+  if(CH['ehpMonth']){CH['ehpMonth'].destroy();delete CH['ehpMonth'];}
+  var canvas=document.getElementById('cEhpMonthProd');
+  if(!canvas)return;
+  var mnSet={};
+  nonMembers.forEach(function(m){Object.keys(m.monthProd||{}).forEach(function(mn){mnSet[mn]=1;});});
+  var mnds=Object.keys(mnSet).sort();
+  if(!mnds.length)return;
+  var datasets=nonMembers.map(function(m,idx){
+    return {label:m.name,
+      data:mnds.map(function(mn){return+(((m.monthProd||{})[mn])||0).toFixed(0);}),
+      backgroundColor:PAL[idx%PAL.length]+'bb',borderRadius:3,stack:'s'};
+  });
+  CH['ehpMonth']=new Chart(canvas,{type:'bar',
+    data:{labels:mnds.map(function(mn){var p=mn.split('-');return MND[parseInt(p[1])-1]+" '"+p[0].slice(2);}),datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:Object.assign(ax(),{stacked:true,grid:{display:false}}),y:Object.assign(ax('kWh'),{stacked:true})}}});
 }
 
 // --- Flow-diagram (hand-rolled SVG, sleepbaar) -------------------------------
