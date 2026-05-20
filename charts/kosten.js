@@ -13,8 +13,8 @@ function drawKosten(allTs,perKw,cos){
       if(kw>0){ka+=kw*0.25;ea+=kw*0.25*(c.priceA||0.12);}
       else{kt+=(-kw)*0.25;et+=(-kw)*0.25*(c.priceT||0.08);}
     });
-    var kwM=Object.keys(mPA).reduce(function(s,mn){return s+((mPA[mn]||0)+(mPT[mn]||0))*st2.km;},0);
-    var kwC=((c.gtvA||150)+(c.gtvT||80))*st2.kc*nMnd;
+    var kwM=Object.keys(mPA).reduce(function(s,mn){return s+(mPA[mn]||0)*st2.km;},0);
+    var kwC=(c.gtvA||150)*st2.kc*nMnd;
     var dt=dn*st2.dn+dl*st2.dl;var totNet=aansl+vast+kwC+kwM+dt;
     return{name:c.name,ka:ka/1000,kt:kt/1000,ea:ea,et:et,netto:ea-et,aansl:aansl,vast:vast,kwC:kwC,kwM:kwM,dt:dt,totNet:totNet,nMnd:nMnd,c:c,sa:sa,st2:st2};
   });
@@ -29,8 +29,8 @@ function drawKosten(allTs,perKw,cos){
     '<tr><td style="padding-left:14px;color:#888">Energie teruglevering</td><td>—</td><td>'+d.kt.toFixed(1)+' MWh</td><td>—</td><td style="color:#46962b">€ '+fmt(d.et)+'</td><td>—</td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Aansluitvergoeding</td><td colspan="3" style="font-size:10px;color:#666">'+d.sa.l+' · '+d.nMnd+' mnd</td><td>—</td><td>€ '+fmt(d.aansl)+'</td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Vastrecht transport</td><td colspan="3" style="font-size:10px;color:#666">'+d.st2.l+'</td><td>—</td><td>€ '+fmt(d.vast)+'</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888">kW-contract (GTV+GTV-T)</td><td colspan="3" style="font-size:10px;color:#666">'+((d.c.gtvA||150)+(d.c.gtvT||80))+' kW x €'+d.st2.kc.toFixed(4)+'/kW/mnd</td><td>—</td><td>€ '+fmt(d.kwC)+'</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888;font-weight:700">kW-max</td><td colspan="3" style="font-size:10px;color:#666">Max afname+teruglevering/mnd x €'+d.st2.km.toFixed(4)+'/kW</td><td>—</td><td><strong>€ '+fmt(d.kwM)+'</strong></td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">kW-contract (GTV-A)</td><td colspan="3" style="font-size:10px;color:#666">'+(d.c.gtvA||150)+' kW x €'+d.st2.kc.toFixed(4)+'/kW/mnd</td><td>—</td><td>€ '+fmt(d.kwC)+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888;font-weight:700">kW-max</td><td colspan="3" style="font-size:10px;color:#666">Max afname/mnd x €'+d.st2.km.toFixed(4)+'/kW</td><td>—</td><td><strong>€ '+fmt(d.kwM)+'</strong></td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Dubbel tarief</td><td colspan="3" style="font-size:10px;color:#666">Norm €'+d.st2.dn+'/kWh · Laag €'+d.st2.dl+'/kWh</td><td>—</td><td>€ '+fmt(d.dt)+'</td></tr>'+
     '<tr style="background:#f7fbf5"><td style="padding-left:14px;font-weight:700">Totaal</td><td>'+d.ka.toFixed(1)+' MWh</td><td>'+d.kt.toFixed(1)+' MWh</td><td>€ '+fmt(d.ea)+'</td><td style="color:#46962b">€ '+fmt(d.et)+'</td><td><strong style="color:'+((d.netto+d.totNet)>0?'#c0392b':'#46962b')+'">€ '+fmt(d.netto+d.totNet)+'</strong></td></tr>';
   }).join('');

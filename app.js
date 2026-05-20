@@ -31,7 +31,7 @@ function setKpi(id,val,alert){var el=document.getElementById(id);el.textContent=
 function mndLabel(mnds,m){var parts=m.split('-');var mo=parseInt(parts[1]);var y=parts[0];var multi=mnds.some(function(x){return x.slice(0,4)!==mnds[0].slice(0,4);});return MND[mo-1]+(multi?" '"+y.slice(2):'');}
 
 // Renderen
-function renderAll(){renderProjSel();renderSidebar();renderOverzicht();try{renderScenarioSidebar();}catch(e){}}
+function renderAll(){renderProjSel();renderSidebar();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}}
 
 function renderProjSel(){
   var s=document.getElementById('projSel');
@@ -266,6 +266,7 @@ async function runAnalysis(){
   updateKpisForRes({grpKw:grpKw,withData:withData,gtvA:gtvA,gtvT:gtvT});
   try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}
   notify('Analyse klaar — '+allTs.length+' overlappende kwartierwaarden');
+  var dlBtn=document.getElementById('btnDlGroep');if(dlBtn)dlBtn.disabled=false;
 }
 
 function genDemo(idx){
@@ -331,6 +332,40 @@ function triggerDownloadAsLink(blob,filename){
   modal.querySelector('#expLinkClose').onclick=close;
   document.addEventListener('keydown',onKey);
   setTimeout(function(){if(!revoked)URL.revokeObjectURL(url);},10*60*1000);
+}
+
+function doDownloadGroepsprofiel(){
+  var allTs=_optim.allTs;
+  if(!allTs.length){notify('Voer eerst de analyse uit',false);return;}
+  var grpKw=_optim.baseKw;
+  var sid=_optim.activeScenId;
+  if(sid&&sid!=='basis'&&_optim.scenResults[sid])grpKw=_optim.scenResults[sid].grpKw||grpKw;
+  var p=ap();
+  var projName=p?p.name:'groepsprofiel';
+  var startDate=allTs[0].slice(0,10);
+  var fwdReadings=[],revReadings=[];
+  for(var i=0;i<allTs.length;i++){
+    var ts=allTs[i];
+    var tsZ=ts.length===16?ts+':00Z':ts.endsWith('Z')?ts:ts+'Z';
+    var v=grpKw[i];
+    fwdReadings.push({value:+(Math.max(0,v)*0.25).toFixed(6),time_stamp:tsZ});
+    revReadings.push({value:+(Math.max(0,-v)*0.25).toFixed(6),time_stamp:tsZ});
+  }
+  var mrs=[
+    {values_interval:{start:startDate,end:'2999-12-31'},interval_blocks:[{interval_readings:fwdReadings,reading_type:{flow_direction:'forward',multiplier:'k',unit:'W'}}]},
+    {values_interval:{start:startDate,end:'2999-12-31'},interval_blocks:[{interval_readings:revReadings,reading_type:{flow_direction:'reverse',multiplier:'k',unit:'W'}}]}
+  ];
+  var scenLabel=sid&&sid!=='basis'?('-'+sid):'';
+  var payload={
+    identifier:'egp-groepsprofiel'+scenLabel,
+    contact_point:'',
+    conforms_to:'http://data.netbeheernederland.nl/data-product/dp-meetdata/',
+    release_date:new Date().toISOString().slice(0,10),
+    version:'1.1.0',
+    market_evaluation_points:[{meter_readings:mrs,european_article_number_ean:projName}]
+  };
+  var fname='groepsprofiel-'+projName.replace(/[^a-z0-9]/gi,'-').toLowerCase()+scenLabel+'-'+new Date().toISOString().slice(0,10)+'.json';
+  triggerDownload(new Blob([JSON.stringify(payload,null,2)],{type:'application/json'}),fname);
 }
 
 // Exporteren / importeren / downloaden
@@ -471,6 +506,7 @@ document.addEventListener('DOMContentLoaded',function(){
   // Zijbalk
   document.getElementById('btnAddComp').addEventListener('click',openAddComp);
   document.getElementById('btnRun').addEventListener('click',runAnalysis);
+  document.getElementById('btnDlGroep').addEventListener('click',doDownloadGroepsprofiel);
   // Gedelegeerd: bewerk-knoppen in zijbalk/tabel
   document.getElementById('cList').addEventListener('click',function(e){
     var editBtn=e.target.closest('[data-editid]');

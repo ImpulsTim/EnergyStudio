@@ -15,7 +15,7 @@ function drawPiek(allTs,perKw,grpKw,cos){
     return mnds.map(function(mn){return+(mT[mn]||0).toFixed(1);});
   });
   // Gecombineerd voor GTO-tabel
-  var indP=cos.map(function(_,ci){return mnds.map(function(_,mi){return+(indPA[ci][mi]+indPT[ci][mi]).toFixed(1);});});
+  var indP=cos.map(function(_,ci){return mnds.map(function(_,mi){return+indPA[ci][mi].toFixed(1);});});
 
   // Collectieve pieken afname en teruglevering afzonderlijk
   var collPA=mnds.map(function(mn){
@@ -24,11 +24,11 @@ function drawPiek(allTs,perKw,grpKw,cos){
   var collPT=mnds.map(function(mn){
     var mx=0;allTs.forEach(function(ts,i){if(ts.slice(0,7)===mn){var v=Math.max(0,-grpKw[i]);if(v>mx)mx=v;}});return+mx.toFixed(1);
   });
-  var collP=mnds.map(function(_,mi){return+(collPA[mi]+collPT[mi]).toFixed(1);});
+  var collP=mnds.map(function(_,mi){return+collPA[mi].toFixed(1);});
 
   var somIndA=mnds.map(function(_,mi){return cos.reduce(function(s,_,ci){return s+indPA[ci][mi];},0);});
   var somIndT=mnds.map(function(_,mi){return cos.reduce(function(s,_,ci){return s+indPT[ci][mi];},0);});
-  var somInd=mnds.map(function(_,mi){return+(somIndA[mi]+somIndT[mi]).toFixed(1);});
+  var somInd=mnds.map(function(_,mi){return+somIndA[mi].toFixed(1);});
   var div=mnds.map(function(_,mi){return+(somInd[mi]-collP[mi]).toFixed(1);});
 
   var totKm=cos.reduce(function(s,c){return s+(ST[c.stedinT||'none']||ST.none).km;},0);
@@ -98,7 +98,7 @@ function updateSim(){
   var spaceA=newPA.map(function(v){return+(Math.max(0,gtvA-v)).toFixed(1);});
   var spaceT=newPT.map(function(v){return+(Math.max(0,gtvT-v)).toFixed(1);});
 
-  var newCost=mnds.map(function(_,mi){return(newPA[mi]+newPT[mi])*avgKm;});
+  var newCost=mnds.map(function(_,mi){return newPA[mi]*avgKm;});
   var besV=mnds.map(function(_,mi){return indKm[mi]-newCost[mi];});
   var totB2=besV.reduce(function(s,v){return s+v;},0);
   var totI=indKm.reduce(function(s,v){return s+v;},0);

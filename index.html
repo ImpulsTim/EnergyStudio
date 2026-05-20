@@ -307,7 +307,11 @@
     <label class="b o" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Importeer<input type="file" id="impIn" accept=".json" style="display:none"></label>
   </div>
 </div>
-<div class="app">
+<div class="nav-tools">
+  <button class="nav-btn on" data-tool="gto">Groepsprofiel (GTO)</button>
+  <button class="nav-btn" data-tool="ehp">Energiehandelsplatform</button>
+</div>
+<div class="app" id="pageGto">
   <div class="sb">
     <div style="margin-bottom:10px">
       <div class="st">Groeps-GTV</div>
@@ -325,6 +329,7 @@
     <div>
       <div class="st">Analyse</div>
       <button class="b dk" id="btnRun" style="width:100%">Bereken groepsprofiel</button>
+      <button class="b" id="btnDlGroep" style="width:100%;margin-top:6px" disabled>↓ Download groepsprofiel (JSON)</button>
     </div>
     <div style="margin-top:12px">
       <div class="st">Scenario's</div>
@@ -573,6 +578,47 @@
         <table class="tbl"><thead><tr><th>Post</th><th>Vol. afname</th><th>Vol. teruglevering</th><th>Afname (€)</th><th>Teruglevering (€)</th><th>Bedrag (€)</th></tr></thead>
         <tbody id="kostenBody"></tbody></table></div>
     </div>
+  </div>
+</div>
+<div class="app ehp-hide" id="pageEhp">
+  <div class="sb">
+    <div style="margin-bottom:12px">
+      <div class="st">Handelsplatforms</div>
+      <div class="cl" id="ehpList"><div style="padding:10px 0;text-align:center;font-size:11px;color:#aaa">Nog geen platform</div></div>
+      <button class="b" id="btnAddEhp" style="width:100%;margin-top:6px;background:#2c7fb8">+ Platform toevoegen</button>
+    </div>
+    <div id="ehpEditor" style="display:none">
+      <div style="margin-bottom:12px">
+        <div class="st">Naam</div>
+        <div class="fg"><input type="text" id="ehpName" placeholder="bijv. Handelsplatform Noord"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="st">Deelnemers (aansluitingen)</div>
+        <div class="scen-con-list" id="ehpMembers"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="st">Interne prijzen (€/kWh)</div>
+        <div class="fgr"><label>Zon</label><input type="number" id="ehpPZon" step="0.001" value="0.08"></div>
+        <div class="fgr"><label>Wind</label><input type="number" id="ehpPWind" step="0.001" value="0.06"></div>
+        <div class="fgr"><label>Overig</label><input type="number" id="ehpPOverig" step="0.001" value="0.07"></div>
+        <div class="fgr"><label>Platformkosten</label><input type="number" id="ehpFee" step="0.001" value="0.00"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="st">Nettarieven (€/kWh)</div>
+        <div class="fgr"><label>Inkoop net</label><input type="number" id="ehpPNetAfname" step="0.001" value="0.12"></div>
+        <div class="fgr"><label>Teruglever</label><input type="number" id="ehpPNetTerug" step="0.001" value="0.04"></div>
+        <div class="fgr"><label>Dyn. inkoop</label><input type="number" id="ehpPDyn" step="0.001" value="0.10"></div>
+      </div>
+      <div>
+        <div class="st">Berekening</div>
+        <button class="b dk" id="btnCalcEhp" style="width:100%">Bereken handelsplatform</button>
+        <button class="b" id="btnDlEhp" style="width:100%;margin-top:6px" disabled>↓ Resultaten (CSV)</button>
+        <button class="b d" id="btnDelEhp" style="width:100%;margin-top:6px">Platform verwijderen</button>
+      </div>
+    </div>
+  </div>
+  <div class="ct">
+    <div id="ehpResults"><div class="verg-empty"><div class="big">⇄</div>Selecteer of maak een handelsplatform en klik op <strong>Bereken handelsplatform</strong>.</div></div>
   </div>
 </div>
 <!-- Modals -->
@@ -839,6 +885,7 @@
 <script src="charts/optimalisatie.js"></script>
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
+<script src="ehp.js"></script>
 <script src="app.js"></script>
 
 </body></html>
