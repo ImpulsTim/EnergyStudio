@@ -391,11 +391,14 @@ function _ehpFlowContent(){
     if(!(kwh>0))return '';
     var sx=src.x+src.w,sy=src.y+src.h/2,tx=tgt.x,ty=tgt.y+tgt.h/2;
     var cx=(sx+tx)/2;
-    var w=Math.max(1.5,Math.min(60,kwh/maxKwh*120));
+    var w=Math.max(1.5,Math.min(16,kwh/maxKwh*50));
     var lbl=kwh>=1000?(kwh/1000).toFixed(1)+' MWh':fmt(kwh)+' kWh';
-    var lx=(sx+tx)/2,ly=(sy+ty)/2-w/2-4;
-    return '<path d="M '+sx+' '+sy+' C '+cx+' '+sy+', '+cx+' '+ty+', '+tx+' '+ty+'" stroke="'+col+'" stroke-width="'+w+'" stroke-opacity=".55" fill="none" stroke-linecap="round" pointer-events="none"/>'+
-      '<text x="'+lx+'" y="'+ly+'" text-anchor="middle" font-family="Barlow" font-size="9" fill="#555" pointer-events="none">'+lbl+'</text>';
+    // Label at t≈0.3 along the bezier (near source) so parallel edges from
+    // different y-positions stay vertically separated instead of clustering
+    var lx=0.658*sx+0.342*tx;
+    var ly=0.784*sy+0.216*ty-10;
+    return '<path d="M '+sx+' '+sy+' C '+cx+' '+sy+', '+cx+' '+ty+', '+tx+' '+ty+'" stroke="'+col+'" stroke-width="'+w+'" stroke-opacity=".6" fill="none" stroke-linecap="round" pointer-events="none"/>'+
+      '<text x="'+lx+'" y="'+ly+'" text-anchor="middle" font-family="Barlow" font-size="10" font-weight="600" fill="#222" paint-order="stroke" stroke="rgba(255,255,255,.92)" stroke-width="3" stroke-linejoin="round" pointer-events="none">'+lbl+'</text>';
   }
   var srcs=['zon','wind','overig'],edges='';
   srcs.forEach(function(k){

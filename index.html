@@ -316,14 +316,14 @@
     <div style="margin-bottom:10px">
       <div class="st">Groeps-GTV</div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
-        <div class="fg"><label>GTV afname (kW)</label><input type="number" id="gGtvA" min="0" step="1" style="font-size:12px"></div>
-        <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="gGtvT" min="0" step="1" style="font-size:12px"></div>
-        <div style="font-size:9px;color:#888" id="gtvHint"></div>
+        <div class="fg"><label>GTV afname (kW)</label><input type="number" id="gGtvA" min="0" step="1" style="font-size:13px"></div>
+        <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="gGtvT" min="0" step="1" style="font-size:13px"></div>
+        <div style="font-size:12px;color:#888" id="gtvHint"></div>
       </div>
     </div>
     <div style="margin-bottom:12px">
       <div class="st">Aansluitingen</div>
-      <div class="cl" id="cList"><div style="padding:10px 0;text-align:center;font-size:11px;color:#aaa">Nog geen aansluitingen</div></div>
+      <div class="cl" id="cList"><div style="padding:10px 0;text-align:center;font-size:13px;color:#aaa">Nog geen aansluitingen</div></div>
       <button class="b" id="btnAddComp" style="width:100%;margin-top:6px">+ Aansluiting toevoegen</button>
     </div>
     <div>
@@ -342,7 +342,7 @@
   <div class="ct">
     <div class="scen-banner" id="scenBanner" style="display:none">
       <span class="sb-lbl">⚡ Actief: <strong id="scenBannerName"></strong></span>
-      <span style="opacity:.75;font-size:10px;font-weight:400">Alle grafieken tonen scenariodata</span>
+      <span style="opacity:.75;font-size:12px;font-weight:400">Alle grafieken tonen scenariodata</span>
       <button id="btnScenBack">← Terug naar basis</button>
     </div>
     <div class="tabs">
@@ -364,7 +364,7 @@
           <div class="ov-sec ov-sec-gen">
             <div class="ov-sec-lbl">Algemeen</div>
             <div class="ov-cards">
-              <div class="kb"><div class="kl">Project</div><div class="kv" id="kProj" style="font-size:11px">Mijn eerste project</div></div>
+              <div class="kb"><div class="kl">Project</div><div class="kv" id="kProj" style="font-size:13px">Mijn eerste project</div></div>
               <div class="kb"><div class="kl">Aansluitingen</div><div class="kv" id="kN">0</div></div>
               <div class="kb"><div class="kl">Overlap punten</div><div class="kv" id="kOvlp">—</div><div class="ku">kwartierwaarden</div></div>
             </div>
@@ -415,18 +415,18 @@
             <span class="li"><span class="ld" style="border:2px dashed #e67e22;background:none"></span>GTV-T</span>
           </div>
           <div style="display:flex;gap:3px">
-            <button class="b" onclick="setJaarPreset(7)" style="padding:3px 7px;font-size:10px">1W</button>
-            <button class="b" onclick="setJaarPreset(30)" style="padding:3px 7px;font-size:10px">1M</button>
-            <button class="b" onclick="setJaarPreset(90)" style="padding:3px 7px;font-size:10px">3M</button>
-            <button class="b dk" onclick="setJaarPreset(0)" style="padding:3px 7px;font-size:10px">Volledig</button>
+            <button class="b" onclick="setJaarPreset(7)" style="padding:5px 9px;font-size:12px">1W</button>
+            <button class="b" onclick="setJaarPreset(30)" style="padding:5px 9px;font-size:12px">1M</button>
+            <button class="b" onclick="setJaarPreset(90)" style="padding:5px 9px;font-size:12px">3M</button>
+            <button class="b dk" onclick="setJaarPreset(0)" style="padding:5px 9px;font-size:12px">Volledig</button>
           </div>
         </div>
         <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-          <span style="font-size:10px;color:#888">Van:</span>
-          <input type="date" id="jDateStart" oninput="panJ()" style="font-size:11px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
-          <span style="font-size:10px;color:#888">Tot:</span>
-          <input type="date" id="jDateEnd" oninput="panJ()" style="font-size:11px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
-          <span style="font-size:10px;color:#888;min-width:60px;text-align:right" id="jZoomLbl"></span>
+          <span style="font-size:12px;color:#888">Van:</span>
+          <input type="date" id="jDateStart" oninput="panJ()" style="font-size:13px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
+          <span style="font-size:12px;color:#888">Tot:</span>
+          <input type="date" id="jDateEnd" oninput="panJ()" style="font-size:13px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
+          <span style="font-size:12px;color:#888;min-width:60px;text-align:right" id="jZoomLbl"></span>
         </div>
         <div class="cw" style="height:480px"><canvas id="cJaarG" role="img" aria-label="Cumulatief groepsprofiel"></canvas></div>
       </div>
@@ -439,19 +439,19 @@
     <div class="pn" id="tWeek">
       <div class="cd"><div class="ct2"><div class="ac"></div>Weekprofiel groep — gem / min / max (Ma–Zo)
         <div id="weekMFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">
-          <button data-mf="all"  onclick="setWeekMonthFilter('all')"  style="font-size:10px;padding:3px 8px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Heel het jaar</button>
-          <button data-mf="0"  onclick="setWeekMonthFilter(0)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jan</button>
-          <button data-mf="1"  onclick="setWeekMonthFilter(1)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Feb</button>
-          <button data-mf="2"  onclick="setWeekMonthFilter(2)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mrt</button>
-          <button data-mf="3"  onclick="setWeekMonthFilter(3)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Apr</button>
-          <button data-mf="4"  onclick="setWeekMonthFilter(4)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mei</button>
-          <button data-mf="5"  onclick="setWeekMonthFilter(5)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jun</button>
-          <button data-mf="6"  onclick="setWeekMonthFilter(6)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jul</button>
-          <button data-mf="7"  onclick="setWeekMonthFilter(7)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Aug</button>
-          <button data-mf="8"  onclick="setWeekMonthFilter(8)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Sep</button>
-          <button data-mf="9"  onclick="setWeekMonthFilter(9)"  style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Okt</button>
-          <button data-mf="10" onclick="setWeekMonthFilter(10)" style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Nov</button>
-          <button data-mf="11" onclick="setWeekMonthFilter(11)" style="font-size:10px;padding:3px 7px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Dec</button>
+          <button data-mf="all"  onclick="setWeekMonthFilter('all')"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Heel het jaar</button>
+          <button data-mf="0"  onclick="setWeekMonthFilter(0)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jan</button>
+          <button data-mf="1"  onclick="setWeekMonthFilter(1)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Feb</button>
+          <button data-mf="2"  onclick="setWeekMonthFilter(2)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mrt</button>
+          <button data-mf="3"  onclick="setWeekMonthFilter(3)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Apr</button>
+          <button data-mf="4"  onclick="setWeekMonthFilter(4)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Mei</button>
+          <button data-mf="5"  onclick="setWeekMonthFilter(5)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jun</button>
+          <button data-mf="6"  onclick="setWeekMonthFilter(6)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Jul</button>
+          <button data-mf="7"  onclick="setWeekMonthFilter(7)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Aug</button>
+          <button data-mf="8"  onclick="setWeekMonthFilter(8)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Sep</button>
+          <button data-mf="9"  onclick="setWeekMonthFilter(9)"  style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Okt</button>
+          <button data-mf="10" onclick="setWeekMonthFilter(10)" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Nov</button>
+          <button data-mf="11" onclick="setWeekMonthFilter(11)" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Dec</button>
         </div>
       </div>
         <div class="cw" style="height:600px"><canvas id="cWeek" role="img" aria-label="Weekprofiel groep"></canvas></div></div>
@@ -498,8 +498,8 @@
       <div class="cd">
         <div class="ct2"><div class="ac"></div>Top piekwaarden afname
           <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:#888">Toon:</span>
-            <select id="peakLimitA" style="font-size:11px;padding:2px 5px;border:1px solid #dce6e0;border-radius:5px">
+            <span style="font-size:12px;color:#888">Toon:</span>
+            <select id="peakLimitA" style="font-size:13px;padding:4px 6px;border:1px solid #dce6e0;border-radius:5px">
               <option value="10" selected>Top 10</option>
               <option value="25">Top 25</option>
               <option value="50">Top 50</option>
@@ -514,8 +514,8 @@
       <div class="cd">
         <div class="ct2"><div class="ac"></div>Top piekwaarden teruglevering
           <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-            <span style="font-size:10px;color:#888">Toon:</span>
-            <select id="peakLimitT" style="font-size:11px;padding:2px 5px;border:1px solid #dce6e0;border-radius:5px">
+            <span style="font-size:12px;color:#888">Toon:</span>
+            <select id="peakLimitT" style="font-size:13px;padding:4px 6px;border:1px solid #dce6e0;border-radius:5px">
               <option value="10" selected>Top 10</option>
               <option value="25">Top 25</option>
               <option value="50">Top 50</option>
@@ -535,8 +535,8 @@
         <div class="ib">Som individueel = optelling van de hoogste kwartierwaarden per aansluiting. Collectief = maandpiek van het groepsprofiel. Afname en teruglevering worden apart weergegeven.</div>
         <div class="lg" id="pLeg"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekA" role="img"></canvas></div></div>
-          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekT" role="img"></canvas></div></div>
+          <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekA" role="img"></canvas></div></div>
+          <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekT" role="img"></canvas></div></div>
         </div></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>GTO-besparing per maand</div>
         <table class="tbl"><thead><tr><th>Maand</th><th>Som ind. pieken (kW)</th><th>Coll. piek (kW)</th><th>Diversiteitswinst (kW / %)</th><th>Besparing kW-max (€)</th></tr></thead>
@@ -544,12 +544,12 @@
       <div class="cd"><div class="ct2"><div class="ac"></div>Besparingssimulatie — extra piekreductie</div>
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
           <div style="flex:1;min-width:150px"><div class="fg"><label>Piekreductie</label><input type="range" id="simSlider" min="0" max="50" value="10" step="1" style="width:100%"></div></div>
-          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#46962b" id="simVal">10%</div><div style="font-size:10px;color:#999">reductie</div></div>
+          <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#46962b" id="simVal">10%</div><div style="font-size:12px;color:#999">reductie</div></div>
         </div>
         <div class="kg" id="simKpis"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px">
-          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:240px"><canvas id="cSimA" role="img"></canvas></div></div>
-          <div><div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:240px"><canvas id="cSimT" role="img"></canvas></div></div>
+          <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:240px"><canvas id="cSimA" role="img"></canvas></div></div>
+          <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:240px"><canvas id="cSimT" role="img"></canvas></div></div>
         </div></div>
     </div>
     <!-- VERGELIJKING -->
@@ -584,7 +584,7 @@
   <div class="sb">
     <div style="margin-bottom:12px">
       <div class="st">Handelsplatforms</div>
-      <div class="cl" id="ehpList"><div style="padding:10px 0;text-align:center;font-size:11px;color:#aaa">Nog geen platform</div></div>
+      <div class="cl" id="ehpList"><div style="padding:10px 0;text-align:center;font-size:13px;color:#aaa">Nog geen platform</div></div>
       <button class="b" id="btnAddEhp" style="width:100%;margin-top:6px;background:#2c7fb8">+ Platform toevoegen</button>
     </div>
     <div id="ehpEditor" style="display:none">
@@ -728,11 +728,11 @@
         <button class="mx" id="btnCloseRap" style="color:#fff">×</button>
       </div>
     </div>
-    <div style="background:#f5f5f5;padding:7px 16px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:14px;font-size:11px;color:#555">
+    <div style="background:#f5f5f5;padding:7px 16px;border-bottom:1px solid #e0e0e0;display:flex;align-items:center;gap:14px;font-size:13px;color:#555">
       <span style="font-weight:700">Downloadmethode:</span>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="rapMethod" value="download" checked style="accent-color:#46962b"> Direct</label>
       <label style="display:flex;align-items:center;gap:5px;cursor:pointer"><input type="radio" name="rapMethod" value="link" style="accent-color:#46962b"> Als link openen</label>
-      <span style="color:#888;margin-left:auto;font-size:10px">Tip: lukt direct downloaden niet, kies "Als link openen"</span>
+      <span style="color:#888;margin-left:auto;font-size:12px">Tip: lukt direct downloaden niet, kies "Als link openen"</span>
     </div>
     <iframe id="rPreview" style="width:100%;height:78vh;border:none;background:#fff;display:block"></iframe>
   </div>
@@ -762,6 +762,10 @@
         <input type="checkbox" id="expChkScen" checked style="accent-color:#46962b;flex-shrink:0">
         <span>Scenario-configuratie (PV, batterij, strategieën)</span>
       </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer">
+        <input type="checkbox" id="expChkEhp" checked style="accent-color:#46962b;flex-shrink:0">
+        <span>Handelsplatforms (EHP — deelnemers &amp; prijzen)</span>
+      </label>
     </div>
     <div class="sh" style="margin-top:10px">Beveiliging</div>
     <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">
@@ -776,7 +780,7 @@
       <div class="fg" style="margin-top:6px">
         <input type="password" id="expPwdConfirm" placeholder="Wachtwoord bevestigen" autocomplete="new-password">
       </div>
-      <div style="font-size:10px;color:#aaa;margin-top:5px">Deel het wachtwoord apart (telefoon, Teams) — niet via hetzelfde kanaal als het bestand.</div>
+      <div style="font-size:12px;color:#aaa;margin-top:5px">Deel het wachtwoord apart (telefoon, Teams) — niet via hetzelfde kanaal als het bestand.</div>
     </div>
     <div class="sh" style="margin-top:10px">Downloadmethode</div>
     <div style="display:flex;flex-direction:column;gap:9px;margin-bottom:6px">
@@ -789,7 +793,7 @@
         <span>Als link openen (voor als download niet werkt)</span>
       </label>
     </div>
-    <div style="font-size:10px;color:#888;margin-bottom:14px">Tip: als de download niet start, kies "Als link openen".</div>
+    <div style="font-size:12px;color:#888;margin-bottom:14px">Tip: als de download niet start, kies "Als link openen".</div>
     <div class="ib2" id="expInfo" style="margin-bottom:12px"></div>
     <button class="b" id="btnDoExp" style="width:100%">Exporteren</button>
   </div>

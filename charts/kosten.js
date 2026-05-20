@@ -24,14 +24,14 @@ function drawKosten(allTs,perKw,cos){
     {label:'Teruglevering',data:kd.map(function(d){return+(-d.et).toFixed(0);}),backgroundColor:'rgba(70,150,43,.25)',borderRadius:5},
   ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax('€')}}});
   var html=kd.map(function(d,i){
-    return '<tr style="border-bottom:2px solid #e2ecdf"><td colspan="6" style="padding:4px 8px 1px;font-size:9px;font-weight:800;text-transform:uppercase;color:#46962b"><span style="background:'+PAL[i%PAL.length]+';width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle"></span>'+d.name+'</td></tr>'+
+    return '<tr style="border-bottom:2px solid #e2ecdf"><td colspan="6" style="padding:4px 8px 1px;font-size:11px;font-weight:800;text-transform:uppercase;color:#46962b"><span style="background:'+PAL[i%PAL.length]+';width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle"></span>'+d.name+'</td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Energie afname</td><td>'+d.ka.toFixed(1)+' MWh</td><td>—</td><td>€ '+fmt(d.ea)+'</td><td>—</td><td>—</td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Energie teruglevering</td><td>—</td><td>'+d.kt.toFixed(1)+' MWh</td><td>—</td><td style="color:#46962b">€ '+fmt(d.et)+'</td><td>—</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888">Aansluitvergoeding</td><td colspan="3" style="font-size:10px;color:#666">'+d.sa.l+' · '+d.nMnd+' mnd</td><td>—</td><td>€ '+fmt(d.aansl)+'</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888">Vastrecht transport</td><td colspan="3" style="font-size:10px;color:#666">'+d.st2.l+'</td><td>—</td><td>€ '+fmt(d.vast)+'</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888">kW-contract (GTV-A)</td><td colspan="3" style="font-size:10px;color:#666">'+(d.c.gtvA||150)+' kW x €'+d.st2.kc.toFixed(4)+'/kW/mnd</td><td>—</td><td>€ '+fmt(d.kwC)+'</td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888;font-weight:700">kW-max</td><td colspan="3" style="font-size:10px;color:#666">Max afname/mnd x €'+d.st2.km.toFixed(4)+'/kW</td><td>—</td><td><strong>€ '+fmt(d.kwM)+'</strong></td></tr>'+
-    '<tr><td style="padding-left:14px;color:#888">Dubbel tarief</td><td colspan="3" style="font-size:10px;color:#666">Norm €'+d.st2.dn+'/kWh · Laag €'+d.st2.dl+'/kWh</td><td>—</td><td>€ '+fmt(d.dt)+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">Aansluitvergoeding</td><td colspan="3" style="font-size:12px;color:#666">'+d.sa.l+' · '+d.nMnd+' mnd</td><td>—</td><td>€ '+fmt(d.aansl)+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">Vastrecht transport</td><td colspan="3" style="font-size:12px;color:#666">'+d.st2.l+'</td><td>—</td><td>€ '+fmt(d.vast)+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">kW-contract (GTV-A)</td><td colspan="3" style="font-size:12px;color:#666">'+(d.c.gtvA||150)+' kW x €'+d.st2.kc.toFixed(4)+'/kW/mnd</td><td>—</td><td>€ '+fmt(d.kwC)+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888;font-weight:700">kW-max</td><td colspan="3" style="font-size:12px;color:#666">Max afname/mnd x €'+d.st2.km.toFixed(4)+'/kW</td><td>—</td><td><strong>€ '+fmt(d.kwM)+'</strong></td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">Dubbel tarief</td><td colspan="3" style="font-size:12px;color:#666">Norm €'+d.st2.dn+'/kWh · Laag €'+d.st2.dl+'/kWh</td><td>—</td><td>€ '+fmt(d.dt)+'</td></tr>'+
     '<tr style="background:#f7fbf5"><td style="padding-left:14px;font-weight:700">Totaal</td><td>'+d.ka.toFixed(1)+' MWh</td><td>'+d.kt.toFixed(1)+' MWh</td><td>€ '+fmt(d.ea)+'</td><td style="color:#46962b">€ '+fmt(d.et)+'</td><td><strong style="color:'+((d.netto+d.totNet)>0?'#c0392b':'#46962b')+'">€ '+fmt(d.netto+d.totNet)+'</strong></td></tr>';
   }).join('');
   document.getElementById('kostenBody').innerHTML=html;

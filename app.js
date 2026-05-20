@@ -375,6 +375,7 @@ function openExportModal(){
   document.getElementById('expScopeCurrent').checked=true;
   document.getElementById('expChkTs').checked=true;
   document.getElementById('expChkScen').checked=true;
+  document.getElementById('expChkEhp').checked=true;
   updateExpInfo();
   showM('mExp');
 }
@@ -384,14 +385,17 @@ function updateExpInfo(){
   var scope=document.querySelector('input[name="expScope"]:checked').value;
   var inclTs=document.getElementById('expChkTs').checked;
   var inclScen=document.getElementById('expChkScen').checked;
+  var inclEhp=document.getElementById('expChkEhp').checked;
   var projs=scope==='current'?(p?[p]:[]):S.projects;
   var nConn=projs.reduce(function(s,pr){return s+pr.companies.length;},0);
   var nScen=projs.reduce(function(s,pr){return s+((pr.scenarios&&pr.scenarios.length)||0);},0);
+  var nEhp=projs.reduce(function(s,pr){return s+((pr.ehps&&pr.ehps.length)||0);},0);
   var parts=[];
   parts.push(projs.length+' project'+(projs.length!==1?'en':''));
   parts.push(nConn+' aansluiting'+(nConn!==1?'en':''));
   if(inclTs)parts.push('meetdata');
   if(inclScen&&nScen>0)parts.push(nScen+' scenario'+(nScen!==1?'s':''));
+  if(inclEhp&&nEhp>0)parts.push(nEhp+' handelsplatform'+(nEhp!==1?'s':''));
   document.getElementById('expInfo').textContent='Export bevat: '+parts.join(' · ');
 }
 
@@ -400,6 +404,7 @@ async function doExportData(){
   var scope=document.querySelector('input[name="expScope"]:checked').value;
   var inclTs=document.getElementById('expChkTs').checked;
   var inclScen=document.getElementById('expChkScen').checked;
+  var inclEhp=document.getElementById('expChkEhp').checked;
   var useEnc=document.getElementById('expEncrypt').checked;
   var method=document.querySelector('input[name="expMethod"]:checked').value;
   if(useEnc){
@@ -412,6 +417,7 @@ async function doExportData(){
     var projs=scope==='current'?(p?[p]:[]):S.projects;
     var projsCopy=JSON.parse(JSON.stringify(projs));
     if(!inclScen)projsCopy.forEach(function(pr){delete pr.scenarios;});
+    if(!inclEhp)projsCopy.forEach(function(pr){delete pr.ehps;});
     var tsData={};
     if(inclTs){
       for(var i=0;i<projsCopy.length;i++){
@@ -448,7 +454,13 @@ async function _doImportObj(obj){
   if(!confirm('Importeer '+nP+' project(en) met '+nPt.toLocaleString()+' meetpunten?'))return;
   var existIds={};S.projects.forEach(function(p){existIds[p.id]=p;});
   obj.state.projects.forEach(function(p){
-    if(existIds[p.id]){var ex=existIds[p.id];var exCIds={};ex.companies.forEach(function(c){exCIds[c.id]=1;});p.companies.forEach(function(c){if(exCIds[c.id]){for(var i=0;i<ex.companies.length;i++){if(ex.companies[i].id===c.id){ex.companies[i]=c;break;}}}else ex.companies.push(c);});}
+    if(existIds[p.id]){
+      var ex=existIds[p.id];
+      var exCIds={};ex.companies.forEach(function(c){exCIds[c.id]=1;});
+      p.companies.forEach(function(c){if(exCIds[c.id]){for(var i=0;i<ex.companies.length;i++){if(ex.companies[i].id===c.id){ex.companies[i]=c;break;}}}else ex.companies.push(c);});
+      if(p.scenarios)ex.scenarios=p.scenarios;
+      if(p.ehps)ex.ehps=p.ehps;
+    }
     else S.projects.push(p);
   });
   if(!S.activeId&&obj.state.activeId)S.activeId=obj.state.activeId;
@@ -556,6 +568,7 @@ document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('input[name="expScope"]').forEach(function(r){r.addEventListener('change',updateExpInfo);});
   document.getElementById('expChkTs').addEventListener('change',updateExpInfo);
   document.getElementById('expChkScen').addEventListener('change',updateExpInfo);
+  document.getElementById('expChkEhp').addEventListener('change',updateExpInfo);
   (function(){
     var cb=document.getElementById('expEncrypt');
     if(!window.crypto||!window.crypto.subtle){
