@@ -31,7 +31,18 @@ function setKpi(id,val,alert){var el=document.getElementById(id);el.textContent=
 function mndLabel(mnds,m){var parts=m.split('-');var mo=parseInt(parts[1]);var y=parts[0];var multi=mnds.some(function(x){return x.slice(0,4)!==mnds[0].slice(0,4);});return MND[mo-1]+(multi?" '"+y.slice(2):'');}
 
 // Renderen
-function renderAll(){renderProjSel();renderSidebar();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}}
+function renderAll(){renderProjSel();renderSidebar();renderHdrProj();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}try{renderHome();}catch(e){}}
+
+function renderHdrProj(){
+  var el=document.getElementById('hdrProj');
+  if(!el)return;
+  var p=ap();
+  if(!p){el.innerHTML='';return;}
+  var tags=(p.companies||[]).map(function(c){
+    return '<span class="hdr-proj-tag">'+c.name.replace(/[<>]/g,'')+'</span>';
+  }).join('');
+  el.innerHTML='<div class="hdr-proj-name">'+p.name.replace(/[<>]/g,'')+'</div>'+(tags?'<div class="hdr-proj-tags">'+tags+'</div>':'');
+}
 
 function renderProjSel(){
   var s=document.getElementById('projSel');
@@ -52,7 +63,7 @@ function renderSidebar(){
     html+='<div class="ci s'+(inScen?'':' ci-dim')+'">';
     html+='<div class="cn"><span class="dt" style="background:'+PAL[i%PAL.length]+'"></span>'+c.name+'</div>';
     html+='<div class="cm">'+c.category+' · GTV '+c.gtvA+'kW · <span id="pt_'+c.id+'">…</span> pt</div>';
-    html+='<div style="margin-top:4px"><button class="b" style="font-size:9px;padding:2px 6px;background:#f0f4f2;color:#46962b" data-editid="'+c.id+'">Bewerken</button></div>';
+    html+='<div style="margin-top:4px"><button class="b demo-hide" style="font-size:9px;padding:2px 6px;background:#f0f4f2;color:#46962b" data-editid="'+c.id+'">Bewerken</button></div>';
     html+='</div>';
   }
   list.innerHTML=html;
@@ -604,9 +615,12 @@ document.addEventListener('DOMContentLoaded',function(){
   try{initScenarios();}catch(e){console.error('initScenarios:',e);}
 });
 
+function renderHome(){}
+
 // Opstarten
 async function boot(){
-  try{db=await openDB();await loadMeta();}catch(e){console.error(e);notify('IndexedDB niet beschikbaar',false);}
+  try{db=await openDB();}catch(e){console.error(e);notify('IndexedDB niet beschikbaar',false);return;}
+  await loadMeta();
   renderAll();
 }
 boot();

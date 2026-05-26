@@ -41,7 +41,7 @@ function saveMeta(){return dbSet('meta','state',S);}
 
 async function loadMeta(){
   var s=await dbGet('meta','state');
-  if(s)S=s;
+  S=s||{projects:[],activeId:null};
   if(!S.projects.length){var id=uid();S.projects=[{id:id,name:'Mijn eerste project',desc:'',companies:[]}];S.activeId=id;}
   if(!S.activeId)S.activeId=S.projects[0].id;
 }

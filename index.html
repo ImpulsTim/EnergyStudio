@@ -298,20 +298,41 @@
     <div class="hdr-brand-name">ENERGY <span>STUDIO</span></div>
     <div class="hdr-brand-by">by Impuls Zeeland</div>
   </div>
-  <div class="hdr-r">
-    <select class="ps" id="projSel"><option value="f2bfdkol" selected>Mijn eerste project</option></select>
-    <button class="b o" id="btnNieuwProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Project</button>
-    <button class="b d" id="btnDelProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>Verwijder</button>
-    <button class="b tc" id="btnRapport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport</button>
-    <button class="b o" id="btnExpData"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Exporteer</button>
-    <label class="b o" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Importeer<input type="file" id="impIn" accept=".json" style="display:none"></label>
-  </div>
+  <div class="hdr-divider"></div>
+  <div class="hdr-proj" id="hdrProj"></div>
+  <div class="hdr-r"></div>
 </div>
 <div class="nav-tools">
-  <button class="nav-btn on" data-tool="gto">Groepsprofiel (GTO)</button>
+  <button class="nav-btn on" data-tool="home">Projecten</button>
+  <button class="nav-btn" data-tool="gto">Groepsprofiel (GTO)</button>
   <button class="nav-btn" data-tool="ehp">Energiehandelsplatform</button>
 </div>
-<div class="app" id="pageGto">
+<div class="home-wrap" id="pageHome">
+  <div class="home-inner">
+    <div class="home-card">
+      <div class="st">Project</div>
+      <div class="home-row">
+        <select class="ps" id="projSel" style="flex:1;min-width:180px"><option value="f2bfdkol" selected>Mijn eerste project</option></select>
+        <button class="b" id="btnNieuwProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Project</button>
+        <button class="b d" id="btnDelProj"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>Verwijder</button>
+      </div>
+    </div>
+    <div class="home-card">
+      <div class="st">Aansluitingen</div>
+      <div class="cl" id="cList"><div style="padding:10px 0;text-align:center;font-size:13px;color:#aaa">Nog geen aansluitingen</div></div>
+      <button class="b" id="btnAddComp" style="width:100%;margin-top:6px">+ Aansluiting toevoegen</button>
+    </div>
+    <div class="home-card">
+      <div class="st">Data &amp; rapport</div>
+      <div class="home-row">
+        <button class="b" id="btnRapport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport</button>
+        <button class="b" id="btnExpData"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Exporteer</button>
+        <label class="b" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Importeer<input type="file" id="impIn" accept=".json" style="display:none"></label>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="app ehp-hide" id="pageGto">
   <div class="sb">
     <div style="margin-bottom:10px">
       <div class="st">Groeps-GTV</div>
@@ -320,11 +341,6 @@
         <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="gGtvT" min="0" step="1" style="font-size:13px"></div>
         <div style="font-size:12px;color:#888" id="gtvHint"></div>
       </div>
-    </div>
-    <div style="margin-bottom:12px">
-      <div class="st">Aansluitingen</div>
-      <div class="cl" id="cList"><div style="padding:10px 0;text-align:center;font-size:13px;color:#aaa">Nog geen aansluitingen</div></div>
-      <button class="b" id="btnAddComp" style="width:100%;margin-top:6px">+ Aansluiting toevoegen</button>
     </div>
     <div>
       <div class="st">Analyse</div>

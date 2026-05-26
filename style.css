@@ -12,7 +12,11 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .hdr-brand-name{font-family:'Barlow',sans-serif;font-weight:900;font-size:32px;color:#fff;letter-spacing:2px;text-transform:uppercase;line-height:1.1}
 .hdr-brand-name span{color:rgb(212, 166, 37)}
 .hdr-brand-by{font-family:'Barlow',sans-serif;font-weight:600;font-size:11px;color:rgba(255,255,255,.75);letter-spacing:.6px;margin-top:2px}
-.hdr-r{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.hdr-proj{display:flex;flex-direction:column;justify-content:center;gap:3px;min-width:0;flex:1;overflow:hidden;padding:0 4px}
+.hdr-proj-name{font-family:'Barlow',sans-serif;font-weight:700;font-size:13px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-proj-tags{display:flex;gap:4px;flex-wrap:wrap}
+.hdr-proj-tag{font-size:10px;font-weight:600;color:rgba(255,255,255,.8);background:rgba(255,255,255,.13);border-radius:4px;padding:1px 7px;white-space:nowrap}
+.hdr-r{margin-left:auto;display:flex;align-items:center;gap:6px;flex-wrap:wrap;flex-shrink:0}
 .ps{background:rgba(0,0,0,.2);color:#fff;border:1px solid rgba(255,255,255,.25);border-radius:7px;padding:8px 12px;font-family:'Barlow',sans-serif;font-size:13px;font-weight:600;cursor:pointer}
 .b{background:#242b38;color:#fff;border:none;border-radius:7px;padding:9px 15px;font-family:'Barlow',sans-serif;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:5px}
 .b:hover{filter:brightness(1.15)}
@@ -207,6 +211,13 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .rap-opt-lbl{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:4px 6px;border-radius:5px;transition:background .1s}
 .rap-opt-lbl:hover{background:#f7fbf5}
 .rap-opt-lbl input[type=checkbox]{accent-color:#46962b;width:14px;height:14px;flex-shrink:0}
+/* Hoofdscherm */
+.home-wrap{padding:24px;min-height:calc(100vh - 46px)}
+.home-wrap.ehp-hide{display:none}
+.home-inner{max-width:920px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.home-card{background:#fff;border-radius:10px;border:1px solid #e2ecdf;padding:18px 20px}
+.home-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.home-card .ps{background:#f2f8fa;color:#242b38;border:1.5px solid #dce6e0}
 /* Wachtwoord velden */
 .pwd-wrap{position:relative}
 .pwd-wrap input{padding-right:32px;width:100%;box-sizing:border-box}

@@ -315,8 +315,10 @@ async function calcEHP(){
     nProdOnly:nProdOnly,nDemOnly:nDemOnly,nBoth:nBoth,nNone:nNone,
     maxMatchKw:maxMatchKw,peakProdKw:peakProdKw,peakDemKw:peakDemKw,
     skipped:skipped,nonMembers:nonMembers,
+    ehpNetKw:ehpNetKw,
     ehpWeekAvg:ehpWeekAvg,ehpWeekNet:ehpWeekNet,ehpMonthImp:ehpMonthImp,ehpMonthExp:ehpMonthExp
   };
+  _ehpPlatWeekSeiz=null;
   renderEhpResults(_ehpLast);
   document.getElementById('btnDlEhp').disabled=false;
   notify('Handelsplatform berekend — '+allTs.length+' kwartierwaarden'+(skipped.length?' ('+skipped.length+' deelnemer(s) zonder data overgeslagen)':''));
@@ -416,8 +418,16 @@ function renderEhpResults(res){
   // Analyse-tab: platform week/maand patronen
   var platAnalyseHtml=
     '<div class="cd">'+
-      '<div class="ct2"><div class="ac" style="background:#2c7fb8"></div>'+
-      'Weekpatroon inkoop &amp; teruglevering — '+_ehpEsc(res.platName)+'</div>'+
+      '<div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#2c7fb8"></div>'+
+      'Weekpatroon inkoop &amp; teruglevering — '+_ehpEsc(res.platName)+
+      '<div id="ehpPlatWeekSeizFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+
+        '<button data-sf="all" onclick="setEhpPlatWeekSeiz(\'all\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Heel het jaar</button>'+
+        '<button data-sf="win" onclick="setEhpPlatWeekSeiz(\'win\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Winter</button>'+
+        '<button data-sf="spr" onclick="setEhpPlatWeekSeiz(\'spr\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Lente</button>'+
+        '<button data-sf="sum" onclick="setEhpPlatWeekSeiz(\'sum\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Zomer</button>'+
+        '<button data-sf="aut" onclick="setEhpPlatWeekSeiz(\'aut\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Herfst</button>'+
+      '</div>'+
+      '</div>'+
       '<div class="ib2" style="margin-bottom:8px">Gemiddeld nettovermogen per kwartier van de week. '+
       'Blauw = inkoop van net (vraag &gt; aanbod). Groen = teruglevering aan net (aanbod &gt; vraag).</div>'+
       '<div class="cw" style="height:260px"><canvas id="cEhpPlatWeek" role="img"></canvas></div>'+
@@ -444,7 +454,7 @@ function renderEhpResults(res){
   _ehpAttachTabs();
 
   // Platform grafieken (Analyse-tab — panel hidden, resize bij tab-switch)
-  _ehpDrawPlatWeekChart(res.ehpWeekAvg||[]);
+  _ehpRenderPlatWeekChart();
   _ehpDrawPlatMonthChart(res.ehpMonthImp||{},res.ehpMonthExp||{});
 
   // Niet-leden grafieken
@@ -477,6 +487,47 @@ function _ehpAttachTabs(){
 }
 
 // --- Platform week/maand grafieken -------------------------------------------
+
+var _ehpPlatWeekSeiz=null;
+
+function _ehpSeizoen(mo){
+  if(mo===11||mo<=1)return'win';
+  if(mo<=4)return'spr';
+  if(mo<=7)return'sum';
+  return'aut';
+}
+
+function _ehpRenderPlatWeekChart(){
+  var res=_ehpLast;if(!res)return;
+  var allTs=res.ts,netKw=res.ehpNetKw,sf=_ehpPlatWeekSeiz;
+  var sum=new Array(672).fill(0),cnt=new Array(672).fill(0);
+  allTs.forEach(function(ts,i){
+    var d=new Date(ts);
+    if(sf!==null&&_ehpSeizoen(d.getMonth())!==sf)return;
+    var dow=(d.getDay()+6)%7;
+    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    sum[sl]+=netKw[i];cnt[sl]++;
+  });
+  var avg=sum.map(function(s,i){return cnt[i]>0?s/cnt[i]:0;});
+  _ehpDrawPlatWeekChart(avg);
+  _ehpUpdatePlatWeekBtns();
+}
+
+function _ehpUpdatePlatWeekBtns(){
+  var SCOLS={win:'#3498db',spr:'#2ecc71',sum:'#e67e22',aut:'#9b59b6'};
+  document.querySelectorAll('#ehpPlatWeekSeizFilter button').forEach(function(btn){
+    var val=btn.getAttribute('data-sf');
+    var act=val==='all'?_ehpPlatWeekSeiz===null:val===_ehpPlatWeekSeiz;
+    btn.style.background=act?(val==='all'?'#46962b':SCOLS[val]):'#eef2ec';
+    btn.style.color=act?'#fff':'#555';
+    btn.style.fontWeight=act?'700':'400';
+  });
+}
+
+function setEhpPlatWeekSeiz(val){
+  _ehpPlatWeekSeiz=val==='all'?null:val;
+  _ehpRenderPlatWeekChart();
+}
 
 function _ehpDrawPlatWeekChart(ehpWeekAvg){
   if(CH['ehpPlatWeek']){CH['ehpPlatWeek'].destroy();delete CH['ehpPlatWeek'];}
@@ -829,15 +880,18 @@ function downloadEhpCsv(){
 
 // --- Event listeners ---------------------------------------------------------
 
+var PAGE_MAP={home:'pageHome',gto:'pageGto',ehp:'pageEhp'};
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('.nav-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
       document.querySelectorAll('.nav-btn').forEach(function(b){b.classList.remove('on');});
       btn.classList.add('on');
-      var ehp=btn.getAttribute('data-tool')==='ehp';
-      document.getElementById('pageGto').classList.toggle('ehp-hide',ehp);
-      document.getElementById('pageEhp').classList.toggle('ehp-hide',!ehp);
-      if(ehp){try{renderEHP();}catch(e){console.error('renderEHP:',e);}}
+      var tool=btn.getAttribute('data-tool');
+      Object.keys(PAGE_MAP).forEach(function(k){
+        document.getElementById(PAGE_MAP[k]).classList.toggle('ehp-hide',k!==tool);
+      });
+      if(tool==='ehp'){try{renderEHP();}catch(e){console.error('renderEHP:',e);}}
+      if(tool==='home'){try{renderHome();}catch(e){console.error('renderHome:',e);}}
     });
   });
   document.getElementById('btnAddEhp').addEventListener('click',addEhp);
