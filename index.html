@@ -337,8 +337,8 @@
     <div style="margin-bottom:10px">
       <div class="st">Groeps-GTV</div>
       <div style="display:flex;flex-direction:column;gap:5px;margin-bottom:6px">
-        <div class="fg"><label>GTV afname (kW)</label><input type="number" id="gGtvA" min="0" step="1" style="font-size:13px"></div>
-        <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="gGtvT" min="0" step="1" style="font-size:13px"></div>
+        <div class="fg"><label>GTV afname (kW)<span class="tip-icon" data-tip="Groeps-GTV afname (kW): totaal gecontracteerd transportvermogen van de groep voor netinkoop.">ⓘ</span></label><input type="number" id="gGtvA" min="0" step="1" style="font-size:13px"></div>
+        <div class="fg"><label>GTV-T teruglevering (kW)<span class="tip-icon" data-tip="Groeps-GTV teruglevering (kW): totaal gecontracteerd vermogen voor teruglevering aan het net.">ⓘ</span></label><input type="number" id="gGtvT" min="0" step="1" style="font-size:13px"></div>
         <div style="font-size:12px;color:#888" id="gtvHint"></div>
       </div>
     </div>
@@ -438,9 +438,9 @@
           </div>
         </div>
         <div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:6px">
-          <span style="font-size:12px;color:#888">Van:</span>
+          <span style="font-size:12px;color:#888">Van:<span class="tip-icon" data-tip="Begindatum van de te analyseren periode.">ⓘ</span></span>
           <input type="date" id="jDateStart" oninput="panJ()" style="font-size:13px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
-          <span style="font-size:12px;color:#888">Tot:</span>
+          <span style="font-size:12px;color:#888">Tot:<span class="tip-icon" data-tip="Einddatum van de te analyseren periode.">ⓘ</span></span>
           <input type="date" id="jDateEnd" oninput="panJ()" style="font-size:13px;font-family:Barlow,sans-serif;border:1px solid #ddd;border-radius:4px;padding:2px 5px;color:#444">
           <span style="font-size:12px;color:#888;min-width:60px;text-align:right" id="jZoomLbl"></span>
         </div>
@@ -514,7 +514,7 @@
       <div class="cd">
         <div class="ct2"><div class="ac"></div>Top piekwaarden afname
           <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-            <span style="font-size:12px;color:#888">Toon:</span>
+            <span style="font-size:12px;color:#888">Toon:<span class="tip-icon" data-tip="Aantal hoogste piekwaarden dat getoond wordt in de tabel voor afname.">ⓘ</span></span>
             <select id="peakLimitA" style="font-size:13px;padding:4px 6px;border:1px solid #dce6e0;border-radius:5px">
               <option value="10" selected>Top 10</option>
               <option value="25">Top 25</option>
@@ -530,7 +530,7 @@
       <div class="cd">
         <div class="ct2"><div class="ac"></div>Top piekwaarden teruglevering
           <span style="margin-left:auto;display:flex;align-items:center;gap:6px">
-            <span style="font-size:12px;color:#888">Toon:</span>
+            <span style="font-size:12px;color:#888">Toon:<span class="tip-icon" data-tip="Aantal hoogste piekwaarden dat getoond wordt in de tabel voor teruglevering.">ⓘ</span></span>
             <select id="peakLimitT" style="font-size:13px;padding:4px 6px;border:1px solid #dce6e0;border-radius:5px">
               <option value="10" selected>Top 10</option>
               <option value="25">Top 25</option>
@@ -559,7 +559,7 @@
         <tbody id="gtoBody"></tbody></table></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>Besparingssimulatie — extra piekreductie</div>
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
-          <div style="flex:1;min-width:150px"><div class="fg"><label>Piekreductie</label><input type="range" id="simSlider" min="0" max="50" value="10" step="1" style="width:100%"></div></div>
+          <div style="flex:1;min-width:150px"><div class="fg"><label>Piekreductie<span class="tip-icon" data-tip="Simuleer een verlaging van de maandelijkse piek. Hogere waarde = meer reductie. Toont de impact op de GTV-kosten.">ⓘ</span></label><input type="range" id="simSlider" min="0" max="50" value="10" step="1" style="width:100%"></div></div>
           <div style="text-align:center"><div style="font-size:22px;font-weight:900;color:#46962b" id="simVal">10%</div><div style="font-size:12px;color:#999">reductie</div></div>
         </div>
         <div class="kg" id="simKpis"></div>
@@ -614,16 +614,54 @@
       </div>
       <div style="margin-bottom:12px">
         <div class="st">Interne prijzen (€/kWh)</div>
-        <div class="fgr"><label>Zon</label><input type="number" id="ehpPZon" step="0.001" value="0.08"></div>
-        <div class="fgr"><label>Wind</label><input type="number" id="ehpPWind" step="0.001" value="0.06"></div>
-        <div class="fgr"><label>Overig</label><input type="number" id="ehpPOverig" step="0.001" value="0.07"></div>
-        <div class="fgr"><label>Platformkosten</label><input type="number" id="ehpFee" step="0.001" value="0.00"></div>
+        <div class="fgr"><label>Zon<span class="tip-icon" data-tip="Interne handelsprijs voor zonne-energie (€/kWh). Afnemers betalen dit; zonnepaneel-eigenaren ontvangen dit.">ⓘ</span></label><input type="number" id="ehpPZon" step="0.001" value="0.08"></div>
+        <div class="fgr"><label>Wind<span class="tip-icon" data-tip="Interne handelsprijs voor windenergie (€/kWh).">ⓘ</span></label><input type="number" id="ehpPWind" step="0.001" value="0.06"></div>
+        <div class="fgr"><label>Overig<span class="tip-icon" data-tip="Interne handelsprijs voor overige hernieuwbare energie (€/kWh).">ⓘ</span></label><input type="number" id="ehpPOverig" step="0.001" value="0.07"></div>
+        <div class="fgr"><label>Platformkosten<span class="tip-icon" data-tip="Kosten die het platform rekent: per kWh intern verhandelde energie, of een vast bedrag per deelnemer per dag.">ⓘ</span></label><span class="fgr-combo"><input type="number" id="ehpFee" step="0.001" value="0.00"><select id="ehpFeeMode" class="fgr-mode-sel"><option value="kwh">€/kWh</option><option value="dag">€/dag</option></select></span></div>
       </div>
       <div style="margin-bottom:12px">
         <div class="st">Nettarieven (€/kWh)</div>
-        <div class="fgr"><label>Inkoop net</label><input type="number" id="ehpPNetAfname" step="0.001" value="0.12"></div>
-        <div class="fgr"><label>Teruglever</label><input type="number" id="ehpPNetTerug" step="0.001" value="0.04"></div>
-        <div class="fgr"><label>Dyn. inkoop</label><input type="number" id="ehpPDyn" step="0.001" value="0.10"></div>
+        <div class="fgr"><label>Inkoop net<span class="tip-icon" data-tip="Nettarief voor inkoop van het reguliere net (€/kWh). Geldt voor energie die niet intern gematcht wordt.">ⓘ</span></label><input type="number" id="ehpPNetAfname" step="0.001" value="0.12"></div>
+        <div class="fgr"><label>Teruglever<span class="tip-icon" data-tip="Nettarief voor teruglevering aan het reguliere net (€/kWh). Geldt voor overschot dat niet intern afgenomen wordt.">ⓘ</span></label><input type="number" id="ehpPNetTerug" step="0.001" value="0.04"></div>
+        <div class="fgr"><label>Dyn. inkoop<span class="tip-icon" data-tip="Dynamische inkoopprijs van het net (€/kWh). Wordt gebruikt bij dynamische contractvorm.">ⓘ</span></label><input type="number" id="ehpPDyn" step="0.001" value="0.10"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="st">Fiscaal</div>
+        <label class="rap-opt-lbl" style="margin-bottom:4px">
+          <input type="checkbox" id="ehpEbOn"> Energiebelasting toepassen
+          <span class="tip-icon" data-tip="Energiebelasting die de koper betaalt over afgenomen kWh. De grondslag bepaalt of intern ingekochte kWh ook belast zijn.">ⓘ</span>
+        </label>
+        <div class="fgr"><label>Jaarstaffel<span class="tip-icon" data-tip="Belastingjaar voor de EB-staffeltarieven.">ⓘ</span></label>
+          <select id="ehpEbJaar"><option value="">Default</option><option value="2024">2024</option><option value="2025" selected>2025</option></select></div>
+        <div class="fgr"><label>Grondslag<span class="tip-icon" data-tip="Bruto = EB over alle verbruik incl. intern ingekochte kWh. Extern = alleen EB over netinkoop (intern vrijgesteld). Netto = EB over verbruik minus eigen productie.">ⓘ</span></label>
+          <select id="ehpEbGrondslag"><option value="bruto" selected>Bruto afname</option><option value="externeLevering">Externe levering</option><option value="netto">Netto (saldering)</option></select></div>
+        <div class="fgr"><label>Heffingskorting (€/jr)<span class="tip-icon" data-tip="Vaste korting op energiebelasting per aansluiting per jaar.">ⓘ</span></label>
+          <input type="number" id="ehpHeffing" step="0.01" value="0"></div>
+        <label class="rap-opt-lbl" style="margin-bottom:4px;margin-top:4px">
+          <input type="checkbox" id="ehpBtwOn"> Btw toepassen
+          <span class="tip-icon" data-tip="Btw wordt berekend over de totale kosten inclusief energiebelasting.">ⓘ</span>
+        </label>
+        <div class="fgr"><label>Btw (%)<span class="tip-icon" data-tip="Btw-percentage. Standaard 21% voor zakelijke afnemers.">ⓘ</span></label>
+          <input type="number" id="ehpBtwPct" step="1" value="21"></div>
+      </div>
+      <div style="margin-bottom:12px">
+        <div class="st">Jaarrekening aannames</div>
+        <div class="fgr"><label>Basisprijs (€/kWh)<span class="tip-icon" data-tip="Vaste energieprijs voor inkoop van het net, gebruikt als er geen EPEX-data geladen is.">ⓘ</span></label><input type="number" id="jrPrijs" step="0.001" value="0.10"></div>
+        <div class="fgr"><label>Leveranciersopslag<span class="tip-icon" data-tip="Opslag die de leverancier bovenop de inkoopprijs rekent (€/kWh).">ⓘ</span></label><input type="number" id="jrLevOpslag" step="0.001" value="0.02"></div>
+        <div class="fgr"><label>Terugleverafslag<span class="tip-icon" data-tip="Korting op de verkoopprijs bij teruglevering aan het net (€/kWh).">ⓘ</span></label><input type="number" id="jrTerugAfslag" step="0.001" value="0.01"></div>
+        <details id="jrDetails">
+          <summary class="jr-summary">Geavanceerd<span class="tip-icon" data-tip="Extra opties: EPEX-marktprijzen importeren, onbalansopslag en verdeelsleutel.">ⓘ</span></summary>
+          <div style="margin-top:8px">
+            <div class="fgr"><label>Onbalansopslag<span class="tip-icon" data-tip="Opslag voor onbalansrisico van de leverancier (€/kWh).">ⓘ</span></label><input type="number" id="jrOnbalans" step="0.001" value="0.00"></div>
+            <div class="st" style="margin-top:8px">EPEX-marktprijzen</div>
+            <div class="ib2" id="jrPriceInfo" style="margin-bottom:6px;font-size:11px">Geen prijsreeks geladen — basisprijs wordt gebruikt.</div>
+            <div class="fgr"><label>Eenheid CSV<span class="tip-icon" data-tip="Eenheid van de prijskolom in de CSV: €/kWh of €/MWh.">ⓘ</span></label><select id="jrPriceUnit"><option value="kwh">€/kWh</option><option value="mwh">€/MWh</option></select></div>
+            <label class="b" style="cursor:pointer;width:100%;text-align:center;margin-top:4px;margin-bottom:6px">↑ EPEX-CSV importeren<input type="file" id="jrPriceFile" accept=".csv" style="display:none"></label>
+            <div class="st" style="margin-top:8px">Voordeelverdeling</div>
+            <div class="fgr"><label>Sleutel<span class="tip-icon" data-tip="Verdeelsleutel voor het financiële voordeel over deelnemers. Eigen delta = geen herverdeling.">ⓘ</span></label><select id="jrVerdeel"><option value="geen" selected>Eigen delta</option><option value="gelijk">Gelijk</option><option value="volume">Naar volume</option><option value="inbreng">Naar inbreng</option></select></div>
+          </div>
+        </details>
+        <button class="b" id="btnCalcJr" style="width:100%;margin-top:8px;background:#2c7fb8">Herbereken jaarrekening</button>
       </div>
       <div>
         <div class="st">Berekening</div>
@@ -641,8 +679,8 @@
 <div class="mbg" id="mProj" style="display:none">
   <div class="mo">
     <div class="mh">Nieuw project<button class="mx" id="btnCloseProj">×</button></div>
-    <div class="fg" style="margin-bottom:8px"><label>Naam</label><input type="text" id="mPN" placeholder="bijv. Energiehub Terneuzen"></div>
-    <div class="fg" style="margin-bottom:13px"><label>Beschrijving</label><input type="text" id="mPD" placeholder="Optioneel..."></div>
+    <div class="fg" style="margin-bottom:8px"><label>Naam<span class="tip-icon" data-tip="Naam van het project, bijv. &apos;Bedrijventerrein Noord 2024&apos;.">ⓘ</span></label><input type="text" id="mPN" placeholder="bijv. Energiehub Terneuzen"></div>
+    <div class="fg" style="margin-bottom:13px"><label>Beschrijving<span class="tip-icon" data-tip="Optionele omschrijving die verduidelijkt waarover dit project gaat.">ⓘ</span></label><input type="text" id="mPD" placeholder="Optioneel..."></div>
     <button class="b" id="btnCreateProj" style="width:100%">Aanmaken</button>
   </div>
 </div>
@@ -651,20 +689,20 @@
     <div class="mh"><span id="mCT">Aansluiting toevoegen</span><button class="mx" id="btnCloseComp">×</button></div>
     <div class="sh">Basisgegevens</div>
     <div class="fg2" style="margin-bottom:8px">
-      <div class="fg"><label>Naam</label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
-      <div class="fg"><label>EAN</label><input type="text" id="cE" placeholder="18 cijfers"></div>
+      <div class="fg"><label>Naam<span class="tip-icon" data-tip="Herkenbare naam van het bedrijf of de aansluiting.">ⓘ</span></label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
+      <div class="fg"><label>EAN<span class="tip-icon" data-tip="EAN-code van de aansluiting (18 cijfers). Te vinden op de energierekening of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cE" placeholder="18 cijfers"></div>
     </div>
     <div class="fg2" style="margin-bottom:8px">
-      <div class="fg"><label>Fysieke capaciteit (kVA)</label><input type="number" id="cKva" min="0" placeholder="bijv. 250"></div>
-      <div class="fg"><label>Zekering</label><input type="text" id="cZek" placeholder="bijv. 3x80A"></div>
+      <div class="fg"><label>Fysieke capaciteit (kVA)<span class="tip-icon" data-tip="Maximale elektrische belasting van de aansluiting in kVA. Staat in het aansluitcontract.">ⓘ</span></label><input type="number" id="cKva" min="0" placeholder="bijv. 250"></div>
+      <div class="fg"><label>Zekering<span class="tip-icon" data-tip="Zekeringswaarde, bijv. &apos;3×80A&apos;. Staat op de meterkast of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cZek" placeholder="bijv. 3x80A"></div>
     </div>
     <div class="fg3" style="margin-bottom:8px">
-      <div class="fg"><label>Categorie</label><select id="cCat"><option>Kleinverbruik</option><option selected>Grootverbruik</option></select></div>
-      <div class="fg"><label>GTV afname (kW)</label><input type="number" id="cGA" value="150" min="0"></div>
-      <div class="fg"><label>GTV-T teruglevering (kW)</label><input type="number" id="cGT" value="80" min="0"></div>
+      <div class="fg"><label>Categorie<span class="tip-icon" data-tip="Kleinverbruik = ≤3×80A. Grootverbruik = hogere capaciteit. Bepaalt welk nettarief van toepassing is.">ⓘ</span></label><select id="cCat"><option>Kleinverbruik</option><option selected>Grootverbruik</option></select></div>
+      <div class="fg"><label>GTV afname (kW)<span class="tip-icon" data-tip="Gecontracteerd Transportvermogen afname (kW): het maximale vermogen waarvoor transportcapaciteit is gereserveerd.">ⓘ</span></label><input type="number" id="cGA" value="150" min="0"></div>
+      <div class="fg"><label>GTV-T teruglevering (kW)<span class="tip-icon" data-tip="Gecontracteerd Transportvermogen teruglevering (kW): de maximale teruglevercapaciteit die is gereserveerd.">ⓘ</span></label><input type="number" id="cGT" value="80" min="0"></div>
     </div>
     <div class="fg2" style="margin-bottom:8px">
-      <div class="fg"><label>Stedin aansluitcategorie</label>
+      <div class="fg"><label>Stedin aansluitcategorie<span class="tip-icon" data-tip="Stedin aansluitcategorie. Bepalend voor de aansluitkosten. Te vinden in uw Stedin-contract.">ⓘ</span></label>
         <select id="cSA">
           <option value="none">— N.v.t. —</option>
           <option value="LS">LS — €75,40/jr</option>
@@ -675,7 +713,7 @@
           <option value="TS">TS — Maatwerk</option>
         </select>
       </div>
-      <div class="fg"><label>Stedin transportcategorie</label>
+      <div class="fg"><label>Stedin transportcategorie<span class="tip-icon" data-tip="Stedin transportcategorie. Bepalend voor de transportkosten. Te vinden in uw Stedin-contract.">ⓘ</span></label>
         <select id="cST">
           <option value="none">— N.v.t. —</option>
           <option value="LS">LS — t/m 50 kW</option>
@@ -694,10 +732,10 @@
       <button class="tg" data-pt="dynamic">Dynamisch (CSV)</button>
     </div>
     <div id="pStatic" class="fg2">
-      <div class="fg"><label>Prijs afname (€/kWh)</label><input type="number" id="cPA" value="0.12" step="0.001"></div>
-      <div class="fg"><label>Terugleververgoeding (€/kWh)</label><input type="number" id="cPT2" value="0.08" step="0.001"></div>
+      <div class="fg"><label>Prijs afname (€/kWh)<span class="tip-icon" data-tip="Vaste afnameprijs per kWh (excl. energiebelasting en btw). Dit is de contractprijs die uw leverancier rekent.">ⓘ</span></label><input type="number" id="cPA" value="0.12" step="0.001"></div>
+      <div class="fg"><label>Terugleververgoeding (€/kWh)<span class="tip-icon" data-tip="Vergoeding per kWh die uw leverancier betaalt voor teruggeleverde energie.">ⓘ</span></label><input type="number" id="cPT2" value="0.08" step="0.001"></div>
     </div>
-    <div id="pDynamic" style="display:none"><div class="fg"><label>Dynamisch CSV</label><textarea id="cPD" placeholder="2024-01-01T00:00:00;0.10;0.06"></textarea></div></div>
+    <div id="pDynamic" style="display:none"><div class="fg"><label>Dynamisch CSV<span class="tip-icon" data-tip="CSV met dynamische kwartierprjzen. Indeling: tijdstip;inkoopprijs;terugleverprijs (€/kWh) — of upload een bestand via de knop.">ⓘ</span></label><textarea id="cPD" placeholder="2024-01-01T00:00:00;0.10;0.06"></textarea></div></div>
     <div class="sh">Meetdata — CSV: kWh/kwartier ×4=kW · JSON: kWh/kwartier ×4=kW</div>
     <div class="drop" id="cDrop">
       <div class="dtt">Kwartierdata uploaden</div>
@@ -785,16 +823,16 @@
     </div>
     <div class="sh" style="margin-top:10px">Beveiliging</div>
     <div style="display:flex;flex-direction:column;gap:7px;margin-bottom:8px">
-      <label class="rap-opt-lbl"><input type="checkbox" id="expEncrypt"> Bestand versleutelen (AES-256)</label>
+      <label class="rap-opt-lbl"><input type="checkbox" id="expEncrypt"> Bestand versleutelen (AES-256)<span class="tip-icon" data-tip="Versleutelt het bestand met AES-256. Vereist het wachtwoord bij het terugimporteren.">ⓘ</span></label>
     </div>
     <div id="expPwdSection" style="display:none;margin-bottom:10px">
       <div class="fg pwd-wrap">
-        <input type="password" id="expPwd" placeholder="Wachtwoord" autocomplete="new-password">
+        <input type="password" id="expPwd" placeholder="Wachtwoord" autocomplete="new-password" data-tip="Kies een sterk wachtwoord. Vergeten = data onherstelbaar verloren.">
         <button type="button" class="pwd-eye" id="expPwdEye">&#128065;</button>
       </div>
       <div class="pwd-strength" id="expPwdStrength"></div>
       <div class="fg" style="margin-top:6px">
-        <input type="password" id="expPwdConfirm" placeholder="Wachtwoord bevestigen" autocomplete="new-password">
+        <input type="password" id="expPwdConfirm" placeholder="Wachtwoord bevestigen" autocomplete="new-password" data-tip="Herhaal het wachtwoord ter verificatie.">
       </div>
       <div style="font-size:12px;color:#aaa;margin-top:5px">Deel het wachtwoord apart (telefoon, Teams) — niet via hetzelfde kanaal als het bestand.</div>
     </div>
@@ -834,37 +872,37 @@
 <div class="mbg" id="mScen" style="display:none">
   <div class="mo">
     <div class="mh">Scenario configureren<button class="mx" id="btnCloseScen">×</button></div>
-    <div class="fg" style="margin-bottom:12px"><label>Naam</label><input type="text" id="sName" placeholder="bijv. Deelgroep A"></div>
+    <div class="fg" style="margin-bottom:12px"><label>Naam<span class="tip-icon" data-tip="Naam van het scenario, bijv. &apos;Met zonnepanelen&apos; of &apos;Batterij 100 kWh&apos;.">ⓘ</span></label><input type="text" id="sName" placeholder="bijv. Deelgroep A"></div>
     <div class="sh" style="margin-bottom:6px">👥 Aansluitingen in dit scenario</div>
     <div id="sConList" class="scen-con-list"></div>
     <div class="fg2" style="margin-bottom:14px">
-      <div class="fg"><label>GTV afname (kW) <small class="lbl-hint">leeg = automatisch</small></label><input type="number" id="sGtvA" placeholder="Automatisch" min="0"></div>
-      <div class="fg"><label>GTV teruglevering (kW) <small class="lbl-hint">leeg = automatisch</small></label><input type="number" id="sGtvT" placeholder="Automatisch" min="0"></div>
+      <div class="fg"><label>GTV afname (kW) <small class="lbl-hint">leeg = automatisch</small><span class="tip-icon" data-tip="GTV-A override voor dit scenario in kW. Laat leeg om automatisch uit de meetdata te berekenen.">ⓘ</span></label><input type="number" id="sGtvA" placeholder="Automatisch" min="0"></div>
+      <div class="fg"><label>GTV teruglevering (kW) <small class="lbl-hint">leeg = automatisch</small><span class="tip-icon" data-tip="GTV-T override voor dit scenario in kW. Laat leeg om automatisch uit de meetdata te berekenen.">ⓘ</span></label><input type="number" id="sGtvT" placeholder="Automatisch" min="0"></div>
     </div>
     <div class="ms-toggle" id="togSolar"><div class="tog"></div>☀ Zonnepanelen</div>
     <div class="scen-fields" id="sfSolar" style="display:none">
       <div class="fg2" style="margin-bottom:8px">
-        <div class="fg"><label>Vermogen (kWp)</label><input type="number" id="sKwp" value="100" min="1" max="5000"></div>
-        <div class="fg"><label>Performance ratio (%)</label><input type="number" id="sPr" value="85" min="50" max="100"></div>
+        <div class="fg"><label>Vermogen (kWp)<span class="tip-icon" data-tip="Piekvermogen van de te simuleren zonnepaneleninstallatie in kilowatt-piek (kWp).">ⓘ</span></label><input type="number" id="sKwp" value="100" min="1" max="5000"></div>
+        <div class="fg"><label>Performance ratio (%)<span class="tip-icon" data-tip="Performance ratio: verhouding tussen werkelijke en theoretische opbrengst. Typisch 75–85% in Nederland.">ⓘ</span></label><input type="number" id="sPr" value="85" min="50" max="100"></div>
       </div>
       <div class="fg2" style="margin-bottom:8px">
-        <div class="fg"><label>Tilt (°)</label><input type="number" id="sTilt" value="35" min="0" max="90"></div>
-        <div class="fg"><label>Azimut (° v. Zuid)</label><input type="number" id="sAzimut" value="0" min="-90" max="90"></div>
+        <div class="fg"><label>Tilt (°)<span class="tip-icon" data-tip="Hellingshoek van de panelen in graden. 0° = plat, 90° = loodrecht. Optimaal ~35° in Nederland.">ⓘ</span></label><input type="number" id="sTilt" value="35" min="0" max="90"></div>
+        <div class="fg"><label>Azimut (° v. Zuid)<span class="tip-icon" data-tip="Oriëntatie ten opzichte van het zuiden. 0° = pal zuid (optimaal), +90° = west, −90° = oost.">ⓘ</span></label><input type="number" id="sAzimut" value="0" min="-90" max="90"></div>
       </div>
     </div>
     <div class="ms-toggle" id="togBat"><div class="tog"></div>⚡ Batterijopslag</div>
     <div class="scen-fields" id="sfBat" style="display:none">
       <div class="fg2" style="margin-bottom:8px">
-        <div class="fg"><label>Capaciteit (kWh)</label><input type="number" id="sCap" value="200" min="1"></div>
-        <div class="fg"><label>Max vermogen (kW)</label><input type="number" id="sPMax" value="50" min="1"></div>
+        <div class="fg"><label>Capaciteit (kWh)<span class="tip-icon" data-tip="Opslagcapaciteit van de batterij in kilowattuur (kWh).">ⓘ</span></label><input type="number" id="sCap" value="200" min="1"></div>
+        <div class="fg"><label>Max vermogen (kW)<span class="tip-icon" data-tip="Maximaal laad- en ontlaadvermogen van de batterij in kW.">ⓘ</span></label><input type="number" id="sPMax" value="50" min="1"></div>
       </div>
       <div class="fg2" style="margin-bottom:8px">
-        <div class="fg"><label>Laadrendement (%)</label><input type="number" id="sEtaC" value="95" min="50" max="100"></div>
-        <div class="fg"><label>Ontlaadrendement (%)</label><input type="number" id="sEtaD" value="95" min="50" max="100"></div>
+        <div class="fg"><label>Laadrendement (%)<span class="tip-icon" data-tip="Laadrendement van de batterij in procenten. Typisch 93–97%.">ⓘ</span></label><input type="number" id="sEtaC" value="95" min="50" max="100"></div>
+        <div class="fg"><label>Ontlaadrendement (%)<span class="tip-icon" data-tip="Ontlaadrendement van de batterij in procenten. Typisch 93–97%.">ⓘ</span></label><input type="number" id="sEtaD" value="95" min="50" max="100"></div>
       </div>
       <div class="fg2" style="margin-bottom:8px">
-        <div class="fg"><label>Min SoC (%)</label><input type="number" id="sSocMin" value="10" min="0" max="50"></div>
-        <div class="fg"><label>Max SoC (%)</label><input type="number" id="sSocMax" value="90" min="50" max="100"></div>
+        <div class="fg"><label>Min SoC (%)<span class="tip-icon" data-tip="Minimale laadtoestand (State of Charge) in procenten. Beschermt de batterij tegen diepe ontlading.">ⓘ</span></label><input type="number" id="sSocMin" value="10" min="0" max="50"></div>
+        <div class="fg"><label>Max SoC (%)<span class="tip-icon" data-tip="Maximale laadtoestand in procenten. Laat ruimte vrij voor opvang van PV-pieken.">ⓘ</span></label><input type="number" id="sSocMax" value="90" min="50" max="100"></div>
       </div>
       <div class="sh">Strategie</div>
       <div class="strat-opt">
@@ -872,17 +910,17 @@
         <label><input type="radio" name="sBatStrat" value="onafhankelijkheid"><span><strong>Onafhankelijkheid / Zon PV</strong> — laad op overschot, ontlaad bij afname van het net</span></label>
       </div>
       <div id="sfBatAggr" style="margin-top:10px">
-        <label style="display:block;margin-bottom:4px">Agressiviteit <span id="sBatAggrLbl" style="float:right;color:#46962b;font-weight:700">3 (gemiddeld)</span></label>
+        <label style="display:block;margin-bottom:4px">Agressiviteit<span class="tip-icon" data-tip="Hoe agressief de batterij pieken afvlakt. Hogere waarde = actiever, meer cycli per jaar.">ⓘ</span> <span id="sBatAggrLbl" style="float:right;color:#46962b;font-weight:700">3 (gemiddeld)</span></label>
         <input type="range" id="sBatAggr" min="1" max="5" value="3" step="1" style="width:100%;accent-color:#46962b">
         <small class="lbl-hint" style="display:block;margin-top:2px">1 = rustig (alleen grote pieken) · 5 = agressief (continu naar nullijn sturen)</small>
       </div>
       <div id="sfBatHorizon" style="margin-top:10px">
-        <label style="display:block;margin-bottom:4px">Forecast vooruitkijken <span id="sBatHorizonLbl" style="float:right;color:#46962b;font-weight:700">8 kwartieren (2 uur)</span></label>
+        <label style="display:block;margin-bottom:4px">Forecast vooruitkijken<span class="tip-icon" data-tip="Aantal kwartieren vooruit dat de strategieoptimalisatie vooruit kijkt (forecast horizon).">ⓘ</span> <span id="sBatHorizonLbl" style="float:right;color:#46962b;font-weight:700">8 kwartieren (2 uur)</span></label>
         <input type="range" id="sBatHorizon" min="0" max="96" value="8" step="4" style="width:100%;accent-color:#46962b">
         <small class="lbl-hint" style="display:block;margin-top:2px">0 = puur reactief · 96 = volle dag (perfecte forecast in simulatie)</small>
       </div>
       <div id="sfBatCycles" style="margin-top:10px">
-        <div class="fg"><label>Max cycli per jaar <small class="lbl-hint">typisch 600 (batterijgarantie)</small></label><input type="number" id="sBatMaxCycles" value="600" min="50" max="5000"></div>
+        <div class="fg"><label>Max cycli per jaar <small class="lbl-hint">typisch 600 (batterijgarantie)</small><span class="tip-icon" data-tip="Maximaal aantal laad-/ontlaadcycli per jaar. Begrenst gebruik om de levensduur te bewaken.">ⓘ</span></label><input type="number" id="sBatMaxCycles" value="600" min="50" max="5000"></div>
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-top:14px">
@@ -894,6 +932,7 @@
 
 <!-- JavaScript modules — volgorde is belangrijk (globals eerst, app.js als laatste) -->
 <script src="tarieven.js"></script>
+<script src="rekenkern.js"></script>
 <script src="db.js"></script>
 <script src="parsers.js"></script>
 <script src="charts/jaarprofiel.js"></script>
@@ -906,6 +945,7 @@
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
 <script src="ehp.js"></script>
+<script src="financieel.js"></script>
 <script src="app.js"></script>
 
 </body></html>

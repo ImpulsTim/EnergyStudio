@@ -6,6 +6,7 @@ var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:
 
 // Hulpfuncties
 function uid(){return Math.random().toString(36).slice(2,10);}
+function tipIcon(t){return '<span class="tip-icon" data-tip="'+t.replace(/"/g,'&quot;')+'">ⓘ</span>';}
 
 function notify(msg,ok){
   var el=document.getElementById('nf');
@@ -195,7 +196,7 @@ async function openEditComp(id){
   document.getElementById('cN').value=c.name;document.getElementById('cE').value=c.ean||'';
   document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cZek').value=c.zekering||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
-  document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:80;
+  document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:0;
   document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';document.getElementById('cST').value=c.stedinT||'TrafoMSLS';
   document.getElementById('cPA').value=c.priceA!=null?c.priceA:0.12;document.getElementById('cPT2').value=c.priceT!=null?c.priceT:0.08;
   document.getElementById('cPD').value=c.priceDyn||'';
@@ -250,7 +251,7 @@ async function runAnalysis(){
   _optim.allData=withData;
   resetCH();
   var somA=withData.reduce(function(s,c){return s+(c.gtvA||150);},0);
-  var somT=withData.reduce(function(s,c){return s+(c.gtvT||80);},0);
+  var somT=withData.reduce(function(s,c){return s+(c.gtvT||0);},0);
   var inGA=parseFloat(document.getElementById('gGtvA').value);
   var inGT=parseFloat(document.getElementById('gGtvT').value);
   var gtvA=isNaN(inGA)?somA:inGA;
@@ -624,3 +625,15 @@ async function boot(){
   renderAll();
 }
 boot();
+
+// Globale tooltip
+(function(){
+  var t=document.createElement('div');t.id='globalTip';document.body.appendChild(t);
+  document.addEventListener('mouseover',function(e){
+    var el=e.target.closest('[data-tip]');
+    t.textContent=el?el.dataset.tip:'';t.style.display=el?'block':'none';
+  });
+  document.addEventListener('mousemove',function(e){
+    if(t.style.display!=='none'){t.style.left=(e.clientX+14)+'px';t.style.top=(e.clientY-40)+'px';}
+  });
+})();

@@ -2,11 +2,13 @@ var db=null;
 
 function openDB(){
   return new Promise(function(res,rej){
-    var r=indexedDB.open('EGP_v4',1);
+    var r=indexedDB.open('EGP_v4',2);
     r.onupgradeneeded=function(e){
       var d=e.target.result;
       if(!d.objectStoreNames.contains('ts'))d.createObjectStore('ts');
       if(!d.objectStoreNames.contains('meta'))d.createObjectStore('meta');
+      // v2: EPEX/EEX-prijsreeksen per project (kale marktprijs €/kWh)
+      if(!d.objectStoreNames.contains('prices'))d.createObjectStore('prices');
     };
     r.onsuccess=function(e){res(e.target.result);};
     r.onerror=function(e){rej(e);};

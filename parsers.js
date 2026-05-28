@@ -43,6 +43,28 @@ function parseCSV(text){
   return result;
 }
 
+// EPEX/EEX-prijsreeks: CSV met "timestamp;prijs" (of komma-gescheiden).
+// Geeft [{ts, price}] terug. price = KALE marktprijs €/kWh; negatieve prijzen blijven negatief.
+// opts.perMWh=true rekent €/MWh om naar €/kWh (deel door 1000).
+function parsePriceCSV(text,opts){
+  opts=opts||{};
+  var lines=text.replace(/\r/g,'').trim().split('\n');
+  if(!lines.length)return [];
+  var sep=lines[0].indexOf(';')>-1?';':',';
+  var start=0;
+  var firstVal=(lines[0].split(sep)[1]||'').trim().replace(',','.');
+  if(isNaN(parseFloat(firstVal)))start=1; // koprij overslaan
+  var div=opts.perMWh?1000:1;
+  var result=[];
+  for(var i=start;i<lines.length;i++){
+    var p=lines[i].split(sep);if(p.length<2)continue;
+    var ts=p[0].trim().replace(/"/g,'');
+    var price=parseFloat(p[1].trim().replace(',','.'));
+    if(ts&&!isNaN(price))result.push({ts:ts,price:Math.round(price/div*1e6)/1e6});
+  }
+  return result;
+}
+
 function parseJSON(json){
   var map={};
   var meps=json.market_evaluation_points||[];
