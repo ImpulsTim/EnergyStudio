@@ -436,7 +436,7 @@ function calcSolar(p) {
     var az = Math.atan2(sinAz, cosAz);
     var cosTheta = sinA * Math.cos(tilt) + cosA * Math.cos(az - azimut) * Math.sin(tilt);
     if (cosTheta <= 0) { kw.push(0); return; }
-    var power = kWp * cosTheta * SOLAR_MF[mo] * pr;
+    var power = kWp * cosTheta * pr;
     kw.push(-power);
     monthEnergy[mo] += power * 0.25;
     monthElevSum[mo] += Math.asin(sinA) * 180 / Math.PI;

@@ -284,6 +284,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body id="artifacts-component-root-html">
@@ -369,6 +372,7 @@
       <button class="tab" data-tab="tOvsch">Overschrijdingen</button>
       <button class="tab" data-tab="tPiek">Piekanalyse</button>
       <button class="tab" data-tab="tKost">Kosten</button>
+      <button class="tab" data-tab="tKaart">Kaart</button>
       <div class="tab-sep"></div>
       <button class="tab tab-verg" data-tab="tVerg">⚖ Vergelijking</button>
     </div>
@@ -594,6 +598,19 @@
         <table class="tbl"><thead><tr><th>Post</th><th>Vol. afname</th><th>Vol. teruglevering</th><th>Afname (€)</th><th>Teruglevering (€)</th><th>Bedrag (€)</th></tr></thead>
         <tbody id="kostenBody"></tbody></table></div>
     </div>
+    <!-- KAART -->
+    <div class="pn" id="tKaart">
+      <div id="kaartWrap">
+        <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
+          <button class="b" id="btnKaartPng" style="font-size:12px;padding:6px 12px">📸 PNG</button>
+          <button class="b" id="btnNetburen" style="font-size:12px;padding:6px 12px;background:#2c7fb8">📋 Netburen beheren</button>
+          <div style="flex:1"></div>
+        </div>
+        <div id="kaartWarning"></div>
+        <div id="kaartMap"></div>
+        <div id="kaartLegenda"></div>
+      </div>
+    </div>
   </div>
 </div>
 <div class="app ehp-hide" id="pageEhp">
@@ -692,6 +709,17 @@
       <div class="fg"><label>Naam<span class="tip-icon" data-tip="Herkenbare naam van het bedrijf of de aansluiting.">ⓘ</span></label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
       <div class="fg"><label>EAN<span class="tip-icon" data-tip="EAN-code van de aansluiting (18 cijfers). Te vinden op de energierekening of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cE" placeholder="18 cijfers"></div>
     </div>
+    <div class="fg" style="margin-bottom:8px">
+      <label>Adres (voor kaart)<span class="tip-icon" data-tip="Adres van de aansluiting — gebruikt voor positionering op de kaart.">ⓘ</span></label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="cAdres" placeholder="bijv. Havenweg 10, 4331AA Middelburg" style="flex:1">
+        <button class="b" type="button" id="btnGeoComp" style="white-space:nowrap;padding:6px 10px;font-size:12px">📍 Zoek</button>
+      </div>
+    </div>
+    <div class="fg2" style="margin-bottom:8px">
+      <div class="fg"><label>Breedtegraad (lat)</label><input type="number" id="cLat" step="0.000001" placeholder="bijv. 51.4988"></div>
+      <div class="fg"><label>Lengtegraad (lng)</label><input type="number" id="cLng" step="0.000001" placeholder="bijv. 3.6136"></div>
+    </div>
     <div class="fg2" style="margin-bottom:8px">
       <div class="fg"><label>Fysieke capaciteit (kVA)<span class="tip-icon" data-tip="Maximale elektrische belasting van de aansluiting in kVA. Staat in het aansluitcontract.">ⓘ</span></label><input type="number" id="cKva" min="0" placeholder="bijv. 250"></div>
       <div class="fg"><label>Zekering<span class="tip-icon" data-tip="Zekeringswaarde, bijv. &apos;3×80A&apos;. Staat op de meterkast of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cZek" placeholder="bijv. 3x80A"></div>
@@ -747,6 +775,58 @@
     <div style="display:flex;gap:6px;margin-top:12px">
       <button class="b" id="btnSaveComp" style="flex:1">Opslaan</button>
       <button class="b d" id="btnDelComp" style="display:none">Verwijderen</button>
+    </div>
+  </div>
+</div>
+<!-- Netburen / MS-ringen modal -->
+<div class="mbg" id="mNetbuur" style="display:none">
+  <div class="mo" style="max-width:660px">
+    <div class="mh">MS-ringen &amp; Netburen<button class="mx" id="btnCloseNetbuur">×</button></div>
+    <!-- Deelnemers per ring -->
+    <div id="nbEanCheck"></div>
+    <!-- Ringen lijst -->
+    <div class="sh" style="display:flex;align-items:center;gap:8px">
+      MS-ringen
+      <button class="b" id="btnNbGeoAll" style="font-size:10px;padding:3px 9px;background:#2c7fb8;margin-left:auto">📍 Alle geocoderen</button>
+    </div>
+    <div id="nbRingenList" style="max-height:260px;overflow-y:auto;margin-bottom:10px"></div>
+    <div id="nbGeoProgress" style="display:none;padding:7px 10px;background:#f7fbf5;border-radius:6px;font-size:12px;color:#46962b;margin-bottom:8px"></div>
+    <!-- Nieuwe ring importeren -->
+    <div class="sh">Nieuwe ring importeren</div>
+    <div class="drop" id="nbDrop" style="margin-bottom:8px">
+      <div class="dtt">Netburenscan uploaden (= 1 nieuwe ring)</div>
+      <div class="dts">CSV of Excel (.xlsx) · Kolommen: Straat ; Huisnummer ; Huisnummertoevoeging ; Plaats ; Postcode ; EAN</div>
+      <button class="dbtn" type="button" id="nbDropBtn">Bestand kiezen</button>
+      <input type="file" id="nbFileIn" accept=".csv,.xlsx" style="display:none">
+    </div>
+    <!-- Handmatig toevoegen -->
+    <div class="sh">Handmatig toevoegen</div>
+    <div class="fg2" style="margin-bottom:6px">
+      <div class="fg"><label>Naam</label><input type="text" id="nbName" placeholder="Bedrijfsnaam"></div>
+      <div class="fg"><label>EAN</label><input type="text" id="nbEan" placeholder="18 cijfers"></div>
+    </div>
+    <div class="fg" style="margin-bottom:6px">
+      <label>Ring</label>
+      <select id="nbRingSelect" style="width:100%;padding:7px 10px;border-radius:7px;border:1px solid #dce6e0;font-family:Barlow,sans-serif"></select>
+    </div>
+    <div class="fg" style="margin-bottom:6px">
+      <label>Adres <small class="lbl-hint">(voor geocoding)</small></label>
+      <div style="display:flex;gap:6px">
+        <input type="text" id="nbAdres" placeholder="bijv. Havenweg 10, 4331AA Middelburg" style="flex:1">
+        <button class="b" id="btnNbGeoSingle" style="white-space:nowrap;padding:6px 10px;font-size:12px">📍 Zoek</button>
+      </div>
+    </div>
+    <div class="fg2" style="margin-bottom:6px">
+      <div class="fg"><label>Breedtegraad (lat)</label><input type="number" id="nbLat" step="0.000001" placeholder="bijv. 51.4988"></div>
+      <div class="fg"><label>Lengtegraad (lng)</label><input type="number" id="nbLng" step="0.000001" placeholder="bijv. 3.6136"></div>
+    </div>
+    <div class="fg" style="margin-bottom:10px">
+      <label>Notitie <small class="lbl-hint">optioneel</small></label>
+      <input type="text" id="nbNote" placeholder="bijv. buurperceel, potentieel lid">
+    </div>
+    <div style="display:flex;gap:6px">
+      <button class="b" id="btnSaveNetbuur" style="flex:1">Toevoegen</button>
+      <button class="b d" id="btnCloseNetbuur2">Sluiten</button>
     </div>
   </div>
 </div>
@@ -942,6 +1022,7 @@
 <script src="charts/piekanalyse.js"></script>
 <script src="charts/kosten.js"></script>
 <script src="charts/optimalisatie.js"></script>
+<script src="charts/kaart.js"></script>
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
 <script src="ehp.js"></script>

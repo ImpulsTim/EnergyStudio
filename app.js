@@ -175,6 +175,7 @@ function openAddComp(){
   document.getElementById('mCT').textContent='Aansluiting toevoegen';
   document.getElementById('btnDelComp').style.display='none';
   document.getElementById('cN').value='';document.getElementById('cE').value='';
+  document.getElementById('cAdres').value='';document.getElementById('cLat').value='';document.getElementById('cLng').value='';
   document.getElementById('cKva').value='';document.getElementById('cZek').value='';
   document.getElementById('cCat').value='Grootverbruik';
   document.getElementById('cGA').value='150';document.getElementById('cGT').value='80';
@@ -194,6 +195,8 @@ async function openEditComp(id){
   document.getElementById('mCT').textContent='Aansluiting bewerken';
   document.getElementById('btnDelComp').style.display='';
   document.getElementById('cN').value=c.name;document.getElementById('cE').value=c.ean||'';
+  document.getElementById('cAdres').value=c.adres||'';
+  document.getElementById('cLat').value=c.lat!=null?c.lat:'';document.getElementById('cLng').value=c.lng!=null?c.lng:'';
   document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cZek').value=c.zekering||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
   document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:0;
@@ -209,7 +212,12 @@ async function saveComp(){
   var name=document.getElementById('cN').value.trim();
   if(!name){notify('Vul een naam in',false);return;}
   var p=ap();var id=editId||uid();
-  var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),category:document.getElementById('cCat').value,
+  var _cLat=parseFloat(document.getElementById('cLat').value);
+  var _cLng=parseFloat(document.getElementById('cLng').value);
+  var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),
+    adres:document.getElementById('cAdres').value.trim(),
+    lat:isNaN(_cLat)?null:_cLat,lng:isNaN(_cLng)?null:_cLng,
+    category:document.getElementById('cCat').value,
     gtvA:(function(){var v=parseFloat(document.getElementById('cGA').value);return isNaN(v)?150:v;})(),gtvT:(function(){var v=parseFloat(document.getElementById('cGT').value);return isNaN(v)?80:v;})(),
     kva:(function(){var v=parseFloat(document.getElementById('cKva').value);return isNaN(v)?null:v;})(),
     zekering:document.getElementById('cZek').value.trim(),
@@ -277,6 +285,7 @@ async function runAnalysis(){
   _optim.perKw=perKw;_optim.withData=withData;
   updateKpisForRes({grpKw:grpKw,withData:withData,gtvA:gtvA,gtvT:gtvT});
   try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}
+  try{renderKaart();}catch(e){}
   notify('Analyse klaar — '+allTs.length+' overlappende kwartierwaarden');
   var dlBtn=document.getElementById('btnDlGroep');if(dlBtn)dlBtn.disabled=false;
 }
@@ -509,6 +518,7 @@ document.addEventListener('DOMContentLoaded',function(){
       document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
       document.getElementById(btn.getAttribute('data-tab')).classList.add('on');
       btn.classList.add('on');
+      if(btn.getAttribute('data-tab')==='tKaart'){try{renderKaart();}catch(e){}}
     });
   });
   // Prijs toggle
@@ -614,6 +624,8 @@ document.addEventListener('DOMContentLoaded',function(){
   initUpload();
   // Scenario's
   try{initScenarios();}catch(e){console.error('initScenarios:',e);}
+  // Kaart
+  try{initKaartEvents();}catch(e){console.error('initKaartEvents:',e);}
 });
 
 function renderHome(){}
