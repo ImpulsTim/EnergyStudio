@@ -368,6 +368,7 @@
       <button class="tab on" data-tab="tOv">Overzicht</button>
       <button class="tab" data-tab="tJaar">Jaarprofiel</button>
       <button class="tab" data-tab="tWeek">Weekprofiel</button>
+      <button class="tab" data-tab="tGelijkt">Gelijktijdigheid</button>
       <button class="tab" data-tab="tBdk">BDK</button>
       <button class="tab" data-tab="tOvsch">Overschrijdingen</button>
       <button class="tab" data-tab="tPiek">Piekanalyse</button>
@@ -478,6 +479,27 @@
       <div class="cd"><div class="ct2"><div class="ac"></div>Per aansluiting — gemiddeld weekprofiel</div>
         <div class="lg" id="wLeg"></div>
         <div class="cw" style="height:340px"><canvas id="cWeekP" role="img" aria-label="Weekprofiel per aansluiting"></canvas></div></div>
+    </div>
+    <!-- GELIJKTIJDIGHEID -->
+    <div class="pn" id="tGelijkt">
+      <div class="cd">
+        <div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#46962b"></div>
+          Gelijktijdigheid opwek &amp; groepsverbruik
+          <div id="gelijktSeizFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">
+            <button data-gsf="all" onclick="setGelijktSeizoen('all')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif;background:#46962b;color:#fff">Heel het jaar</button>
+            <button data-gsf="win" onclick="setGelijktSeizoen('win')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Winter</button>
+            <button data-gsf="spr" onclick="setGelijktSeizoen('spr')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Lente</button>
+            <button data-gsf="sum" onclick="setGelijktSeizoen('sum')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Zomer</button>
+            <button data-gsf="aut" onclick="setGelijktSeizoen('aut')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Herfst</button>
+          </div>
+        </div>
+        <div class="ib2" style="margin-bottom:8px">Hoeveel van de groepsopwek valt samen met groepsverbruik (groen = gesaldeerd intern) en hoeveel gaat toch terug naar het net (grijs). Blauw = % gesaldeerd (rechter as).</div>
+      </div>
+      <div class="kg" id="gelijktKpis"></div>
+      <div class="cd"><div class="ct2"><div class="ac" style="background:#46962b"></div>Weekpatroon gelijktijdigheid</div>
+        <div class="cw" style="height:260px"><canvas id="cGelijktWeek"></canvas></div></div>
+      <div class="cd"><div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Maandoverzicht gesaldeerd vs. teruggeleverd</div>
+        <div class="cw" style="height:220px"><canvas id="cGelijktMaand"></canvas></div></div>
     </div>
     <!-- BDK -->
     <div class="pn" id="tBdk">
@@ -604,6 +626,7 @@
         <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:8px">
           <button class="b" id="btnKaartPng" style="font-size:12px;padding:6px 12px">📸 PNG</button>
           <button class="b" id="btnNetburen" style="font-size:12px;padding:6px 12px;background:#2c7fb8">📋 Netburen beheren</button>
+          <button class="b" id="btnKaartLabels" style="font-size:12px;padding:6px 12px;background:#46962b">🏷 Labels aan</button>
           <div style="flex:1"></div>
         </div>
         <div id="kaartWarning"></div>
@@ -1022,6 +1045,7 @@
 <script src="charts/piekanalyse.js"></script>
 <script src="charts/kosten.js"></script>
 <script src="charts/optimalisatie.js"></script>
+<script src="charts/gelijktijdigheid.js"></script>
 <script src="charts/kaart.js"></script>
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>

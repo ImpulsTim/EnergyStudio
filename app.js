@@ -275,6 +275,7 @@ async function runAnalysis(){
   var gT=grpKw.map(function(v){return Math.max(0,-v);});
   try{drawJaar(allTs,perKw,grpKw,withData,gtvA,gtvT);}catch(e){console.error('drawJaar:',e);}
   try{drawWeek(allTs,grpKw,perKw,withData,gtvA,gtvT);}catch(e){console.error('drawWeek:',e);}
+  try{drawGelijktijdigheid(allTs,perKw,withData);}catch(e){console.error('drawGelijktijdigheid:',e);}
   try{drawBDK(perKw,gA,gT,withData,gtvA,gtvT);}catch(e){console.error('drawBDK:',e);}
   try{drawOvsch(allTs,gA,gT,gtvA,gtvT);}catch(e){console.error('drawOvsch:',e);}
   try{drawPiek(allTs,perKw,grpKw,withData);}catch(e){console.error('drawPiek:',e);}
@@ -519,6 +520,7 @@ document.addEventListener('DOMContentLoaded',function(){
       document.getElementById(btn.getAttribute('data-tab')).classList.add('on');
       btn.classList.add('on');
       if(btn.getAttribute('data-tab')==='tKaart'){try{renderKaart();}catch(e){}}
+      if(btn.getAttribute('data-tab')==='tGelijkt'){try{drawGelijktijdigheid(_optim.allTs,_optim.perKw,_optim.withData);}catch(e){}}
     });
   });
   // Prijs toggle

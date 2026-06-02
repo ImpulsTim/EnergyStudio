@@ -70,10 +70,21 @@ function renderKaart(){
   var companies=p.companies||[];
   var msRingen=p.msRingen||[];
 
-  // EAN → ringIndex
+  // EAN → eerste ringIndex (voor projectdeelnemers-koppeling)
   var eanRingMap={};
   msRingen.forEach(function(ring,ri){
-    (ring.netburen||[]).forEach(function(n){if(n.ean)eanRingMap[n.ean.trim()]=ri;});
+    (ring.netburen||[]).forEach(function(n){if(n.ean&&!(n.ean.trim() in eanRingMap))eanRingMap[n.ean.trim()]=ri;});
+  });
+
+  // EAN → alle ringIndices (voor overlap-detectie)
+  var multiRingMap={};
+  msRingen.forEach(function(ring,ri){
+    (ring.netburen||[]).forEach(function(n){
+      if(!n.ean)return;
+      var key=n.ean.trim();
+      if(!multiRingMap[key])multiRingMap[key]=[];
+      if(multiRingMap[key].indexOf(ri)<0)multiRingMap[key].push(ri);
+    });
   });
 
   var stats=_kaartBuildStats();
@@ -128,31 +139,21 @@ function renderKaart(){
     bounds.push([+c.lat,+c.lng]);
   });
 
-  // ── Netburen per ring — cirkels ──
+  // ── Netburen per ring — cirkels (met overlap-detectie) ──
+  var drawnNb={};
   msRingen.forEach(function(ring,ri){
     var ringCol=RING_PAL[ri%RING_PAL.length];
     (ring.netburen||[]).forEach(function(n){
       if(n.lat==null||n.lng==null||isNaN(n.lat)||isNaN(n.lng))return;
       if(n.ean&&compEanSet[n.ean.trim()])return;
-
-      var m=L.circleMarker([+n.lat,+n.lng],{
-        radius:7, fillColor:ringCol, color:'#fff',
-        weight:1.5, fillOpacity:0.8, opacity:1
-      });
-      // Label: aangepaste naam indien ingesteld, anders EAN
-      var hasCustomName=n.name&&n.name!==n.adres&&n.name!==n.ean&&n.name!=='';
-      var nbLbl=hasCustomName?n.name:(n.adres||n.ean||'');
-      if(nbLbl.length>20)nbLbl=nbLbl.slice(0,19)+'…';
-      m.bindTooltip(_kEsc(nbLbl),{
-        permanent:true, direction:'top', className:'kaart-label-sm', offset:[0,-7]
-      });
-      // Detail-popup op klik
-      var tip='<strong>'+_kEsc(n.name||'?')+'</strong>'
-        +' <span style="background:'+ringCol+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">'+_kEsc(ring.label)+'</span>';
-      if(n.ean)tip+='<br><span style="font-family:monospace;font-size:10px">EAN: '+_kEsc(n.ean)+'</span>';
-      if(n.adres)tip+='<br>'+_kEsc(n.adres);
-      if(n.note)tip+='<br><em>'+_kEsc(n.note)+'</em>';
-      m.bindPopup(tip,{className:'kaart-pop',maxWidth:240});
+      // Deduplicatie: elk uniek punt slechts één keer tekenen
+      var dedup=n.ean?n.ean.trim():(+n.lat).toFixed(5)+','+(+n.lng).toFixed(5);
+      if(drawnNb[dedup])return;
+      drawnNb[dedup]=true;
+      var ringIndices=n.ean?(multiRingMap[n.ean.trim()]||[ri]):[ri];
+      var m=ringIndices.length>1
+        ?_kaartMultiRingMarker(n,ringIndices,msRingen)
+        :_kaartSingleNbMarker(n,ringCol,ring.label);
       _kaartLG.addLayer(m);
       bounds.push([+n.lat,+n.lng]);
     });
@@ -216,6 +217,59 @@ function _kaartNetwerk(pts,col,lg){
   });
 }
 
+// Enkelvoudige netbuur-marker (één ring) — behoud bestaande circleMarker stijl
+function _kaartSingleNbMarker(n,ringCol,ringLabel){
+  var m=L.circleMarker([+n.lat,+n.lng],{
+    radius:7,fillColor:ringCol,color:'#fff',weight:1.5,fillOpacity:0.8,opacity:1
+  });
+  var hasCustomName=n.name&&n.name!==n.adres&&n.name!==n.ean&&n.name!=='';
+  var nbLbl=hasCustomName?n.name:(n.adres||n.ean||'');
+  if(nbLbl.length>20)nbLbl=nbLbl.slice(0,19)+'…';
+  m.bindTooltip(_kEsc(nbLbl),{permanent:true,direction:'top',className:'kaart-label-sm',offset:[0,-7]});
+  var tip='<strong>'+_kEsc(n.name||'?')+'</strong>'
+    +' <span style="background:'+ringCol+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">'+_kEsc(ringLabel)+'</span>';
+  if(n.ean)tip+='<br><span style="font-family:monospace;font-size:10px">EAN: '+_kEsc(n.ean)+'</span>';
+  if(n.adres)tip+='<br>'+_kEsc(n.adres);
+  if(n.note)tip+='<br><em>'+_kEsc(n.note)+'</em>';
+  m.bindPopup(tip,{className:'kaart-pop',maxWidth:240});
+  return m;
+}
+
+// Multi-ring netbuur-marker — taartpunt-stijl divIcon
+function _kaartMultiRingMarker(n,ringIndices,msRingen){
+  var r=9; // iets groter dan enkelvoudige netbuur (7px)
+  var cols=ringIndices.map(function(ri){return RING_PAL[ri%RING_PAL.length];});
+  var segDeg=360/cols.length;
+  var grad='conic-gradient('+cols.map(function(c,i){
+    return c+' '+Math.round(i*segDeg)+'deg '+Math.round((i+1)*segDeg)+'deg';
+  }).join(',')+')';
+  var icon=L.divIcon({
+    className:'kaart-multi-ring-wrap',
+    html:'<div style="width:'+(r*2)+'px;height:'+(r*2)+'px;border-radius:50%;'
+      +'background:'+grad+';border:2.5px solid #fff;'
+      +'box-shadow:0 1px 5px rgba(0,0,0,.45)"></div>',
+    iconSize:[r*2+5,r*2+5],
+    iconAnchor:[r+2,r+2]
+  });
+  var ringLabels=ringIndices.map(function(ri){return msRingen[ri].label;}).join(' + ');
+  var m=L.marker([+n.lat,+n.lng],{icon:icon});
+  var hasCustomName=n.name&&n.name!==n.adres&&n.name!==n.ean&&n.name!=='';
+  var nbLbl=hasCustomName?n.name:(n.adres||n.ean||'');
+  if(nbLbl.length>20)nbLbl=nbLbl.slice(0,19)+'…';
+  m.bindTooltip(_kEsc(nbLbl),{permanent:true,direction:'top',
+    className:'kaart-label-sm kaart-label-multi',offset:[0,-(r+4)]});
+  // Popup toont alle ringen als gekleurde badges
+  var badges=ringIndices.map(function(ri){
+    var col=RING_PAL[ri%RING_PAL.length];
+    return '<span style="background:'+col+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;margin-right:2px">'+_kEsc(msRingen[ri].label)+'</span>';
+  }).join('');
+  var tip='<strong>'+_kEsc(n.name||n.adres||'?')+'</strong> '+badges;
+  if(n.ean)tip+='<br><span style="font-family:monospace;font-size:10px">EAN: '+_kEsc(n.ean)+'</span>';
+  if(n.adres)tip+='<br>'+_kEsc(n.adres);
+  m.bindPopup(tip,{className:'kaart-pop',maxWidth:260});
+  return m;
+}
+
 function _kaartBuildStats(){
   var map={};
   if(!_optim||!_optim.withData||!_optim.allTs||!_optim.allTs.length)return map;
@@ -252,6 +306,18 @@ function _kaartUpdateLegend(companies,msRingen,stats,eanRingMap){
   var el=document.getElementById('kaartLegenda');if(!el)return;
   var items=[];
 
+  // Detecteer of er multi-ring netburen zijn
+  var multiRingMapLeg={};
+  msRingen.forEach(function(ring,ri){
+    (ring.netburen||[]).forEach(function(n){
+      if(!n.ean)return;
+      var key=n.ean.trim();
+      if(!multiRingMapLeg[key])multiRingMapLeg[key]=[];
+      if(multiRingMapLeg[key].indexOf(ri)<0)multiRingMapLeg[key].push(ri);
+    });
+  });
+  var hasMulti=Object.keys(multiRingMapLeg).some(function(k){return multiRingMapLeg[k].length>1;});
+
   // Legenda-types uitleg (één keer bovenaan)
   items.push(
     '<span class="kaart-leg-item" style="color:#555">'
@@ -264,6 +330,16 @@ function _kaartUpdateLegend(companies,msRingen,stats,eanRingMap){
     +'<span class="kaart-dot" style="background:#aaa;border-color:#aaa;opacity:.7"></span>'
     +'Netbuur (ring-kleur)</span>'
   );
+  if(hasMulti){
+    var c0=RING_PAL[0],c1=RING_PAL[1];
+    items.push(
+      '<span class="kaart-leg-item" style="color:#555">'
+      +'<span style="display:inline-block;width:14px;height:14px;border-radius:50%;'
+      +'background:conic-gradient('+c0+' 0deg 180deg,'+c1+' 180deg 360deg);'
+      +'border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.3);vertical-align:middle;margin-right:5px"></span>'
+      +'Netbuur in meerdere ringen</span>'
+    );
+  }
 
   // Deelnemer separator
   items.push('<span style="display:block;width:100%;height:0;border-top:1px solid #e8e8e8;margin:4px 0"></span>');
@@ -739,4 +815,28 @@ function initKaartEvents(){
 
   var btnNb=document.getElementById('btnNetburen');
   if(btnNb)btnNb.addEventListener('click',openNetburenModal);
+
+  var btnLbl=document.getElementById('btnKaartLabels');
+  if(btnLbl){
+    var _lblState=0; // 0=alle aan, 1=alleen deelnemers, 2=alle uit
+    var _lblStates=[
+      {cls:'',           label:'🏷 Alle labels',     bg:'#46962b'},
+      {cls:'labels-deelnemers', label:'🏷 Deelnemers',   bg:'#2c7fb8'},
+      {cls:'labels-hidden',    label:'🏷 Labels uit',    bg:'#888'}
+    ];
+    function _applyLblState(){
+      var map=document.getElementById('kaartMap');
+      if(!map)return;
+      _lblStates.forEach(function(s){if(s.cls)map.classList.remove(s.cls);});
+      var st=_lblStates[_lblState];
+      if(st.cls)map.classList.add(st.cls);
+      btnLbl.textContent=st.label;
+      btnLbl.style.background=st.bg;
+    }
+    _applyLblState();
+    btnLbl.addEventListener('click',function(){
+      _lblState=(_lblState+1)%_lblStates.length;
+      _applyLblState();
+    });
+  }
 }
