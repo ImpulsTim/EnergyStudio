@@ -43,6 +43,25 @@ function parseCSV(text){
   return result;
 }
 
+// Normaliseert EPEX-timestamps naar "YYYY-MM-DDTHH:MM".
+// Ondersteunt: ISO, Europees dd.mm.yyyy, slash-formaat, ENTSO-E range "dd.mm.yyyy HH:MM - HH:MM".
+function _normPriceTs(raw){
+  raw=raw.trim().replace(/"/g,'');
+  // ENTSO-E range "01.01.2024 00:00 - 01.01.2024 01:00" → pak start
+  raw=raw.split(' - ')[0].trim();
+  var m;
+  // ISO: "2024-01-01T00:00" of "2024-01-01 00:00"
+  m=raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3]+'T'+m[4]+':'+m[5];
+  // Europees punt: "01.01.2024 00:00"
+  m=raw.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
+  // Slash: "01/01/2024 00:00" (aanname DD/MM/YYYY voor NL)
+  m=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
+  return raw.slice(0,16);
+}
+
 // EPEX/EEX-prijsreeks: CSV met "timestamp;prijs" (of komma-gescheiden).
 // Geeft [{ts, price}] terug. price = KALE marktprijs €/kWh; negatieve prijzen blijven negatief.
 // opts.perMWh=true rekent €/MWh om naar €/kWh (deel door 1000).
@@ -58,7 +77,7 @@ function parsePriceCSV(text,opts){
   var result=[];
   for(var i=start;i<lines.length;i++){
     var p=lines[i].split(sep);if(p.length<2)continue;
-    var ts=p[0].trim().replace(/"/g,'');
+    var ts=_normPriceTs(p[0]);
     var price=parseFloat(p[1].trim().replace(',','.'));
     if(ts&&!isNaN(price))result.push({ts:ts,price:Math.round(price/div*1e6)/1e6});
   }

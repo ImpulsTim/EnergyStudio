@@ -242,6 +242,13 @@ details[open] .jr-summary::before{transform:rotate(90deg)}
 /* Jaarrekening compacte samenvattingstabellen */
 .jr-table td,.jr-table th{padding:5px 8px;font-size:12px}
 .jr-table{width:100%}
+/* Jaarrekening prijsverkenner sliders */
+.jr-slider-row{display:flex;align-items:center;gap:10px;margin:6px 0}
+.jr-slider-row label{width:46px;font-size:12px;font-weight:700;flex-shrink:0}
+.jr-slider-row input[type=range]{flex:1;accent-color:#e67e22}
+.jr-slider-row input[type=number]{width:68px;padding:3px 6px;border:1px solid #cdd7d0;border-radius:5px;font-family:Barlow,sans-serif;font-size:12px}
+.jr-slider-unit{font-size:11px;color:#888;white-space:nowrap}
+.jr-slider-note{font-size:11px;color:#888;margin-top:4px}
 /* ── Kaart-tabblad ─────────────────────────────────────────────────────────── */
 #kaartMap{height:calc(100vh - 370px);min-height:340px;border-radius:8px;border:1px solid #dce6e0;background:#eef2ec}
 #kaartMap .leaflet-tile-pane{filter:grayscale(100%)}

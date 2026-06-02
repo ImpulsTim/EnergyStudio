@@ -512,7 +512,7 @@ function renderEhpResults(res){
       (hasNm?'<button class="tab" data-ehp-tab="tEhpNm">Niet-leden</button>':'')+
     '</div>'+
     '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+_ehpPrijsblok(res)+simHtml+'</div>'+
-    '<div id="tEhpAn" class="pn">'+flowHtml+platAnalyseHtml+'</div>'+
+    '<div id="tEhpAn" class="pn">'+flowHtml+platAnalyseHtml+'<div id="ehpOpwekAnalyse" style="margin-top:16px"><div class="verg-empty" style="padding:14px;font-size:12px">Opwekanalyse beschikbaar na afronden jaarrekening...</div></div></div>'+
     '<div id="tEhpDeel" class="pn">'+skipNote+summaryHtml+partyCards+'</div>'+
     '<div id="tEhpJr" class="pn"></div>'+
     (hasNm?'<div id="tEhpNm" class="pn">'+nonMemHtml+'</div>':'');
@@ -1007,7 +1007,7 @@ async function calcJaarrekening(switchTab){
     heffingskortingPerLid:cfg.heffingskorting||0,
     netToepassen:false,
     verdeelsleutel:cfg.jrVerdeel||'geen',
-    keepQuarterMatrix:false
+    keepQuarterMatrix:true
   };
   var r;
   try{r=buildAnnualComparison(members,prices,assumptions);}
@@ -1024,8 +1024,12 @@ function _ehpJrRenderInTab(switchTab){
   if(!_ehpJrLast){
     panel.innerHTML='<div class="verg-empty"><div class="big">€</div>Klik op <strong>Herbereken jaarrekening</strong> in de zijbalk om te starten.</div>';
   }else{
+    _ehpJrLast._r2=null;
     panel.innerHTML=renderJaarrekenTab(_ehpJrLast);
     _ehpJrAttachVolledige(_ehpJrLast);
+    _ehpJrAttachSliders(_ehpJrLast);
+    _ehpJrAttachOpwek(_ehpJrLast);
+    _renderEhpOpwekAnalyse();
     if(switchTab){
       var jrBtn=document.querySelector('[data-ehp-tab="tEhpJr"]');
       if(jrBtn)jrBtn.click();
@@ -1043,12 +1047,25 @@ function renderJaarrekenTab(L){
   var d1=r.periode&&r.periode.end?String(r.periode.end).slice(0,10):'—';
   var headline='<div class="cd" style="display:flex;flex-wrap:wrap;gap:18px;align-items:center;justify-content:space-between">'+
     '<div><div class="kl">Resultaat platformscenario t.o.v. huidige situatie</div>'+
-    '<div class="'+saveCls+'" style="font-size:34px;line-height:1.1;margin-top:2px">'+_finMoney(co.totaalVoordeel)+'</div>'+
-    '<div class="ku" style="margin-top:2px">'+_finPct(co.totaalVoordeelPct)+' · periode '+d0+' t/m '+d1+'</div></div>'+
+    '<div id="jrTotaalBedrag" class="'+saveCls+'" style="font-size:34px;line-height:1.1;margin-top:2px">'+_finMoney(co.totaalVoordeel)+'</div>'+
+    '<div class="ku" style="margin-top:2px"><span id="jrTotaalPct">'+_finPct(co.totaalVoordeelPct)+'</span> · periode '+d0+' t/m '+d1+'</div></div>'+
     '<div style="display:flex;gap:10px;flex-wrap:wrap">'+
-    '<div class="kb"><div class="kl">Huidig</div><div class="kv" style="font-size:15px">€ '+_finEur0(co.nettoHuidig)+'</div><div class="ku">huidige situatie</div></div>'+
-    '<div class="kb"><div class="kl">Platform</div><div class="kv" style="font-size:15px">€ '+_finEur0(co.nettoPlatform)+'</div><div class="ku">platformscenario</div></div>'+
+    '<div class="kb"><div class="kl">Huidig</div><div class="kv" id="jrHuidigTotaal" style="font-size:15px">€ '+_finEur0(co.nettoHuidig)+'</div><div class="ku">huidige situatie</div></div>'+
+    '<div class="kb"><div class="kl">Platform</div><div class="kv" id="jrPlatformTotaal" style="font-size:15px">€ '+_finEur0(co.nettoPlatform)+'</div><div class="ku">platformscenario</div></div>'+
     '</div></div>';
+  var ip=L.assumptions&&L.assumptions.internalPrices||{};
+  var pZ=ip.zon||0,pW=ip.wind||0,pO=ip.overig||0;
+  function slRow(lbl,sid,val){
+    return '<div class="jr-slider-row"><label>'+lbl+'</label>'+
+      '<input type="range" id="sl'+sid+'" min="0" max="0.20" step="0.005" value="'+val+'">'+
+      '<input type="number" id="sl'+sid+'Val" min="0" max="0.20" step="0.001" value="'+val+'" style="width:68px">'+
+      '<span class="jr-slider-unit">€/kWh</span></div>';
+  }
+  var sliders='<div class="cd" id="jrPrijsSliders">'+
+    '<div class="ct2"><div class="ac" style="background:#e67e22"></div>Scenario verkenner — interne prijzen</div>'+
+    slRow('Zon','Zon',pZ)+slRow('Wind','Wind',pW)+slRow('Overig','Overig',pO)+
+    '<div class="ib2 jr-slider-note">Beweeg een slider om de verdeling per deelnemer live te zien. Totale groepsbesparing wijzigt nauwelijks (zero-sum).</div>'+
+    '</div>';
   var srcLbl={zon:'Zon',wind:'Wind',overig:'Overig',none:'Afnemer'};
   var rows=r.perCompany.map(function(c){
     var cls=c.verschil>=0?'verg-pos':'verg-neg';
@@ -1062,7 +1079,31 @@ function renderJaarrekenTab(L){
   var perDeelTbl='<div class="cd ehp-grp"><div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Per deelnemer</div>'+
     '<div style="overflow-x:auto"><table class="verg-tbl jr-table"><thead><tr>'+
     '<th>Deelnemer</th><th>Bron</th><th>Huidig €</th><th>Platform €</th><th>Besparing</th><th>%</th>'+
-    '</tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+    '</tr></thead><tbody id="jrPerDeelTbody">'+rows+'</tbody></table></div></div>';
+  var producers=r.perCompany.filter(function(c){return c.source!=='none';});
+  var opwekSectie='';
+  if(producers.length>0){
+    var srcLbl2={zon:'Zon',wind:'Wind',overig:'Overig'};
+    var opts=producers.map(function(c){
+      return '<option value="'+c.id+'">'+_ehpEsc(c.name)+' ('+( srcLbl2[c.source]||c.source)+')</option>';
+    }).join('');
+    var mfOpts='<option value="">Heel jaar</option>'+
+      ['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December']
+      .map(function(m,i){return '<option value="'+i+'">'+m+'</option>';}).join('');
+    opwekSectie='<div class="cd" id="jrOpwekSectie">'+
+      '<div class="ct2"><div class="ac" style="background:#46962b"></div>Opwek detail — intern vs. netteruglevering</div>'+
+      '<div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
+        '<select id="jrOpwekSel" style="font-family:Barlow,sans-serif;font-size:13px;padding:4px 10px;border-radius:5px;border:1px solid #ccc">'+opts+'</select>'+
+      '</div>'+
+      '<div style="font-size:12px;font-weight:700;color:#555;margin-bottom:4px">Per maand</div>'+
+      '<div style="position:relative;height:200px"><canvas id="jrOpwekCanvas"></canvas></div>'+
+      '<div style="display:flex;gap:8px;align-items:center;margin:12px 0 4px">'+
+        '<span style="font-size:12px;font-weight:700;color:#555">Weekpatroon</span>'+
+        '<select id="jrOpwekMf" style="font-family:Barlow,sans-serif;font-size:12px;padding:3px 8px;border-radius:5px;border:1px solid #ccc">'+mfOpts+'</select>'+
+      '</div>'+
+      '<div style="position:relative;height:220px"><canvas id="jrWeekOpwekCanvas"></canvas></div>'+
+      '</div>';
+  }
   var platTbl='<div class="cd ehp-grp"><div class="ct2"><div class="ac" style="background:#46962b"></div>Platform totaal</div>'+
     '<table class="verg-tbl jr-table"><tbody>'+
     '<tr><td>Totaal platformvolume</td><td>'+_finEur0(co.platformVolumeKwh/1000)+' MWh</td></tr>'+
@@ -1071,7 +1112,7 @@ function renderJaarrekenTab(L){
     '</tbody></table></div>';
   var skipNote=L.skipped&&L.skipped.length?
     '<div class="opt-warn">Niet meegerekend (geen meetdata): '+L.skipped.map(_ehpEsc).join(', ')+'</div>':'';
-  return skipNote+headline+perDeelTbl+platTbl+
+  return skipNote+headline+sliders+perDeelTbl+opwekSectie+platTbl+
     '<div id="jrVolledigeWrap" style="margin-top:16px">'+
     '<button class="b" id="btnJrVolledig" style="background:#2c7fb8">Volledige analyse ▶</button>'+
     '<div id="jrVolledigeContent" style="margin-top:12px"></div>'+
@@ -1089,6 +1130,330 @@ function _ehpJrAttachVolledige(L){
     var L2={r:L.r,ehp:_ehpActive(),ehpName:L.platName,assumptions:L.assumptions||{},prices:L.prices||[],members:L.members,skipped:L.skipped,f:{}};
     _finRender(L2,content);
   });
+}
+
+var _jrOpwekChartInst=null;
+var _jrWeekOpwekChartInst=null;
+var _ehpOaChartInst=null;
+
+function _ehpJrRecalcPrices(pZon,pWind,pOverig){
+  if(!_ehpJrLast)return;
+  var L=_ehpJrLast;
+  var newAss={};for(var k in L.assumptions)newAss[k]=L.assumptions[k];
+  newAss.internalPrices={zon:pZon,wind:pWind,overig:pOverig};
+  newAss.keepQuarterMatrix=false;
+  var r2;
+  try{r2=buildAnnualComparison(L.members,L.prices,newAss);}
+  catch(e){console.error('recalcPrices:',e);return;}
+  var co=r2.consolidated;
+  var bedragEl=document.getElementById('jrTotaalBedrag');
+  if(bedragEl){bedragEl.className=co.totaalVoordeel>=0?'ehp-savings-pos':'ehp-savings-neg';bedragEl.textContent=_finMoney(co.totaalVoordeel);}
+  var pctEl=document.getElementById('jrTotaalPct');if(pctEl)pctEl.textContent=_finPct(co.totaalVoordeelPct);
+  var hEl=document.getElementById('jrHuidigTotaal');if(hEl)hEl.textContent='€ '+_finEur0(co.nettoHuidig);
+  var pEl=document.getElementById('jrPlatformTotaal');if(pEl)pEl.textContent='€ '+_finEur0(co.nettoPlatform);
+  var srcLbl={zon:'Zon',wind:'Wind',overig:'Overig',none:'Afnemer'};
+  var tbody=document.getElementById('jrPerDeelTbody');
+  if(tbody){
+    tbody.innerHTML=r2.perCompany.map(function(c){
+      var cls=c.verschil>=0?'verg-pos':'verg-neg';
+      return '<tr><td style="font-weight:700">'+_ehpEsc(c.name)+'</td>'+
+        '<td>'+(srcLbl[c.source]||c.source)+'</td>'+
+        '<td>€ '+_finEur0(c.nettoHuidig)+'</td>'+
+        '<td>€ '+_finEur0(c.nettoPlatform)+'</td>'+
+        '<td class="'+cls+'">'+_finMoney(c.verschil)+'</td>'+
+        '<td class="'+cls+'">'+_finPct(c.besparingPct)+'</td></tr>';
+    }).join('');
+  }
+  L._r2=r2;
+  var sel=document.getElementById('jrOpwekSel');
+  if(sel)_ehpJrDrawOpwekChart(sel.value,r2);
+}
+
+function _ehpJrAttachSliders(L){
+  var timer=null;
+  function debounce(){
+    clearTimeout(timer);
+    timer=setTimeout(function(){
+      var pZ=parseFloat(document.getElementById('slZon').value)||0;
+      var pW=parseFloat(document.getElementById('slWind').value)||0;
+      var pO=parseFloat(document.getElementById('slOverig').value)||0;
+      _ehpJrRecalcPrices(pZ,pW,pO);
+    },300);
+  }
+  function sync(rangeId,numId){
+    var range=document.getElementById(rangeId);
+    var num=document.getElementById(numId);
+    if(!range||!num)return;
+    range.addEventListener('input',function(){num.value=parseFloat(range.value).toFixed(3);debounce();});
+    num.addEventListener('input',function(){
+      var v=Math.max(0,Math.min(0.20,parseFloat(num.value)||0));
+      range.value=v;debounce();
+    });
+  }
+  sync('slZon','slZonVal');sync('slWind','slWindVal');sync('slOverig','slOverigVal');
+}
+
+function _ehpJrAttachOpwek(L){
+  var sel=document.getElementById('jrOpwekSel');
+  if(!sel)return;
+  function getWeekMf(){
+    var el=document.getElementById('jrOpwekMf');
+    var v=el?el.value:'';
+    return v===''?null:parseInt(v,10);
+  }
+  _ehpJrDrawOpwekChart(sel.value,L.r);
+  _ehpJrDrawWeekOpwek(sel.value,null,L.r);
+  sel.addEventListener('change',function(){
+    var r=(L._r2)||L.r;
+    _ehpJrDrawOpwekChart(sel.value,r);
+    _ehpJrDrawWeekOpwek(sel.value,getWeekMf(),L.r);
+  });
+  var mfEl=document.getElementById('jrOpwekMf');
+  if(mfEl)mfEl.addEventListener('change',function(){
+    _ehpJrDrawWeekOpwek(sel.value,getWeekMf(),L.r);
+  });
+}
+
+function _ehpJrDrawWeekOpwek(memberId,mf,r){
+  var canvas=document.getElementById('jrWeekOpwekCanvas');
+  if(!canvas)return;
+  var pq=r&&r.perQuarter;
+  if(!pq||!pq.length){canvas.parentNode.style.display='none';return;}
+  canvas.parentNode.style.display='';
+  var S=7*96;
+  var intS=[],extS=[];
+  for(var i=0;i<S;i++){intS.push([]);extS.push([]);}
+  pq.forEach(function(row){
+    if(row.member!==memberId)return;
+    if(mf!==null&&new Date(row.ts).getMonth()!==mf)return;
+    var d=new Date(row.ts);
+    var dow=(d.getDay()+6)%7;
+    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    if(sl>=0&&sl<S){
+      intS[sl].push((row.interneLeveringKwh||0)*4);
+      extS[sl].push((row.externeVerkoopKwh||0)*4);
+    }
+  });
+  var avg=function(a){return a.length?+(a.reduce(function(x,y){return x+y;},0)/a.length).toFixed(3):null;};
+  var intAvg=intS.map(avg),extAvg=extS.map(avg);
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'],lb=[];
+  for(var i=0;i<S;i++){
+    var dow=Math.floor(i/96),h=Math.floor((i%96)/4),m=(i%4)*15;
+    lb.push(i%96===0?DN[dow]:(h%6===0&&m===0?(String(h).padStart(2,'0')+':00'):''));
+  }
+  if(_jrWeekOpwekChartInst){try{_jrWeekOpwekChartInst.destroy();}catch(e){}_jrWeekOpwekChartInst=null;}
+  _jrWeekOpwekChartInst=new Chart(canvas,{
+    type:'line',
+    data:{labels:lb,datasets:[
+      {label:'Gem. intern geleverd (kW)',data:intAvg,borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.08)',
+        fill:false,tension:0.3,pointRadius:0,borderWidth:2},
+      {label:'Gem. terug aan net (kW)',data:extAvg,borderColor:'#95a5a6',
+        fill:false,tension:0.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3]}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{
+        x:{ticks:{color:'#999',font:{family:'Barlow',size:11},maxTicksLimit:30,autoSkip:false,
+          callback:function(v,i){return lb[i]||null;}},grid:{color:'#f3f7f4'}},
+        y:{ticks:{font:{family:'Barlow',size:11}},title:{display:true,text:'kW',font:{family:'Barlow',size:11}},
+          grid:{color:function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';},
+            lineWidth:function(ctx){return ctx.tick.value===0?2:0.5;}}}
+      }
+    }
+  });
+}
+
+function _ehpJrDrawOpwekChart(memberId,r){
+  var canvas=document.getElementById('jrOpwekCanvas');
+  if(!canvas)return;
+  var comp=null;
+  if(r&&r.perCompany){for(var i=0;i<r.perCompany.length;i++){if(r.perCompany[i].id===memberId){comp=r.perCompany[i];break;}}}
+  var months=(comp&&comp.platDetail&&comp.platDetail.perMonth)||[];
+  if(!months.length)return;
+  var mNames=['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  var labels=months.map(function(m){
+    var parts=(m.maand||'').split('-');
+    return parts.length>=2?mNames[parseInt(parts[1],10)-1]+' \''+parts[0].slice(2):m.maand||'';
+  });
+  var intern=months.map(function(m){return Math.round(m.interneLeveringKwh||0);});
+  var extern=months.map(function(m){return Math.round(m.externeVerkoopKwh||0);});
+  if(_jrOpwekChartInst){try{_jrOpwekChartInst.destroy();}catch(e){}_jrOpwekChartInst=null;}
+  _jrOpwekChartInst=new Chart(canvas,{
+    type:'bar',
+    data:{labels:labels,datasets:[
+      {label:'Intern geleverd (kWh)',data:intern,backgroundColor:'#46962b',stack:'s'},
+      {label:'Aan net teruggeleverd (kWh)',data:extern,backgroundColor:'#b2bec3',stack:'s'}
+    ]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{position:'top',labels:{font:{family:'Barlow',size:11}}},
+        tooltip:{callbacks:{afterBody:function(items){
+          var idx=items[0].dataIndex;
+          var tot=(intern[idx]||0)+(extern[idx]||0);
+          return tot>0?'Intern: '+Math.round((intern[idx]||0)/tot*100)+'%':'';
+        }}}
+      },
+      scales:{
+        x:{stacked:true,ticks:{font:{family:'Barlow',size:11}}},
+        y:{stacked:true,ticks:{font:{family:'Barlow',size:11}},title:{display:true,text:'kWh',font:{family:'Barlow',size:11}}}
+      }
+    }
+  });
+}
+
+function _renderEhpOpwekAnalyse(){
+  var wrap=document.getElementById('ehpOpwekAnalyse');
+  if(!wrap)return;
+  if(!_ehpJrLast||!_ehpJrLast.r||!_ehpJrLast.r.perQuarter||!_ehpJrLast.r.perQuarter.length){return;}
+  var r=_ehpJrLast.r;
+  var producers=r.perCompany.filter(function(c){return c.source!=='none';});
+  if(!producers.length){wrap.innerHTML='<div class="ib2" style="padding:10px">Geen opwekkers in dit platform.</div>';return;}
+  var srcLbl2={zon:'Zon',wind:'Wind',overig:'Overig'};
+  var opts=producers.map(function(c){
+    return '<option value="'+c.id+'">'+_ehpEsc(c.name)+' ('+(srcLbl2[c.source]||c.source)+')</option>';
+  }).join('');
+  var mfOpts='<option value="">Heel jaar</option>'+
+    ['Januari','Februari','Maart','April','Mei','Juni','Juli','Augustus','September','Oktober','November','December']
+    .map(function(m,i){return '<option value="'+i+'">'+m+'</option>';}).join('');
+  wrap.innerHTML='<div class="cd">'+
+    '<div class="ct2"><div class="ac" style="background:#e67e22"></div>Opwekanalyse — intern vs. markt</div>'+
+    '<div class="ib2" style="margin-bottom:10px">Weekpatroon van de opwekker: groen = intern geleverd aan de groep, grijs = teruggeleverd aan het net. De oranje lijn toont de gemiddelde EPEX-marktprijs op die kwartieren (rechter as, ct/kWh).</div>'+
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
+      '<select id="ehpOaSel" style="font-family:Barlow,sans-serif;font-size:13px;padding:4px 10px;border-radius:5px;border:1px solid #ccc">'+opts+'</select>'+
+      '<select id="ehpOaMf" style="font-family:Barlow,sans-serif;font-size:12px;padding:3px 8px;border-radius:5px;border:1px solid #ccc">'+mfOpts+'</select>'+
+    '</div>'+
+    '<div style="position:relative;height:260px"><canvas id="ehpOaCanvas"></canvas></div>'+
+    '<div id="ehpOaSummary" style="display:flex;gap:10px;flex-wrap:wrap;margin-top:14px"></div>'+
+    '</div>';
+  var sel=document.getElementById('ehpOaSel');
+  var mfEl=document.getElementById('ehpOaMf');
+  function getMf(){var v=mfEl?mfEl.value:'';return v===''?null:parseInt(v,10);}
+  _ehpDrawOpwekAnalyse(sel.value,null);
+  sel.addEventListener('change',function(){_ehpDrawOpwekAnalyse(sel.value,getMf());});
+  if(mfEl)mfEl.addEventListener('change',function(){_ehpDrawOpwekAnalyse(sel.value,getMf());});
+}
+
+function _ehpDrawOpwekAnalyse(memberId,mf){
+  var canvas=document.getElementById('ehpOaCanvas');
+  if(!canvas||!_ehpJrLast||!_ehpJrLast.r)return;
+  var pq=_ehpJrLast.r.perQuarter;
+  if(!pq||!pq.length)return;
+  var hasRealEpex=!!((_ehpJrLast.prices)&&_ehpJrLast.prices.length>0);
+  var srcOfMember='overig';
+  (_ehpJrLast.r.perCompany||[]).forEach(function(c){if(c.id===memberId)srcOfMember=c.source;});
+  var ip=(_ehpJrLast.assumptions&&_ehpJrLast.assumptions.internalPrices)||{};
+  var intPrijs=(srcOfMember==='zon'?ip.zon:srcOfMember==='wind'?ip.wind:ip.overig)||0;
+  var S=7*96;
+  var intS=[],extS=[],epxS=[];
+  var totIntKwh=0,totExtKwh=0,epxExtSum=0,epxExtN=0;
+  for(var i=0;i<S;i++){intS.push([]);extS.push([]);epxS.push([]);}
+  pq.forEach(function(row){
+    if(row.member!==memberId)return;
+    var d=new Date(row.ts);
+    if(mf!==null&&d.getMonth()!==mf)return;
+    var dow=(d.getDay()+6)%7;
+    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    if(sl<0||sl>=S)return;
+    var iKw=(row.interneLeveringKwh||0)*4;
+    var eKw=(row.externeVerkoopKwh||0)*4;
+    intS[sl].push(iKw);extS[sl].push(eKw);
+    totIntKwh+=(row.interneLeveringKwh||0);totExtKwh+=(row.externeVerkoopKwh||0);
+    // EPEX per slot: verzamel alle productiemomenten (intern én extern)
+    if((iKw+eKw)>0&&row.epex!==null&&row.epex!==undefined){
+      epxS[sl].push(row.epex*100);
+    }
+    if(eKw>0&&row.epex!==null&&row.epex!==undefined){epxExtSum+=row.epex*100;epxExtN++;}
+  });
+  var avg=function(a){return a.length?+(a.reduce(function(x,y){return x+y;},0)/a.length).toFixed(3):null;};
+  var intAvg=intS.map(avg),extAvg=extS.map(avg),epxAvg=epxS.map(avg);
+  var totalAvg=intAvg.map(function(v,i){
+    var e=extAvg[i];
+    return (v===null&&e===null)?null:((v||0)+(e||0));
+  });
+  var pctIntAvg=intAvg.map(function(v,i){
+    var tot=(v||0)+(extAvg[i]||0);
+    return tot>0.01?Math.round((v||0)/tot*100):null;
+  });
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'],lb=[];
+  for(var i=0;i<S;i++){
+    var dow=Math.floor(i/96),h=Math.floor((i%96)/4),m=(i%4)*15;
+    lb.push(i%96===0?DN[dow]:(h%6===0&&m===0?(String(h).padStart(2,'0')+':00'):''));
+  }
+  var datasets=[
+    {label:'Intern geleverd (kW)',data:intAvg,
+      fill:'origin',backgroundColor:'rgba(70,150,43,0.5)',borderColor:'#46962b',
+      borderWidth:1,tension:0.3,pointRadius:0,yAxisID:'y'},
+    {label:'Terug aan net (kW)',data:totalAvg,
+      fill:'-1',backgroundColor:'rgba(149,165,166,0.45)',borderColor:'#95a5a6',
+      borderWidth:1,tension:0.3,pointRadius:0,yAxisID:'y'},
+    {label:'% intern',data:pctIntAvg,fill:false,borderColor:'#2c7fb8',
+      borderWidth:1.5,borderDash:[3,2],tension:0.3,pointRadius:0,yAxisID:'y2'}
+  ];
+  if(hasRealEpex){
+    datasets.push({label:'EPEX marktprijs (ct/kWh)',data:epxAvg,fill:false,borderColor:'#e67e22',
+      borderWidth:2.5,borderDash:[6,3],tension:0.3,pointRadius:0,yAxisID:'y3'});
+  }
+  var scales={
+    x:{ticks:{color:'#999',font:{family:'Barlow',size:11},maxTicksLimit:30,autoSkip:false,
+      callback:function(v,i){return lb[i]||null;}},grid:{color:'#f3f7f4'}},
+    y:{ticks:{font:{family:'Barlow',size:11}},
+      title:{display:true,text:'kW',font:{family:'Barlow',size:11}},
+      grid:{color:function(ctx){return ctx.tick.value===0?'#ccc':'#f3f7f4';}}},
+    y2:{position:'right',min:0,max:100,
+      ticks:{font:{family:'Barlow',size:11},color:'#2c7fb8',callback:function(v){return v+'%';}},
+      title:{display:true,text:'% intern',font:{family:'Barlow',size:11},color:'#2c7fb8'},
+      grid:{drawOnChartArea:false}}
+  };
+  if(hasRealEpex){
+    scales.y3={position:'right',
+      ticks:{font:{family:'Barlow',size:11},color:'#e67e22',callback:function(v){return v+' ct';}},
+      title:{display:true,text:'ct/kWh',font:{family:'Barlow',size:11},color:'#e67e22'},
+      grid:{drawOnChartArea:false}};
+  }
+  if(_ehpOaChartInst){try{_ehpOaChartInst.destroy();}catch(e){}_ehpOaChartInst=null;}
+  _ehpOaChartInst=new Chart(canvas,{
+    type:'line',
+    data:{labels:lb,datasets:datasets},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:scales
+    }
+  });
+  // Samenvatting-cards
+  var totKwh=totIntKwh+totExtKwh;
+  var pctInt=totKwh>0?Math.round(totIntKwh/totKwh*100):0;
+  var pctExt=100-pctInt;
+  var intP=(intPrijs*100);
+  var gemEpxExt=epxExtN>0?(epxExtSum/epxExtN):null;
+  var sumEl=document.getElementById('ehpOaSummary');
+  if(sumEl){
+    var epxVerg='';
+    if(hasRealEpex&&gemEpxExt!==null){
+      var diff=intP-gemEpxExt;
+      var diffTxt=(diff>=0?'+':'')+diff.toFixed(2);
+      var cls=diff>=0?'verg-pos':'verg-neg';
+      epxVerg='<div class="ku">Gem. EPEX bij teruglevering: '+gemEpxExt.toFixed(2)+' ct/kWh</div>'+
+        '<div class="ku">Interne prijs: '+intP.toFixed(2)+' ct/kWh → <span class="'+cls+'" style="font-weight:700">'+diffTxt+' ct/kWh</span></div>';
+    } else if(!hasRealEpex){
+      epxVerg='<div class="ku" style="color:#e67e22">💡 Laad EPEX-data via Jaarrekening-instellingen voor een marktprijsvergelijking.</div>';
+    }
+    sumEl.innerHTML=
+      '<div class="kb" style="min-width:160px">'+
+        '<div class="kl">Intern geleverd</div>'+
+        '<div class="kv" style="font-size:16px">'+(totIntKwh/1000).toFixed(2)+' MWh</div>'+
+        '<div class="ku">'+pctInt+'% van totale opwek</div>'+
+        '<div class="ku">Interne prijs: '+intP.toFixed(2)+' ct/kWh</div>'+
+      '</div>'+
+      '<div class="kb" style="min-width:200px">'+
+        '<div class="kl">Terug aan net</div>'+
+        '<div class="kv" style="font-size:16px">'+(totExtKwh/1000).toFixed(2)+' MWh</div>'+
+        '<div class="ku">'+pctExt+'% van totale opwek</div>'+
+        epxVerg+
+      '</div>';
+  }
 }
 
 function _ehpJrDeelnemersBlok(){

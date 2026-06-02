@@ -98,12 +98,24 @@ function normalizeContract(company){
 function buildPriceIndex(priceSeries){
   var map={};
   (priceSeries||[]).forEach(function(r){
-    if(r&&r.ts!=null&&typeof r.price==='number'&&!isNaN(r.price))map[_normTs(r.ts)]=r.price;
+    if(r&&r.ts!=null&&typeof r.price==='number'&&!isNaN(r.price)){
+      // Normaliseer opgeslagen timestamps naar ISO (space→T, voor bestaande data)
+      var key=_normTs(String(r.ts).replace(' ','T'));
+      map[key]=r.price;
+    }
   });
   return {
     map:map,
     size:Object.keys(map).length,
-    priceAt:function(ts){var v=map[_normTs(ts)];return v===undefined?null:v;}
+    priceAt:function(ts){
+      var norm=_normTs(ts);
+      var v=map[norm];
+      if(v!==undefined)return v;
+      // Uurlijkse EPEX-data (ENTSO-E): geen kwartierprijs → zoek het :00 van hetzelfde uur
+      var hourKey=norm.slice(0,13)+':00';
+      v=map[hourKey];
+      return v!==undefined?v:null;
+    }
   };
 }
 
