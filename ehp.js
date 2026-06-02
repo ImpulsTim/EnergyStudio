@@ -795,8 +795,8 @@ function _ehpFlowSvg(res){
       overig: {x:30, y:150, w:110,h:48, lbl:'Overig opwek', kwh:res.prodBySrc.overig, col:'#46962b'},
       netIn:  {x:30, y:230, w:110,h:48, lbl:'Inkoop net',   kwh:res.totGridImpKwh,    col:'#999'},
       pool:   {x:340,y:120, w:130,h:70, lbl:'Pool · intern',kwh:res.totMatchedKwh,    col:'#5fb3df'},
-      cons:   {x:680,y:60,  w:120,h:90, lbl:'Deelnemers',   kwh:res.totConsKwh,       col:'#46962b'},
-      netOut: {x:680,y:200, w:120,h:48, lbl:'Teruglever net',kwh:res.totGridExpKwh,   col:'#999'}
+      netOut: {x:680,y:30,  w:120,h:48, lbl:'Teruglever net',kwh:res.totGridExpKwh,   col:'#999'},
+      cons:   {x:680,y:140, w:120,h:90, lbl:'Deelnemers',   kwh:res.totConsKwh,       col:'#46962b'}
     }
   };
   return '<svg id="ehpFlowSvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'+_ehpFlowContent()+'</svg>';

@@ -309,6 +309,7 @@ function redrawChartsForScenario(res) {
   var gT = grpKw.map(function (v) { return Math.max(0, -v); });
   try { drawJaar(allTs, perKw, grpKw, withData, gtvA, gtvT); } catch (e) { console.error('drawJaar scen:', e); }
   try { drawWeek(allTs, grpKw, perKw, withData, gtvA, gtvT); } catch (e) { console.error('drawWeek scen:', e); }
+  try { drawGelijktijdigheid(allTs, perKw, withData); } catch (e) { console.error('drawGelijktijdigheid scen:', e); }
   try { drawBDK(perKw, gA, gT, withData, gtvA, gtvT); } catch (e) { console.error('drawBDK scen:', e); }
   try { drawOvsch(allTs, gA, gT, gtvA, gtvT); } catch (e) { console.error('drawOvsch scen:', e); }
   try { drawPiek(allTs, perKw, grpKw, withData); } catch (e) { console.error('drawPiek scen:', e); }

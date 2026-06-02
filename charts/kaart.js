@@ -47,7 +47,7 @@ function initKaart(){
   if(_kaartMap)return;
   var el=document.getElementById('kaartMap');
   if(!el||typeof L==='undefined')return;
-  _kaartMap=L.map('kaartMap',{preferCanvas:false}).setView([51.50,3.80],12);
+  _kaartMap=L.map('kaartMap',{preferCanvas:false,zoomSnap:0.05,zoomDelta:0.05,wheelPxPerZoomLevel:60}).setView([51.50,3.80],12);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
     attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
     crossOrigin:'anonymous',maxZoom:19
