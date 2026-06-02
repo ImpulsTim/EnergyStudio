@@ -166,27 +166,52 @@ function renderKaart(){
   _kaartSetWarning(companies,msRingen);
 }
 
-// Teken K-nearest-neighbour lijnen (neuraal netwerk stijl) voor een ring
+// Teken MST (connectiviteitsgarantie) + K-NN (esthetiek) lijnen voor een ring
 function _kaartNetwerk(pts,col,lg){
-  var K=Math.min(3,pts.length-1); // max 3 buren per punt
+  var n=pts.length;
+  if(n<2)return;
+
+  // Bouw alle kanten gesorteerd op afstand² (Kruskal MST)
+  var edges=[];
+  for(var i=0;i<n;i++){
+    for(var j=i+1;j<n;j++){
+      var dlat=pts[j][0]-pts[i][0],dlng=pts[j][1]-pts[i][1];
+      edges.push({i:i,j:j,d:dlat*dlat+dlng*dlng});
+    }
+  }
+  edges.sort(function(a,b){return a.d-b.d;});
+
+  // Union-Find voor MST
+  var par=[];
+  for(var k=0;k<n;k++)par[k]=k;
+  function find(x){return par[x]===x?x:(par[x]=find(par[x]));}
+
   var drawn={};
+  // MST-kanten — garandeert dat alle clusters verbonden zijn
+  edges.forEach(function(e){
+    if(find(e.i)!==find(e.j)){
+      par[find(e.i)]=find(e.j);
+      var key=e.i+'-'+e.j;
+      drawn[key]=true;
+      L.polyline([pts[e.i],pts[e.j]],{color:col,weight:1.5,opacity:0.65,interactive:false}).addTo(lg);
+    }
+  });
+
+  // K-NN extra kanten voor neurologisch netwerk-uiterlijk binnen clusters
+  var K=Math.min(2,n-1);
   pts.forEach(function(p,i){
-    // Bereken afstand² tot alle andere punten en sorteer
     var dists=[];
-    for(var j=0;j<pts.length;j++){
+    for(var j=0;j<n;j++){
       if(j===i)continue;
       var dlat=pts[j][0]-p[0],dlng=pts[j][1]-p[1];
       dists.push({j:j,d:dlat*dlat+dlng*dlng});
     }
     dists.sort(function(a,b){return a.d-b.d;});
-    // Verbind met de K dichtstbijzijnde buren
     for(var k=0;k<K;k++){
       var key=Math.min(i,dists[k].j)+'-'+Math.max(i,dists[k].j);
       if(drawn[key])continue;
       drawn[key]=true;
-      L.polyline([p,pts[dists[k].j]],{
-        color:col,weight:1.5,opacity:0.65,interactive:false
-      }).addTo(lg);
+      L.polyline([p,pts[dists[k].j]],{color:col,weight:1.5,opacity:0.65,interactive:false}).addTo(lg);
     }
   });
 }
