@@ -49,7 +49,7 @@ function _renderWeek() {
     lineWidth: function (ctx) { return ctx.tick.value === 0 ? 2 : 0.5; }
   };
   var tOpts = {
-    responsive: true, maintainAspectRatio: false,
+    responsive: true, maintainAspectRatio: false, animation: false,
     plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
     scales: {
       x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxTicksLimit: 20, autoSkip: false, callback: function (v, i) { return lb[i] || null; } }, grid: { color: '#f3f7f4' } },
