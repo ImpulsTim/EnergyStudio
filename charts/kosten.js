@@ -1,5 +1,9 @@
 function drawKosten(allTs,perKw,cos){
   dC('kost');
+  // Multicommodity: Stedin-nettarieven gelden alleen voor elektra. Andere dragers
+  // krijgen een eenvoudige kostenweergave (vlakke prijs per eenheid).
+  var _carrier=(typeof _activeCarrier!=='undefined')?_activeCarrier:'elektra';
+  if(_carrier!=='elektra'){drawKostenSimpel(allTs,perKw,cos,_carrier);return;}
   var kd=cos.map(function(c,ci){
     var sa=SA[c.stedinA||'none']||SA.none;var st2=ST[c.stedinT||'none']||ST.none;
     var mndSet={};allTs.forEach(function(ts){mndSet[ts.slice(0,7)]=1;});var nMnd=Object.keys(mndSet).length||12;
@@ -33,6 +37,36 @@ function drawKosten(allTs,perKw,cos){
     '<tr><td style="padding-left:14px;color:#888;font-weight:700">kW-max</td><td colspan="3" style="font-size:12px;color:#666">Max afname/mnd x €'+d.st2.km.toFixed(4)+'/kW</td><td>—</td><td><strong>€ '+fmt(d.kwM)+'</strong></td></tr>'+
     '<tr><td style="padding-left:14px;color:#888">Dubbel tarief</td><td colspan="3" style="font-size:12px;color:#666">Norm €'+d.st2.dn+'/kWh · Laag €'+d.st2.dl+'/kWh</td><td>—</td><td>€ '+fmt(d.dt)+'</td></tr>'+
     '<tr style="background:#f7fbf5"><td style="padding-left:14px;font-weight:700">Totaal</td><td>'+d.ka.toFixed(1)+' MWh</td><td>'+d.kt.toFixed(1)+' MWh</td><td>€ '+fmt(d.ea)+'</td><td style="color:#46962b">€ '+fmt(d.et)+'</td><td><strong style="color:'+((d.netto+d.totNet)>0?'#c0392b':'#46962b')+'">€ '+fmt(d.netto+d.totNet)+'</strong></td></tr>';
+  }).join('');
+  document.getElementById('kostenBody').innerHTML=html;
+}
+
+// Eenvoudige kosten voor niet-elektra dragers (gas €/m³, warmte €/kWh).
+// Geen Stedin-tarieven, geen staffels — vlakke prijs per eenheid (c.priceA).
+function drawKostenSimpel(allTs,perKw,cos,carrier){
+  var def=(typeof carrierDef==='function')?carrierDef(carrier):{label:carrier,calorisch:9.769,prijsEenheid:carrier==='gas'?'m³':'kWh'};
+  var kd=cos.map(function(c,ci){
+    var afnameKwh=0;
+    (perKw[ci]||[]).forEach(function(kw){if(kw!=null&&kw>0)afnameKwh+=kw*0.25;});
+    var prijs=(c.priceA!=null&&!isNaN(c.priceA))?c.priceA:0;
+    var qty,eenheid,kosten;
+    if(carrier==='gas'){
+      var cal=(c.calorisch!=null&&!isNaN(c.calorisch))?c.calorisch:def.calorisch;
+      qty=cal>0?afnameKwh/cal:0;eenheid='m³';kosten=qty*prijs;
+    }else{
+      qty=afnameKwh;eenheid='kWh';kosten=qty*prijs;
+    }
+    return {name:c.name,afnameKwh:afnameKwh,qty:qty,eenheid:eenheid,prijs:prijs,kosten:kosten};
+  });
+  CH['kost']=new Chart(document.getElementById('cKost'),{type:'bar',data:{labels:kd.map(function(d){return d.name;}),datasets:[
+    {label:'Energiekosten ('+def.label+')',data:kd.map(function(d){return+d.kosten.toFixed(0);}),backgroundColor:cos.map(function(_,i){return PAL[i%PAL.length];}),borderRadius:5}
+  ]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax('€')}}});
+  var html=kd.map(function(d,i){
+    var gj=(carrier==='warmte')?(' · '+(d.afnameKwh/277.778).toFixed(1)+' GJ'):'';
+    return '<tr style="border-bottom:2px solid #e2ecdf"><td colspan="6" style="padding:4px 8px 1px;font-size:11px;font-weight:800;text-transform:uppercase;color:#46962b"><span style="background:'+PAL[i%PAL.length]+';width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;vertical-align:middle"></span>'+d.name+'</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">Afname</td><td>'+fmt(d.qty)+' '+d.eenheid+gj+'</td><td>—</td><td>€ '+fmt(d.kosten)+'</td><td>—</td><td>—</td></tr>'+
+    '<tr><td style="padding-left:14px;color:#888">Prijs</td><td colspan="3" style="font-size:12px;color:#666">€ '+d.prijs+' / '+def.prijsEenheid+'</td><td>—</td><td>—</td></tr>'+
+    '<tr style="background:#f7fbf5"><td style="padding-left:14px;font-weight:700">Totaal</td><td>'+fmt(d.qty)+' '+d.eenheid+'</td><td>—</td><td>€ '+fmt(d.kosten)+'</td><td>—</td><td><strong style="color:#c0392b">€ '+fmt(d.kosten)+'</strong></td></tr>';
   }).join('');
   document.getElementById('kostenBody').innerHTML=html;
 }

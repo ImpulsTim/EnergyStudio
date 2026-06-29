@@ -158,6 +158,8 @@ function panJ() {
   var span = new Date(slTs[slTs.length - 1]).getTime() - new Date(slTs[0]).getTime();
 
   var dec = _jDecimate(slKw, slTs, 1400);
+  var _cv = (typeof _carrierView !== 'undefined') ? _carrierView : { unit: 'kW', scale: 1, showGtv: true };
+  var decKwS = dec.kw.map(function (v) { return v == null ? null : v * _cv.scale; });
 
   var days = Math.round(slTs.length / 96);
   document.getElementById('jZoomLbl').textContent =
@@ -176,7 +178,7 @@ function panJ() {
       labels: dec.ts,
       datasets: [
         {
-          label: 'Vermogen groep', data: dec.kw,
+          label: 'Vermogen groep', data: decKwS,
           borderColor: '#46962b',
           backgroundColor: function (ctx) { return ctx.raw >= 0 ? 'rgba(70,150,43,.12)' : 'rgba(251,186,0,.12)'; },
           fill: true, tension: 0, pointRadius: 0, borderWidth: 2,
@@ -184,10 +186,11 @@ function panJ() {
             borderColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? '#46962b' : '#fbba00'; },
             backgroundColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? 'rgba(70,150,43,.08)' : 'rgba(251,186,0,.08)'; }
           }
-        },
-        { label: 'GTV ' + gtvA + 'kW', data: new Array(dec.kw.length).fill(gtvA), borderColor: '#c0392b', borderDash: [6, 3], pointRadius: 0, borderWidth: 1.5, fill: false },
-        { label: 'GTV-T -' + gtvT + 'kW', data: new Array(dec.kw.length).fill(-gtvT), borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false },
-      ]
+        }
+      ].concat(_cv.showGtv ? [
+        { label: 'GTV ' + gtvA + 'kW', data: new Array(decKwS.length).fill(gtvA), borderColor: '#c0392b', borderDash: [6, 3], pointRadius: 0, borderWidth: 1.5, fill: false },
+        { label: 'GTV-T -' + gtvT + 'kW', data: new Array(decKwS.length).fill(-gtvT), borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }
+      ] : [])
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
@@ -201,7 +204,7 @@ function panJ() {
           },
           grid: { color: '#f3f7f4' }
         },
-        y: Object.assign(ax('kW'), { beginAtZero: false, grid: { color: gridColor, lineWidth: gridWidth } })
+        y: Object.assign(ax(_cv.unit), { beginAtZero: false, grid: { color: gridColor, lineWidth: gridWidth } })
       }
     }
   });
@@ -222,7 +225,7 @@ function panJ() {
     data: {
       labels: pTs,
       datasets: (cos || []).map(function (c, ci) {
-        return { label: c.name, data: pSl[ci], borderColor: PAL[ci % PAL.length], fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5 };
+        return { label: c.name, data: pSl[ci].map(function (v) { return v == null ? null : v * _cv.scale; }), borderColor: PAL[ci % PAL.length], fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5 };
       })
     },
     options: {
@@ -237,7 +240,7 @@ function panJ() {
           },
           grid: { color: '#f3f7f4' }
         },
-        y: Object.assign(ax('kW'), { grid: { color: gridColor, lineWidth: gridWidth } })
+        y: Object.assign(ax(_cv.unit), { grid: { color: gridColor, lineWidth: gridWidth } })
       }
     }
   });

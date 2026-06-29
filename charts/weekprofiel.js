@@ -35,6 +35,11 @@ function _renderWeek() {
   var mn  = gs.map(function (s) { return s.length ? +Math.min.apply(null, s).toFixed(2) : null; });
   var mx  = gs.map(function (s) { return s.length ? +Math.max.apply(null, s).toFixed(2) : null; });
 
+  // Drager-weergave: schaal naar de eenheid van de actieve drager (gas → m³/h).
+  var _cv = (typeof _carrierView !== 'undefined') ? _carrierView : { unit: 'kW', scale: 1, showGtv: true };
+  function _sc(a) { return a.map(function (v) { return v == null ? null : +(v * _cv.scale).toFixed(3); }); }
+  var avgS = _sc(avg), mnS = _sc(mn), mxS = _sc(mx);
+
   var DN = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
   var lb = [];
   for (var i = 0; i < S2; i++) {
@@ -53,18 +58,19 @@ function _renderWeek() {
     plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
     scales: {
       x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxTicksLimit: 20, autoSkip: false, callback: function (v, i) { return lb[i] || null; } }, grid: { color: '#f3f7f4' } },
-      y: Object.assign(ax('kW'), { grid: zeroLine })
+      y: Object.assign(ax(_cv.unit), { grid: zeroLine })
     }
   };
 
   CH['week'] = new Chart(document.getElementById('cWeek'), {
     type: 'line', data: { labels: lb, datasets: [
-      { label: 'Max', data: mx, borderColor: 'rgba(70,150,43,.45)', backgroundColor: 'rgba(70,150,43,.09)', fill: '+1', tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
-      { label: 'Min', data: mn, borderColor: 'rgba(70,150,43,.45)', fill: false, tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
-      { label: 'Gemiddeld', data: avg, borderColor: '#46962b', fill: false, tension: .3, pointRadius: 0, borderWidth: 2.5 },
+      { label: 'Max', data: mxS, borderColor: 'rgba(70,150,43,.45)', backgroundColor: 'rgba(70,150,43,.09)', fill: '+1', tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
+      { label: 'Min', data: mnS, borderColor: 'rgba(70,150,43,.45)', fill: false, tension: .3, pointRadius: 0, borderWidth: 1.5, borderDash: [4, 3] },
+      { label: 'Gemiddeld', data: avgS, borderColor: '#46962b', fill: false, tension: .3, pointRadius: 0, borderWidth: 2.5 },
+    ].concat(_cv.showGtv ? [
       { label: 'GTV ' + gtvA + 'kW', data: new Array(S2).fill(gtvA), borderColor: '#c0392b', borderDash: [6, 3], pointRadius: 0, borderWidth: 1.5, fill: false },
       { label: 'GTV-T -' + gtvT + 'kW', data: new Array(S2).fill(-gtvT), borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false },
-    ] }, options: tOpts
+    ] : []) }, options: tOpts
   });
 
   var legHtml = '';
@@ -74,7 +80,7 @@ function _renderWeek() {
 
   CH['weekP'] = new Chart(document.getElementById('cWeekP'), {
     type: 'line', data: { labels: lb, datasets: cos.map(function (c, i) {
-      return { label: c.name, data: ps[i].map(function (s) { return s.length ? +(s.reduce(function (a, b) { return a + b; }, 0) / s.length).toFixed(2) : null; }), borderColor: PAL[i % PAL.length], fill: false, tension: .3, pointRadius: 0, borderWidth: 1.8 };
+      return { label: c.name, data: ps[i].map(function (s) { return s.length ? +(s.reduce(function (a, b) { return a + b; }, 0) / s.length * _cv.scale).toFixed(3) : null; }), borderColor: PAL[i % PAL.length], fill: false, tension: .3, pointRadius: 0, borderWidth: 1.8 };
     }) }, options: Object.assign({}, tOpts, { plugins: { legend: { display: false } } })
   });
 

@@ -11,20 +11,67 @@ function initUpload(){
 
 function handleFile(file){
   pendName=file.name;
+  var carrierEl=document.getElementById('cCarrier');
+  var carrier=(carrierEl&&carrierEl.value)||'elektra';
   var r=new FileReader();
   r.onload=function(e){
     try{
-      var data;
-      if(file.name.toLowerCase().indexOf('.json')>-1)data=parseJSON(JSON.parse(e.target.result));
-      else data=parseCSV(e.target.result);
+      var data,unitLbl;
+      if(carrier==='elektra'){
+        // Ongewijzigd elektra-pad: kWh/kwartier → kW (×4), MEPS-JSON ondersteund.
+        if(file.name.toLowerCase().indexOf('.json')>-1){data=parseJSON(JSON.parse(e.target.result));}
+        else{var _raw=e.target.result,_sep=_raw.split('\n')[0].indexOf(';')>-1?';':',',_h=(_raw.split('\n')[0].split(_sep)[1]||'').trim().toLowerCase();data=(_h==='netto')?parseNettoCSV(_raw):parseCSV(_raw);}
+        unitLbl='kW';
+      }else{
+        // Gas/warmte: ruwe meetwaarde per interval, geen kW-omrekening.
+        data=parseCarrierCSV(e.target.result);
+        unitLbl=(typeof carrierDef==='function')?carrierDef(carrier).unit:'';
+      }
       if(!data||!data.length){notify('Geen geldige metingen',false);return;}
       pendData=data;
-      document.getElementById('cPills').innerHTML='<div class="pl">'+file.name+' — '+data.length+' metingen (kW)</div>';
-      notify(data.length+' kwartierwaarden ingeladen');
+      document.getElementById('cPills').innerHTML='<div class="pl">'+file.name+' — '+data.length+' metingen ('+unitLbl+')</div>';
+      notify(data.length+' metingen ingeladen');
     }catch(err){notify('Fout: '+err.message,false);}
   };
   r.onerror=function(){notify('Kan bestand niet lezen',false);};
   r.readAsText(file,'UTF-8');
+}
+
+// Carrier-CSV (gas/warmte): "timestamp;waarde", komma- of puntkomma-gescheiden.
+// Bewaart de ruwe meetwaarde als {ts,val} (m³ voor gas, kWh voor warmte) ZONDER
+// kW-omrekening. Interval-detectie en kWh-conversie gebeuren in de analyse
+// (_carrierSeries), zodat het bron-interval (bv. uurwaarden) behouden blijft.
+// Normaliseert een energie-timestamp naar "YYYY-MM-DDTHH:MM".
+// Herkent ISO (T of spatie), Europees punt (DD.MM.YYYY) en slash (DD/MM/YYYY).
+// Zelfde logica als _normPriceTs maar afzonderlijk zodat parsers er onafhankelijk
+// gebruik van kunnen maken vóór _normPriceTs geladen is.
+function _normTs(raw){
+  raw=(raw||'').toString().trim().replace(/"/g,'');
+  var m;
+  m=raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+  if(m)return m[1]+'-'+m[2]+'-'+m[3]+'T'+m[4]+':'+m[5];
+  m=raw.match(/^(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
+  m=raw.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2})/);
+  if(m)return m[3]+'-'+m[2]+'-'+m[1]+'T'+m[4]+':'+m[5];
+  return raw.slice(0,16);
+}
+
+function parseCarrierCSV(text){
+  var lines=text.replace(/\r/g,'').trim().split('\n');
+  if(!lines.length)return [];
+  var sep=lines[0].indexOf(';')>-1?';':',';
+  var start=0;
+  var firstVal=(lines[0].split(sep)[1]||'').trim().replace(',','.');
+  if(isNaN(parseFloat(firstVal)))start=1; // koprij overslaan
+  var result=[];
+  for(var i=start;i<lines.length;i++){
+    var p=lines[i].split(sep);if(p.length<2)continue;
+    var ts=_normTs(p[0]);
+    var val=parseFloat(p[1].trim().replace(',','.'));
+    if(ts&&!isNaN(val))result.push({ts:ts,val:Math.round(val*1000)/1000});
+  }
+  return result;
 }
 
 function parseCSV(text){
@@ -36,7 +83,22 @@ function parseCSV(text){
   var result=[];
   for(var i=start;i<lines.length;i++){
     var p=lines[i].split(sep);if(p.length<2)continue;
-    var ts=p[0].trim().replace(/"/g,'');
+    var ts=_normTs(p[0]);
+    var val=parseFloat(p[1].trim().replace(',','.'));
+    if(ts&&!isNaN(val))result.push({ts:ts,kw:Math.round(val*4*1000)/1000});
+  }
+  return result;
+}
+
+// Netto-CSV (time_stamp;netto): gesigneerde kWh/kwartier → ×4 → kW.
+// Positief = afname, negatief = teruglevering. Zelfde intern {ts,kw}-formaat als parseCSV.
+function parseNettoCSV(text){
+  var lines=text.replace(/\r/g,'').trim().split('\n');
+  var sep=lines[0].indexOf(';')>-1?';':',';
+  var result=[];
+  for(var i=1;i<lines.length;i++){
+    var p=lines[i].split(sep);if(p.length<2)continue;
+    var ts=_normTs(p[0]);
     var val=parseFloat(p[1].trim().replace(',','.'));
     if(ts&&!isNaN(val))result.push({ts:ts,kw:Math.round(val*4*1000)/1000});
   }

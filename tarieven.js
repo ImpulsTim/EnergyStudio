@@ -30,3 +30,34 @@ function isDL(ts){
   if(HOL[ts.slice(5,10)])return true;
   var h=d.getHours();return!(h>=7&&h<23);
 }
+
+// --- Energiedragers (multicommodity) -----------------------------------------
+// Eén bron van waarheid per drager. Elektra is en blijft de default; bestaande
+// aansluitingen zonder `carrier` worden overal als 'elektra' behandeld, zodat de
+// huidige werking ongewijzigd blijft. Gas/warmte zijn additief.
+//
+// Velden:
+//   key          interne sleutel
+//   label        weergavenaam
+//   unit         eenheid van de bron-/meetwaarde (kW, m³, kWh)
+//   energieUnit  gemene-deler-eenheid voor energie-aggregatie (altijd kWh)
+//   bidir        kan de drager teruglevering/invoeding hebben? (warmteuitwisseling)
+//   interval     verwacht meetinterval ('kwartier' | 'uur' | 'auto')
+//   kleur        grafiekkleur
+//   prijsEenheid eenheid waarin eenvoudige kosten gerekend worden (kWh of m³)
+//   calorisch    (gas) default kWh per m³ — per project instelbaar
+//   weergaveUnit (warmte) optionele alternatieve weergave-eenheid
+//   kwhPer       (warmte) factor om energieUnit→weergaveUnit te tonen (1 GJ ≈ 277,778 kWh)
+var CARRIER={
+  elektra:{key:'elektra',label:'Elektriciteit',unit:'kW', energieUnit:'kWh',bidir:true, interval:'kwartier',kleur:'#46962b',prijsEenheid:'kWh'},
+  gas:    {key:'gas',    label:'Gas',          unit:'m³', energieUnit:'kWh',bidir:false,interval:'uur',     kleur:'#e67e22',prijsEenheid:'m³', calorisch:9.769,co2:1.788},
+  warmte: {key:'warmte', label:'Warmte',       unit:'kWh',energieUnit:'kWh',bidir:true, interval:'auto',    kleur:'#c0392b',prijsEenheid:'kWh',weergaveUnit:'GJ',kwhPer:277.778}
+};
+
+// Carrier-definitie met veilige fallback naar elektra (voor legacy-aansluitingen).
+function carrierDef(k){return CARRIER[k]||CARRIER.elektra;}
+
+// Constanten voor de centrale hub-weergave (cross-carrier).
+//   gridCo2 — CO₂-emissiefactor netstroom (kg/kWh), indicatief NL-gemiddelde.
+//   cop     — COP-aanname warmtepomp voor het electrificatiepotentieel.
+var HUB={gridCo2:0.27,cop:3};

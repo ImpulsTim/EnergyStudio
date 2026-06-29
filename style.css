@@ -214,6 +214,30 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .verg-empty{text-align:center;padding:40px 20px;color:#bbb}
 .verg-empty .big{font-size:32px;margin-bottom:8px}
 .ac-verg{background:#242b38}
+/* Financieel overzicht tabellen */
+.ehp-ov-blok{margin-bottom:20px}
+.ehp-ov-blok-hdr{background:#2c7fb8;color:#fff;padding:6px 12px;font-weight:600;border-radius:4px 4px 0 0;font-size:13px}
+.ehp-ov-side-hdr{font-weight:600;font-size:12px;padding:6px 8px;color:#fff;margin-bottom:4px}
+.ehp-ov-side-afn{background:#2c7fb8}
+.ehp-ov-side-prod{background:#c0793c}
+.ehp-ov-tbl{width:100%;border-collapse:collapse;font-size:11px}
+.ehp-ov-tbl th{background:#eaf3f9;text-align:right;padding:4px 6px;border-bottom:1px solid #dce6e0;font-weight:700;font-size:11px}
+.ehp-ov-tbl th:first-child{text-align:left}
+.ehp-ov-tbl td{padding:3px 6px;border-bottom:1px solid #f0f4f2;text-align:right}
+.ehp-ov-tbl td:first-child{text-align:left}
+.ehp-ov-tbl tr.subtotaal td{font-weight:600;border-top:1px solid #dce6e0;background:#f8fbf9}
+.ehp-ov-tbl tr.totaal td{font-weight:700;border-top:2px solid #2c7fb8;font-size:12px}
+.ehp-ov-tbl tr.pct-row td{color:#888;font-size:10px;padding:1px 6px}
+/* Gelijktijdigheid-tab */
+.gel-blok{margin-bottom:24px}
+.gel-blok-hdr{background:#2c7fb8;color:#fff;padding:6px 14px;font-weight:700;font-size:13px;border-radius:4px 4px 0 0}
+.gel-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
+.gel-tbl th{background:#2d7a4b;color:#fff;text-align:right;padding:5px 7px;white-space:nowrap;font-weight:700;font-size:11px}
+.gel-tbl th:first-child{text-align:left}
+.gel-tbl td{padding:3px 7px;text-align:right;border-bottom:1px solid #e8f4e8;white-space:nowrap}
+.gel-tbl td:first-child{text-align:left;font-weight:500}
+.gel-tbl tr:nth-child(even) td{background:#f4fbf4}
+.gel-tbl tr.gel-totaal td{font-weight:700;border-top:2px solid #2d7a4b;background:#e8f4e8}
 /* Rapport opties */
 .rap-opt-lbl{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:5px 6px;border-radius:5px;transition:background .1s;line-height:1.35}
 .rap-opt-lbl:hover{background:#f7fbf5}

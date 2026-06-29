@@ -283,6 +283,7 @@
 <title>Energy Studio — Impuls Zeeland</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;700;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-chart-sankey@0.12.1/dist/chartjs-chart-sankey.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="anonymous"/>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin="anonymous"></script>
@@ -365,6 +366,8 @@
       <span style="opacity:.75;font-size:12px;font-weight:400">Alle grafieken tonen scenariodata</span>
       <button id="btnScenBack">← Terug naar basis</button>
     </div>
+    <div id="carrierBar" style="display:none;gap:6px;margin-bottom:9px;flex-wrap:wrap;align-items:center"></div>
+    <div id="yearBar" style="display:none;gap:8px;margin-bottom:9px;flex-wrap:wrap;align-items:center"></div>
     <div class="tabs">
       <button class="tab on" data-tab="tOv">Overzicht</button>
       <button class="tab" data-tab="tJaar">Jaarprofiel</button>
@@ -377,9 +380,11 @@
       <button class="tab" data-tab="tKaart">Kaart</button>
       <div class="tab-sep"></div>
       <button class="tab tab-verg" data-tab="tVerg">⚖ Vergelijking</button>
+      <button class="tab" data-tab="tHub" style="display:none">⚡ Energiehub</button>
     </div>
     <!-- OVERZICHT -->
     <div class="pn on" id="tOv">
+      <div id="ovElektra">
       <div class="ov-kpi-wrap">
         <!-- Rij 1: Algemeen + Pieken & GTV -->
         <div class="ov-kpi-row ov-row-sm">
@@ -425,9 +430,13 @@
       <div class="cd"><div class="ct2"><div class="ac"></div>Aansluitingen</div>
         <table class="tbl"><thead><tr><th></th><th>Naam</th><th>EAN</th><th>Cat.</th><th>GTV</th><th>GTV-T</th><th>Capaciteit</th><th>Zekering</th><th>Punten</th><th></th></tr></thead>
         <tbody id="ovBody"><tr><td colspan="10" style="text-align:center;padding:16px;color:#aaa">Geen aansluitingen</td></tr></tbody></table></div>
+      </div><!-- /ovElektra -->
+      <div id="ovGas" style="display:none"></div>
+      <div id="ovCompare" style="display:none"></div>
     </div>
     <!-- JAARPROFIEL -->
     <div class="pn" id="tJaar">
+      <div id="jaarNormal">
       <div class="cd"><div class="ct2"><div class="ac"></div>Cumulatief groepsprofiel (kW) — positief=afname, negatief=teruglevering</div>
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;flex-wrap:wrap">
           <div class="lg" style="margin:0;flex:1">
@@ -455,6 +464,14 @@
       <div class="cd"><div class="ct2"><div class="ac"></div>Per aansluiting (kW) — negatief=teruglevering</div>
         <div class="lg" id="jLeg"></div>
         <div class="cw" style="height:340px"><canvas id="cJaar" role="img" aria-label="Jaarprofiel per aansluiting"></canvas></div>
+      </div>
+      </div><!-- /jaarNormal -->
+      <div id="jaarCompare" style="display:none">
+        <div class="cd"><div class="ct2"><div class="ac"></div>Verbruik per maand — per jaar vergeleken</div>
+          <div class="lg" id="yrLegM"></div>
+          <div class="cw" style="height:340px"><canvas id="cYrMaand" role="img" aria-label="Jaarvergelijking per maand"></canvas></div></div>
+        <div class="cd"><div class="ct2"><div class="ac"></div>Verbruik per dag — per jaar vergeleken</div>
+          <div class="cw" style="height:340px"><canvas id="cYrDag" role="img" aria-label="Jaarvergelijking per dag"></canvas></div></div>
       </div>
     </div>
     <!-- WEEKPROFIEL -->
@@ -635,6 +652,8 @@
         <div id="kaartLegenda"></div>
       </div>
     </div>
+    <!-- ENERGIEHUB (cross-carrier) -->
+    <div class="pn" id="tHub"></div>
   </div>
 </div>
 <div class="app ehp-hide" id="pageEhp">
@@ -654,56 +673,49 @@
         <div class="scen-con-list" id="ehpMembers"></div>
       </div>
       <div style="margin-bottom:12px">
-        <div class="st">Interne prijzen (€/kWh)</div>
-        <div class="fgr"><label>Zon<span class="tip-icon" data-tip="Interne handelsprijs voor zonne-energie (€/kWh). Afnemers betalen dit; zonnepaneel-eigenaren ontvangen dit.">ⓘ</span></label><input type="number" id="ehpPZon" step="0.001" value="0.08"></div>
-        <div class="fgr"><label>Wind<span class="tip-icon" data-tip="Interne handelsprijs voor windenergie (€/kWh).">ⓘ</span></label><input type="number" id="ehpPWind" step="0.001" value="0.06"></div>
-        <div class="fgr"><label>Overig<span class="tip-icon" data-tip="Interne handelsprijs voor overige hernieuwbare energie (€/kWh).">ⓘ</span></label><input type="number" id="ehpPOverig" step="0.001" value="0.07"></div>
-        <div class="fgr"><label>Platformkosten<span class="tip-icon" data-tip="Kosten die het platform rekent: per kWh intern verhandelde energie, of een vast bedrag per deelnemer per dag.">ⓘ</span></label><span class="fgr-combo"><input type="number" id="ehpFee" step="0.001" value="0.00"><select id="ehpFeeMode" class="fgr-mode-sel"><option value="kwh">€/kWh</option><option value="dag">€/dag</option></select></span></div>
+        <div class="st">Gelijktijdigheidsvergoeding (€/MWh)</div>
+        <div class="fgr"><label>Zon<span class="tip-icon" data-tip="Vergoeding voor gelijktijdig geleverde zonnestroom (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelZon" step="0.01" value="20"></div>
+        <div class="fgr"><label>Wind<span class="tip-icon" data-tip="Vergoeding voor gelijktijdig geleverde windstroom (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelWind" step="0.01" value="20"></div>
+        <div class="fgr"><label>Afname-invoeden<span class="tip-icon" data-tip="Vergoeding voor afname-invoeden (netto teruglevering via hoofdmeter) als gelijktijdige bron (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelAI" step="0.01" value="0"></div>
+        <div class="fgr"><label>Platformtarief<span class="tip-icon" data-tip="Platformkosten per gelijktijdig verrekende kWh (€/MWh).">ⓘ</span></label><input type="number" id="ehpPlatform" step="0.01" value="0"></div>
+        <div class="fgr"><label>GVO bilateraal<span class="tip-icon" data-tip="GVO-kosten voor bilateraal intern verrekende kWh (€/MWh).">ⓘ</span></label><input type="number" id="ehpGvoBil" step="0.01" value="0"></div>
+        <div class="fgr"><label>GVO rest (tekort)<span class="tip-icon" data-tip="GVO-kosten voor het tekort (van net betrokken kWh) (€/MWh).">ⓘ</span></label><input type="number" id="ehpGvoRest" step="0.01" value="0"></div>
       </div>
-      <div style="margin-bottom:12px">
-        <div class="st">Nettarieven (€/kWh)</div>
-        <div class="fgr"><label>Inkoop net<span class="tip-icon" data-tip="Nettarief voor inkoop van het reguliere net (€/kWh). Geldt voor energie die niet intern gematcht wordt.">ⓘ</span></label><input type="number" id="ehpPNetAfname" step="0.001" value="0.12"></div>
-        <div class="fgr"><label>Teruglever<span class="tip-icon" data-tip="Nettarief voor teruglevering aan het reguliere net (€/kWh). Geldt voor overschot dat niet intern afgenomen wordt.">ⓘ</span></label><input type="number" id="ehpPNetTerug" step="0.001" value="0.04"></div>
-        <div class="fgr"><label>Dyn. inkoop<span class="tip-icon" data-tip="Dynamische inkoopprijs van het net (€/kWh). Wordt gebruikt bij dynamische contractvorm.">ⓘ</span></label><input type="number" id="ehpPDyn" step="0.001" value="0.10"></div>
-      </div>
-      <div style="margin-bottom:12px">
-        <div class="st">Fiscaal</div>
-        <label class="rap-opt-lbl" style="margin-bottom:4px">
-          <input type="checkbox" id="ehpEbOn"> Energiebelasting toepassen
-          <span class="tip-icon" data-tip="Energiebelasting die de koper betaalt over afgenomen kWh. De grondslag bepaalt of intern ingekochte kWh ook belast zijn.">ⓘ</span>
-        </label>
-        <div class="fgr"><label>Jaarstaffel<span class="tip-icon" data-tip="Belastingjaar voor de EB-staffeltarieven.">ⓘ</span></label>
-          <select id="ehpEbJaar"><option value="">Default</option><option value="2024">2024</option><option value="2025" selected>2025</option></select></div>
-        <div class="fgr"><label>Grondslag<span class="tip-icon" data-tip="Bruto = EB over alle verbruik incl. intern ingekochte kWh. Extern = alleen EB over netinkoop (intern vrijgesteld). Netto = EB over verbruik minus eigen productie.">ⓘ</span></label>
-          <select id="ehpEbGrondslag"><option value="bruto" selected>Bruto afname</option><option value="externeLevering">Externe levering</option><option value="netto">Netto (saldering)</option></select></div>
-        <div class="fgr"><label>Heffingskorting (€/jr)<span class="tip-icon" data-tip="Vaste korting op energiebelasting per aansluiting per jaar.">ⓘ</span></label>
-          <input type="number" id="ehpHeffing" step="0.01" value="0"></div>
-        <label class="rap-opt-lbl" style="margin-bottom:4px;margin-top:4px">
-          <input type="checkbox" id="ehpBtwOn"> Btw toepassen
-          <span class="tip-icon" data-tip="Btw wordt berekend over de totale kosten inclusief energiebelasting.">ⓘ</span>
-        </label>
-        <div class="fgr"><label>Btw (%)<span class="tip-icon" data-tip="Btw-percentage. Standaard 21% voor zakelijke afnemers.">ⓘ</span></label>
-          <input type="number" id="ehpBtwPct" step="1" value="21"></div>
-      </div>
-      <div style="margin-bottom:12px">
-        <div class="st">Jaarrekening aannames</div>
-        <div class="fgr"><label>Basisprijs (€/kWh)<span class="tip-icon" data-tip="Vaste energieprijs voor inkoop van het net, gebruikt als er geen EPEX-data geladen is.">ⓘ</span></label><input type="number" id="jrPrijs" step="0.001" value="0.10"></div>
-        <div class="fgr"><label>Leveranciersopslag<span class="tip-icon" data-tip="Opslag die de leverancier bovenop de inkoopprijs rekent (€/kWh).">ⓘ</span></label><input type="number" id="jrLevOpslag" step="0.001" value="0.02"></div>
-        <div class="fgr"><label>Terugleverafslag<span class="tip-icon" data-tip="Korting op de verkoopprijs bij teruglevering aan het net (€/kWh).">ⓘ</span></label><input type="number" id="jrTerugAfslag" step="0.001" value="0.01"></div>
-        <details id="jrDetails">
-          <summary class="jr-summary">Geavanceerd<span class="tip-icon" data-tip="Extra opties: EPEX-marktprijzen importeren, onbalansopslag en verdeelsleutel.">ⓘ</span></summary>
-          <div style="margin-top:8px">
-            <div class="fgr"><label>Onbalansopslag<span class="tip-icon" data-tip="Opslag voor onbalansrisico van de leverancier (€/kWh).">ⓘ</span></label><input type="number" id="jrOnbalans" step="0.001" value="0.00"></div>
-            <div class="st" style="margin-top:8px">EPEX-marktprijzen</div>
-            <div class="ib2" id="jrPriceInfo" style="margin-bottom:6px;font-size:11px">Geen prijsreeks geladen — basisprijs wordt gebruikt.</div>
-            <div class="fgr"><label>Eenheid CSV<span class="tip-icon" data-tip="Eenheid van de prijskolom in de CSV: €/kWh of €/MWh.">ⓘ</span></label><select id="jrPriceUnit"><option value="kwh">€/kWh</option><option value="mwh">€/MWh</option></select></div>
-            <label class="b" style="cursor:pointer;width:100%;text-align:center;margin-top:4px;margin-bottom:6px">↑ EPEX-CSV importeren<input type="file" id="jrPriceFile" accept=".csv" style="display:none"></label>
-            <div class="st" style="margin-top:8px">Voordeelverdeling</div>
-            <div class="fgr"><label>Sleutel<span class="tip-icon" data-tip="Verdeelsleutel voor het financiële voordeel over deelnemers. Eigen delta = geen herverdeling.">ⓘ</span></label><select id="jrVerdeel"><option value="geen" selected>Eigen delta</option><option value="gelijk">Gelijk</option><option value="volume">Naar volume</option><option value="inbreng">Naar inbreng</option></select></div>
-          </div>
-        </details>
-        <button class="b" id="btnCalcJr" style="width:100%;margin-top:8px;background:#2c7fb8">Herbereken jaarrekening</button>
-      </div>
+      <details id="ehpGeavanceerd" style="margin-bottom:12px">
+        <summary class="jr-summary">Geavanceerd<span class="tip-icon" data-tip="EPEX-marktdata, onbalansrisico, fiscale instellingen en jaarrekening aannames.">ⓘ</span></summary>
+        <div style="margin-top:8px">
+          <div class="st">EPEX-marktprijzen</div>
+          <div class="ib2" style="margin-bottom:4px;font-size:11px" id="ehpEpexInfo">Geen EPEX geladen (basisprijs wordt gebruikt)</div>
+          <label class="b" style="cursor:pointer;width:100%;text-align:center;display:block;margin-bottom:8px;font-size:11px">↑ EPEX.xlsx importeren<input type="file" id="ehpEpexFile" accept=".xlsx,.xls" style="display:none"></label>
+          <div class="st">Forwardcurve</div>
+          <div class="ib2" style="margin-bottom:4px;font-size:11px" id="ehpFwdInfo">Geen forwardcurve geladen</div>
+          <label class="b" style="cursor:pointer;width:100%;text-align:center;display:block;margin-bottom:8px;font-size:11px">↑ Forwardcurve.xlsx (opt.)<input type="file" id="ehpFwdFile" accept=".xlsx,.xls" style="display:none"></label>
+          <div class="st">Onbalansrisico</div>
+          <div class="fgr"><label>Zon afwijking %<span class="tip-icon" data-tip="Onbalansverwachting voor zon als % van de opwek (bijv. 20 = 20%).">ⓘ</span></label><input type="number" id="ehpOnbZonPct" step="0.1" value="20"></div>
+          <div class="fgr"><label>Zon risicoprijs €/MWh<span class="tip-icon" data-tip="Risicoprijs voor zon-onbalans (€/MWh).">ⓘ</span></label><input type="number" id="ehpOnbZonRisico" step="1" value="90"></div>
+          <div class="fgr"><label>Wind afwijking %<span class="tip-icon" data-tip="Onbalansverwachting voor wind als % van de opwek.">ⓘ</span></label><input type="number" id="ehpOnbWindPct" step="0.1" value="20"></div>
+          <div class="fgr"><label>Wind risicoprijs €/MWh<span class="tip-icon" data-tip="Risicoprijs voor wind-onbalans (€/MWh).">ⓘ</span></label><input type="number" id="ehpOnbWindRisico" step="1" value="60"></div>
+          <div class="fgr"><label>Verbruik afwijking %<span class="tip-icon" data-tip="Onbalansverwachting voor verbruik als % van het verbruik.">ⓘ</span></label><input type="number" id="ehpOnbVbPct" step="0.1" value="8"></div>
+          <div class="fgr"><label>Verbruik risicoprijs €/MWh<span class="tip-icon" data-tip="Risicoprijs voor verbruik-onbalans (€/MWh).">ⓘ</span></label><input type="number" id="ehpOnbVbRisico" step="1" value="25"></div>
+          <div class="st" style="margin-top:8px">Fiscaal</div>
+          <label class="rap-opt-lbl" style="margin-bottom:4px">
+            <input type="checkbox" id="ehpEbOn"> Energiebelasting toepassen
+            <span class="tip-icon" data-tip="Energiebelasting die de koper betaalt over afgenomen kWh. De grondslag bepaalt of intern ingekochte kWh ook belast zijn.">ⓘ</span>
+          </label>
+          <div class="fgr"><label>Jaarstaffel<span class="tip-icon" data-tip="Belastingjaar voor de EB-staffeltarieven.">ⓘ</span></label>
+            <select id="ehpEbJaar"><option value="">Default</option><option value="2024">2024</option><option value="2025" selected>2025</option></select></div>
+          <div class="fgr"><label>Grondslag<span class="tip-icon" data-tip="Bruto = EB over alle verbruik incl. intern ingekochte kWh. Extern = alleen EB over netinkoop (intern vrijgesteld). Netto = EB over verbruik minus eigen productie.">ⓘ</span></label>
+            <select id="ehpEbGrondslag"><option value="bruto" selected>Bruto afname</option><option value="externeLevering">Externe levering</option><option value="netto">Netto (saldering)</option></select></div>
+          <div class="fgr"><label>Heffingskorting (€/jr)<span class="tip-icon" data-tip="Vaste korting op energiebelasting per aansluiting per jaar.">ⓘ</span></label>
+            <input type="number" id="ehpHeffing" step="0.01" value="0"></div>
+          <label class="rap-opt-lbl" style="margin-bottom:4px;margin-top:4px">
+            <input type="checkbox" id="ehpBtwOn"> Btw toepassen
+            <span class="tip-icon" data-tip="Btw wordt berekend over de totale kosten inclusief energiebelasting.">ⓘ</span>
+          </label>
+          <div class="fgr"><label>Btw (%)<span class="tip-icon" data-tip="Btw-percentage. Standaard 21% voor zakelijke afnemers.">ⓘ</span></label>
+            <input type="number" id="ehpBtwPct" step="1" value="21"></div>
+        </div>
+      </details>
       <div>
         <div class="st">Berekening</div>
         <button class="b dk" id="btnCalcEhp" style="width:100%">Bereken handelsplatform</button>
@@ -733,6 +745,16 @@
     <div class="fg2" style="margin-bottom:8px">
       <div class="fg"><label>Naam<span class="tip-icon" data-tip="Herkenbare naam van het bedrijf of de aansluiting.">ⓘ</span></label><input type="text" id="cN" placeholder="bijv. Koelcel A"></div>
       <div class="fg"><label>EAN<span class="tip-icon" data-tip="EAN-code van de aansluiting (18 cijfers). Te vinden op de energierekening of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cE" placeholder="18 cijfers"></div>
+    </div>
+    <div class="fg2" style="margin-bottom:8px">
+      <div class="fg"><label>Energiedrager<span class="tip-icon" data-tip="De energiedrager van deze aansluiting. Elektriciteit is standaard; gas en warmte zijn voor multicommodity-hubs. Bepaalt eenheid en analyse.">ⓘ</span></label>
+        <select id="cCarrier">
+          <option value="elektra" selected>Elektriciteit (kW)</option>
+          <option value="gas">Gas (m³)</option>
+          <option value="warmte">Warmte (kWh)</option>
+        </select>
+      </div>
+      <div class="fg"><label>Deelnemer (bedrijf)<span class="tip-icon" data-tip="Bedrijf waaronder deze aansluiting valt. Groepeert bv. een elektra- en gasaansluiting van hetzelfde bedrijf. Leeg = naam van de aansluiting.">ⓘ</span></label><input type="text" id="cDeelnemer" placeholder="leeg = naam aansluiting"></div>
     </div>
     <div class="fg" style="margin-bottom:8px">
       <label>Adres (voor kaart)<span class="tip-icon" data-tip="Adres van de aansluiting — gebruikt voor positionering op de kaart.">ⓘ</span></label>
@@ -1071,6 +1093,7 @@
 <script src="charts/kaart.js"></script>
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
+<script src="energiemodel.js"></script>
 <script src="ehp.js"></script>
 <script src="rapport_ehp.js"></script>
 <script src="financieel.js"></script>

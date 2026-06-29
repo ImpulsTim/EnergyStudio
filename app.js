@@ -4,6 +4,392 @@ var editId=null,pendData=null,pendName='',pType='static';
 var CH={},_piek=null,_jaarState=null,_jZoom=1;
 var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],allData:[],activeScenId:'basis',scenResults:{}};
 
+// --- Multicommodity ----------------------------------------------------------
+// Actieve energiedrager waarvoor het groepsprofiel berekend/getoond wordt.
+// Default 'elektra' → bestaand gedrag. De analyse draait per drager apart.
+var _activeCarrier='elektra';
+var _yearFilter=null; // null = alle jaren; anders 'YYYY'
+function _cNum(v,d){var n=(typeof v==='number')?v:parseFloat(v);return isNaN(n)?d:n;}
+
+// Distinct jaren (YYYY) uit genormaliseerde aansluit-data.
+function _collectYears(withData){
+  var ys={};
+  (withData||[]).forEach(function(c){(c.data||[]).forEach(function(d){if(d&&d.ts!=null)ys[String(d.ts).slice(0,4)]=1;});});
+  return Object.keys(ys).sort();
+}
+
+// Jaarkeuze-balk (dropdown). Toont alleen bij >1 jaar; default = alle jaren.
+function renderYearTabs(years){
+  var bar=document.getElementById('yearBar');
+  if(!bar)return;
+  if(!years||years.length<=1){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='flex';
+  var opts='<option value="">Alle jaren</option>'+years.map(function(y){
+    return '<option value="'+y+'"'+(_yearFilter===y?' selected':'')+'>'+y+'</option>';}).join('');
+  // Vergelijk-optie alleen per drager (niet in hub-modus).
+  if(_activeCarrier!=='hub')opts+='<option value="compare"'+(_yearFilter==='compare'?' selected':'')+'>📊 Jaren vergelijken</option>';
+  var hint=_yearFilter==='compare'?'Jaren naast elkaar':(_yearFilter?('Toont alleen '+_yearFilter):'Alle jaren samen');
+  bar.innerHTML='<span style="font-size:12px;color:#888;font-weight:700">Jaar:</span>'+
+    '<select id="yearSel" style="font-family:Barlow,sans-serif;font-size:13px;padding:5px 9px;border:1.5px solid #dce6e0;border-radius:8px;color:#444;cursor:pointer">'+opts+'</select>'+
+    '<span style="font-size:11px;color:#999">'+hint+'</span>';
+}
+
+// Toont/verbergt de vergelijk-panelen (overzicht + jaarprofiel).
+function _setComparePanels(on){
+  var oc=document.getElementById('ovCompare'),jc=document.getElementById('jaarCompare'),jn=document.getElementById('jaarNormal');
+  if(oc)oc.style.display=on?'':'none';
+  if(jc)jc.style.display=on?'':'none';
+  if(jn)jn.style.display=on?'none':'';
+}
+
+// Weergave-eenheid voor jaarvergelijking: gas → m³, anders MWh.
+function _cmpUnit(carrier){
+  if(carrier==='gas')return {div:(carrierDef('gas').calorisch||9.769),label:'m³'};
+  return {div:1000,label:'MWh'};
+}
+
+// Vergelijkt jaren: per jaar maand-/dagverbruik + totaal/%-verschil/CO₂(gas).
+function renderYearComparison(withData){
+  var carrier=_activeCarrier,cu=_cmpUnit(carrier);
+  var perYear={};
+  (withData||[]).forEach(function(c){(c.data||[]).forEach(function(d){
+    if(!d||d.ts==null||d.kw==null)return;
+    var ts=String(d.ts),y=ts.slice(0,4),mi=parseInt(ts.slice(5,7),10)-1,md=ts.slice(5,10);
+    var e=Math.max(0,d.kw)*0.25;
+    var py=perYear[y]||(perYear[y]={month:[0,0,0,0,0,0,0,0,0,0,0,0],day:{},total:0});
+    if(mi>=0&&mi<12)py.month[mi]+=e;
+    py.day[md]=(py.day[md]||0)+e;py.total+=e;
+  });});
+  var years=Object.keys(perYear).sort();
+  var isGas=carrier==='gas',co2f=carrierDef('gas').co2||1.788,cal=carrierDef('gas').calorisch||9.769;
+  var rows=years.map(function(y,idx){
+    var tot=perYear[y].total/cu.div;
+    var prevTot=idx>0?perYear[years[idx-1]].total:null;
+    var pct=(prevTot&&prevTot>0)?((perYear[y].total-prevTot)/prevTot*100):null;
+    var pctTxt=pct==null?'—':((pct>=0?'+':'')+pct.toFixed(1)+'%');
+    var pctColor=pct==null?'#888':(pct>0?'#c0392b':'#46962b');
+    var co2=isGas?((perYear[y].total/cal)*co2f/1000):null;
+    return '<tr><td><span class="dt" style="background:'+PAL[idx%PAL.length]+';display:inline-block"></span> <strong>'+y+'</strong></td>'+
+      '<td>'+fmt(tot)+' '+cu.label+'</td>'+
+      '<td style="color:'+pctColor+';font-weight:700">'+pctTxt+'</td>'+
+      (isGas?('<td>'+co2.toFixed(1)+' ton</td>'):'')+'</tr>';
+  }).join('');
+  var oc=document.getElementById('ovCompare');
+  if(oc)oc.innerHTML='<div class="cd"><div class="ct2"><div class="ac"></div>Jaarvergelijking — '+carrierDef(carrier).label+'</div>'+
+    '<table class="tbl"><thead><tr><th>Jaar</th><th>Totaal verbruik</th><th>% t.o.v. vorig jaar</th>'+(isGas?'<th>CO₂</th>':'')+'</tr></thead><tbody>'+
+    (years.length?rows:'<tr><td colspan="'+(isGas?4:3)+'" style="text-align:center;padding:14px;color:#aaa">Geen data</td></tr>')+'</tbody></table></div>';
+  // Maandgrafiek (één lijn per jaar) + legenda.
+  var legM='';years.forEach(function(y,idx){legM+='<span class="li"><span class="ld" style="background:'+PAL[idx%PAL.length]+'"></span>'+y+'</span>';});
+  var legEl=document.getElementById('yrLegM');if(legEl)legEl.innerHTML=legM;
+  dC('yrMaand');
+  CH['yrMaand']=new Chart(document.getElementById('cYrMaand'),{type:'line',
+    data:{labels:MND,datasets:years.map(function(y,idx){return {label:y,data:perYear[y].month.map(function(v){return +(v/cu.div).toFixed(2);}),borderColor:PAL[idx%PAL.length],backgroundColor:'transparent',fill:false,tension:.3,pointRadius:2,borderWidth:2};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax(cu.label)}}});
+  // Daggrafiek (x = MM-DD-unie, één lijn per jaar).
+  var mdSet={};years.forEach(function(y){Object.keys(perYear[y].day).forEach(function(md){mdSet[md]=1;});});
+  var mds=Object.keys(mdSet).sort();
+  dC('yrDag');
+  CH['yrDag']=new Chart(document.getElementById('cYrDag'),{type:'line',
+    data:{labels:mds,datasets:years.map(function(y,idx){return {label:y,data:mds.map(function(md){var v=perYear[y].day[md];return v==null?null:+(v/cu.div).toFixed(3);}),borderColor:PAL[idx%PAL.length],backgroundColor:'transparent',fill:false,tension:.2,pointRadius:0,borderWidth:1.3,spanGaps:true};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:Object.assign(ax(),{ticks:{color:'#999',font:{family:'Barlow',size:10},maxTicksLimit:12,callback:function(v){var md=this.getLabelForValue(v);return (md&&md.slice(3)==='01')?MND[parseInt(md.slice(0,2),10)-1]:'';}},grid:{display:false}}),y:ax(cu.label+'/dag')}}});
+}
+
+// Dragers die in het actieve project voorkomen, in vaste volgorde.
+function projectCarriers(){
+  var p=ap();if(!p||!p.companies)return ['elektra'];
+  var present={};p.companies.forEach(function(c){present[c.carrier||'elektra']=1;});
+  var order=['elektra','gas','warmte'].filter(function(k){return present[k];});
+  return order.length?order:['elektra'];
+}
+
+function _fmtLocalTs(ms){
+  var d=new Date(ms);function p(n){return String(n).padStart(2,'0');}
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes());
+}
+
+// Normaliseert ruwe meetdata van een aansluiting naar een kwartier-raster met
+// kW-equivalent (gemiddeld vermogen), zodat de bestaande charts/KPI's (die met
+// kWh = kw*0.25 rekenen) energetisch correcte waarden tonen, ongeacht het
+// bron-interval.
+//   - elektra: ONGEWIJZIGD doorgegeven ({ts,kw}).
+//   - gas:     m³/interval → kWh (×calorisch, enkelrichting) → gem. kW; interval
+//              uitgesplitst naar kwartieren (uurwaarde → 4 kwartieren).
+//   - warmte:  kWh/interval → gem. kW (bidirectioneel); idem uitgesplitst.
+function _carrierSeries(c,raw){
+  var carrier=(c&&c.carrier)||'elektra';
+  if(carrier==='elektra'){
+    // Normaliseer timestamps on-the-fly zodat bestaande IndexedDB-data met
+    // wisselende formaten (spatie vs T, DD.MM vs YYYY-MM) toch overlapt.
+    var normFn=(typeof _normTs==='function')?_normTs:(typeof _normPriceTs==='function')?_normPriceTs:null;
+    if(!normFn)return raw||[];
+    return (raw||[]).map(function(d){return d&&d.ts?{ts:normFn(d.ts),kw:d.kw}:d;});
+  }
+  raw=(raw||[]).filter(function(d){return d&&d.ts!=null;});
+  if(!raw.length)return [];
+  var def=carrierDef(carrier);
+  var cal=(carrier==='gas')?_cNum(c.calorisch,def.calorisch):1; // warmte: val al in kWh
+  // Interval bepalen uit de eerste twee timestamps (ms); default kwartier.
+  var intervalMs=900000;
+  if(raw.length>=2){
+    var t0=new Date(raw[0].ts).getTime(),t1=new Date(raw[1].ts).getTime();
+    if(t1>t0)intervalMs=t1-t0;
+  }
+  var q=Math.max(1,Math.round(intervalMs/900000)); // aantal kwartier-slots per record
+  var intervalH=intervalMs/3600000;
+  var bidir=def.bidir;
+  var out=[];
+  for(var i=0;i<raw.length;i++){
+    var v=_cNum(raw[i].val!=null?raw[i].val:raw[i].kw,0);
+    var energy=v*cal;                 // kWh over het interval
+    if(!bidir&&energy<0)energy=0;      // enkelrichting (gas)
+    var kw=intervalH>0?energy/intervalH:0; // gem. vermogen (kW-equivalent)
+    var baseMs=new Date(raw[i].ts).getTime();
+    if(isNaN(baseMs))continue;
+    for(var s=0;s<q;s++)out.push({ts:_fmtLocalTs(baseMs+s*900000),kw:kw});
+  }
+  return out;
+}
+
+// Rendert de drager-keuzebalk boven de tabs (alleen zichtbaar bij >1 drager).
+function renderCarrierTabs(carriers){
+  var bar=document.getElementById('carrierBar');
+  if(!bar)return;
+  if(!carriers||carriers.length<=1){bar.style.display='none';bar.innerHTML='';return;}
+  bar.style.display='flex';
+  function _cbtn(k,label,kleur){
+    var on=k===_activeCarrier;
+    var st='font-family:Barlow,sans-serif;font-weight:700;font-size:12px;padding:6px 14px;border-radius:14px;cursor:pointer;border:1.5px solid '+kleur+';'+
+      (on?('background:'+kleur+';color:#fff;'):('background:#fff;color:'+kleur+';'));
+    return '<button data-carrier="'+k+'" style="'+st+'">'+label+'</button>';
+  }
+  var html=carriers.map(function(k){var def=carrierDef(k);return _cbtn(k,def.label+' <span style="opacity:.7">('+def.unit+')</span>',def.kleur);}).join('');
+  html+=_cbtn('hub','⚡ Hub (alle dragers)','#242b38');
+  var lbl=_activeCarrier==='hub'?'Alle energiestromen door de hub':('Analyse per drager — '+carrierDef(_activeCarrier).label);
+  bar.innerHTML=html+'<span style="font-size:11px;color:#999;margin-left:4px">'+lbl+'</span>';
+}
+
+// Weergavecontext per drager: schaal + as-eenheid + GTV-lijnen tonen?
+// Voor gas worden de (kW-equivalente) plotwaarden ×(1/calorische waarde) → m³/h.
+var _carrierView={carrier:'elektra',unit:'kW',scale:1,showGtv:true};
+function setCarrierView(){
+  if(_activeCarrier==='gas'){
+    var cal=carrierDef('gas').calorisch||9.769;
+    _carrierView={carrier:'gas',unit:'m³/h',scale:1/cal,showGtv:false};
+  }else if(_activeCarrier==='warmte'){
+    _carrierView={carrier:'warmte',unit:'kW',scale:1,showGtv:false};
+  }else{
+    _carrierView={carrier:'elektra',unit:'kW',scale:1,showGtv:true};
+  }
+}
+
+// Tabs die per drager zichtbaar zijn (null = alle). Gas/warmte: geen GTV-overschrijding,
+// elektra-piekanalyse of scenario-vergelijking.
+var CARRIER_TABS={
+  gas:['tOv','tJaar','tWeek','tGelijkt','tKost','tKaart'],
+  warmte:['tOv','tJaar','tWeek','tGelijkt','tKost','tKaart'],
+  hub:['tHub']
+};
+function applyTabVisibility(){
+  // Vergelijkmodus (per drager): alleen Overzicht + Jaarprofiel.
+  var vis=(_yearFilter==='compare'&&_activeCarrier!=='hub')?['tOv','tJaar']:(CARRIER_TABS[_activeCarrier]||null);
+  var tabs=document.querySelectorAll('.tabs .tab');
+  var activeHidden=false;
+  tabs.forEach(function(btn){
+    var id=btn.getAttribute('data-tab');
+    // De Energiehub-tab verschijnt uitsluitend in hub-modus; verder volgt de drager-set (null = alle).
+    var show=(id==='tHub')?(_activeCarrier==='hub'):(!vis||vis.indexOf(id)!==-1);
+    btn.style.display=show?'':'none';
+    if(!show&&btn.classList.contains('on'))activeHidden=true;
+  });
+  var sep=document.querySelector('.tabs .tab-sep');
+  if(sep)sep.style.display=vis?'none':'';
+  // Verborgen actieve tab → naar de eerste zichtbare tab (Overzicht voor gas, Energiehub in hub-modus).
+  if(activeHidden){
+    var firstVis=null;
+    tabs.forEach(function(b){if(!firstVis&&b.style.display!=='none')firstVis=b;});
+    if(firstVis){
+      document.querySelectorAll('.pn').forEach(function(p){p.classList.remove('on');});
+      document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('on');});
+      var pid=firstVis.getAttribute('data-tab');
+      var pn=document.getElementById(pid);if(pn)pn.classList.add('on');
+      firstVis.classList.add('on');
+    }
+  }
+}
+
+// Gas-overzichtspagina (#ovGas): m³ totaal/maand, energie (kWh+GJ), CO₂, baseload vs seizoen.
+function _kbCard(l,v,u){return '<div class="kb"><div class="kl">'+l+'</div><div class="kv">'+v+'</div><div class="ku">'+u+'</div></div>';}
+function renderGasOverzicht(withData,allTs,grpKw,perKw){
+  var host=document.getElementById('ovGas');if(!host)return;
+  var def=carrierDef('gas');var cal=def.calorisch||9.769;var co2f=def.co2||1.788;
+  // Hub-totaal per maand (kWh → m³).
+  var mMap={};
+  for(var i=0;i<allTs.length;i++){var mn=String(allTs[i]).slice(0,7);mMap[mn]=(mMap[mn]||0)+Math.max(0,grpKw[i])*0.25;}
+  var months=Object.keys(mMap).sort();
+  var monthM3=months.map(function(m){return mMap[m]/cal;});
+  var totKwh=months.reduce(function(s,m){return s+mMap[m];},0);
+  var totM3=totKwh/cal,totGJ=totKwh/277.778,co2ton=totM3*co2f/1000;
+  var nM=months.length||1,gemM3=totM3/nM;
+  var maxIdx=monthM3.length?monthM3.reduce(function(b,v,i,a){return v>a[b]?i:b;},0):0;
+  // Baseload = laagste maand × aantal maanden (proces); rest = seizoen (verwarming).
+  var baseMonthly=monthM3.length?Math.min.apply(null,monthM3):0;
+  var baseYear=baseMonthly*nM,seizoen=Math.max(0,totM3-baseYear);
+  var seizPct=totM3>0?seizoen/totM3*100:0;
+  var perComp=withData.map(function(c,ci){
+    var kwh=0;(perKw[ci]||[]).forEach(function(kw){if(kw>0)kwh+=kw*0.25;});
+    var ccal=_cNum(c.calorisch,cal),m3=kwh/ccal;
+    return {name:c.name,deelnemer:c.deelnemer||c.name,m3:m3,kwh:kwh,co2:m3*co2f};
+  });
+  host.innerHTML=
+    '<div class="kg">'+
+      _kbCard('Totaal gas',fmt(totM3),'m³')+
+      _kbCard('Energie',fmt(totKwh),'kWh · '+totGJ.toFixed(1)+' GJ')+
+      _kbCard('Gemiddeld/maand',fmt(gemM3),'m³')+
+      _kbCard('Hoogste maand',fmt(monthM3[maxIdx]||0),(months.length?mndLabel(months,months[maxIdx]):'—')+' · m³')+
+      _kbCard('CO₂-uitstoot',co2ton.toFixed(1),'ton CO₂ (×'+co2f+' kg/m³)')+
+      _kbCard('Verwarming (seizoen)',seizPct.toFixed(0)+'%',fmt(seizoen)+' m³ · baseload '+fmt(baseYear)+' m³')+
+    '</div>'+
+    '<div class="cd"><div class="ct2"><div class="ac" style="background:'+def.kleur+'"></div>Gasverbruik per maand (hub-totaal)</div>'+
+      '<div class="cw" style="height:300px"><canvas id="cGasMaand"></canvas></div></div>'+
+    '<div class="cd"><div class="ct2"><div class="ac" style="background:'+def.kleur+'"></div>Per aansluiting</div>'+
+      '<table class="tbl"><thead><tr><th>Aansluiting</th><th>Deelnemer</th><th>m³</th><th>kWh</th><th>CO₂ (ton)</th></tr></thead><tbody>'+
+      (perComp.length?perComp.map(function(d){return '<tr><td><strong>'+d.name+'</strong></td><td>'+d.deelnemer+'</td><td>'+fmt(d.m3)+'</td><td>'+fmt(d.kwh)+'</td><td>'+(d.co2/1000).toFixed(2)+'</td></tr>';}).join(''):'<tr><td colspan="5" style="text-align:center;padding:14px;color:#aaa">Geen gasaansluitingen</td></tr>')+
+      '</tbody></table></div>';
+  dC('gasMaand');
+  CH['gasMaand']=new Chart(document.getElementById('cGasMaand'),{type:'bar',
+    data:{labels:months.map(function(m){return mndLabel(months,m);}),datasets:[{label:'m³',data:monthM3.map(function(v){return Math.round(v);}),backgroundColor:def.kleur,borderRadius:5}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax('m³')}}});
+}
+
+// --- Centrale hub-weergave (cross-carrier energiestromen) --------------------
+function _hubNodeColor(name){
+  if(/opwek|elektra|teruglever/i.test(name))return '#46962b';
+  if(/gas/i.test(name))return '#e67e22';
+  if(/warmte/i.test(name))return '#c0392b';
+  return '#8898a8';
+}
+
+// Aggregeert per drager over álle aansluitingen: vraag, opwek, intern gematcht
+// (Σ per tijdstap min(Σprod,Σvraag)), net-import/-export en maand-rollup (kWh).
+async function computeHubData(p){
+  var carriers=projectCarriers();
+  var perCarrier={},yearsSet={};
+  for(var ci=0;ci<carriers.length;ci++){
+    var car=carriers[ci];
+    var cos=p.companies.filter(function(c){return (c.carrier||'elektra')===car;});
+    var demByTs={},prodByTs={};
+    for(var i=0;i<cos.length;i++){
+      var raw=await dbGet('ts',cos[i].id)||[];
+      if(!raw.length&&car==='elektra')raw=genDemo(i);
+      var series=_carrierSeries(cos[i],raw);
+      for(var j=0;j<series.length;j++){
+        var d=series[j];if(!d||d.ts==null||d.kw==null)continue;
+        yearsSet[String(d.ts).slice(0,4)]=1;                       // beschikbare jaren (vóór filter)
+        if(_yearFilter&&String(d.ts).slice(0,4)!==_yearFilter)continue; // jaarfilter
+        if(d.kw>0)demByTs[d.ts]=(demByTs[d.ts]||0)+d.kw;
+        else if(d.kw<0)prodByTs[d.ts]=(prodByTs[d.ts]||0)+(-d.kw);
+      }
+    }
+    var afnameKwh=0,opwekKwh=0,internKwh=0,monthKwh={},keys={};
+    Object.keys(demByTs).forEach(function(t){keys[t]=1;});Object.keys(prodByTs).forEach(function(t){keys[t]=1;});
+    Object.keys(keys).forEach(function(ts){
+      var dem=demByTs[ts]||0,prod=prodByTs[ts]||0;
+      afnameKwh+=dem*0.25;opwekKwh+=prod*0.25;internKwh+=Math.min(dem,prod)*0.25;
+      var mn=String(ts).slice(0,7);monthKwh[mn]=(monthKwh[mn]||0)+dem*0.25;
+    });
+    perCarrier[car]={afnameKwh:afnameKwh,opwekKwh:opwekKwh,internMatchedKwh:internKwh,
+      netImportKwh:Math.max(0,afnameKwh-internKwh),netExportKwh:Math.max(0,opwekKwh-internKwh),
+      monthKwh:monthKwh,nConn:cos.length};
+  }
+  return {carriers:carriers,perCarrier:perCarrier,years:Object.keys(yearsSet).sort()};
+}
+
+async function renderHub(p){
+  var host=document.getElementById('tHub');if(!host)return;
+  var data=await computeHubData(p);
+  // Jaarfilter: ongeldig jaar (niet in de hub-jaren) → terug naar alle jaren en herbereken.
+  if(_yearFilter&&(data.years||[]).indexOf(_yearFilter)===-1){_yearFilter=null;data=await computeHubData(p);}
+  renderYearTabs(data.years||[]);
+  var carriers=data.carriers,pc=data.perCarrier;
+  var MWH=function(k){return +(k/1000).toFixed(2);};
+  var totDemand=carriers.reduce(function(s,c){return s+pc[c].afnameKwh;},0);
+  var internTot=carriers.reduce(function(s,c){return s+pc[c].internMatchedKwh;},0);
+  var netImpTot=carriers.reduce(function(s,c){return s+pc[c].netImportKwh;},0);
+  var zelfvz=totDemand>0?internTot/totDemand*100:0;
+  // CO₂: gas (per m³) + elektra net-import (netstroomfactor).
+  var gd=carrierDef('gas');
+  var co2gasKg=pc.gas?(pc.gas.afnameKwh/(gd.calorisch||9.769))*(gd.co2||1.788):0;
+  var co2elekKg=pc.elektra?pc.elektra.netImportKwh*((typeof HUB!=='undefined'?HUB.gridCo2:0.27)):0;
+  var co2ton=(co2gasKg+co2elekKg)/1000;
+  // Electrificatiepotentieel: verwarmingsdeel gas (boven baseload) via warmtepomp (COP).
+  var cop=(typeof HUB!=='undefined'?HUB.cop:3),gasHeatKwh=0;
+  if(pc.gas){
+    var gm=Object.keys(pc.gas.monthKwh).map(function(m){return pc.gas.monthKwh[m];});
+    var nm=gm.length||1,baseMonthly=gm.length?Math.min.apply(null,gm):0;
+    gasHeatKwh=Math.max(0,pc.gas.afnameKwh-baseMonthly*nm);
+  }
+  var elekNodig=gasHeatKwh/cop,overschot=pc.elektra?pc.elektra.netExportKwh:0;
+  var dekkPct=elekNodig>0?Math.min(100,overschot/elekNodig*100):0;
+  // Sankey-flows (MWh, alleen >1 MWh tonen).
+  var flows=[];
+  if(pc.elektra){var e=pc.elektra;
+    if(e.netImportKwh>1000)flows.push({from:'Net elektra',to:'Elektra-vraag',flow:MWH(e.netImportKwh)});
+    if(e.internMatchedKwh>1000)flows.push({from:'Eigen opwek',to:'Elektra-vraag',flow:MWH(e.internMatchedKwh)});
+    if(e.netExportKwh>1000)flows.push({from:'Eigen opwek',to:'Teruglevering net',flow:MWH(e.netExportKwh)});
+  }
+  if(pc.gas&&pc.gas.afnameKwh>1000)flows.push({from:'Gasnet',to:'Gas-vraag',flow:MWH(pc.gas.afnameKwh)});
+  if(pc.warmte){var w=pc.warmte;
+    if(w.internMatchedKwh>1000)flows.push({from:'Warmtebron',to:'Warmte-vraag',flow:MWH(w.internMatchedKwh)});
+    if(w.netImportKwh>1000)flows.push({from:'Externe warmte/ketel',to:'Warmte-vraag',flow:MWH(w.netImportKwh)});
+  }
+  var mset={};carriers.forEach(function(c){Object.keys(pc[c].monthKwh).forEach(function(m){mset[m]=1;});});
+  var months=Object.keys(mset).sort();
+  var balansRows=carriers.map(function(c){var x=pc[c],def=carrierDef(c);
+    return '<tr><td><span class="dt" style="background:'+def.kleur+';display:inline-block"></span> '+def.label+'</td><td>'+fmt(MWH(x.afnameKwh))+'</td><td>'+fmt(MWH(x.opwekKwh))+'</td><td>'+fmt(MWH(x.internMatchedKwh))+'</td><td>'+fmt(MWH(x.netImportKwh))+'</td><td>'+fmt(MWH(x.netExportKwh))+'</td></tr>';}).join('');
+  host.innerHTML=
+    '<div class="kg">'+
+      _kbCard('Totale energievraag',fmt(MWH(totDemand)),'MWh (alle dragers)')+
+      _kbCard('Intern gedekt',fmt(MWH(internTot)),'MWh eigen opwek/uitwisseling')+
+      _kbCard('Net-import',fmt(MWH(netImpTot)),'MWh van buiten de hub')+
+      _kbCard('Zelfvoorzieningsgraad',zelfvz.toFixed(0)+'%','intern / totale vraag')+
+      _kbCard('CO₂-voetafdruk',co2ton.toFixed(1),'ton CO₂ (gas + netstroom)')+
+    '</div>'+
+    '<div class="cd"><div class="ct2"><div class="ac"></div>Energiestromen door de hub (MWh)</div>'+
+      '<div class="ib2" style="margin-bottom:6px">Bron → bestemming, breedte = MWh over de periode. Cross-carrier koppeling (gas→warmte, elektra→warmte) volgt met conversie-assets (fase 2).</div>'+
+      '<div class="cw" style="height:380px"><canvas id="cHubSankey"></canvas></div></div>'+
+    '<div class="cd"><div class="ct2"><div class="ac"></div>Energiebalans per drager (MWh)</div>'+
+      '<table class="tbl"><thead><tr><th>Drager</th><th>Vraag</th><th>Opwek</th><th>Intern</th><th>Net-import</th><th>Teruglev.</th></tr></thead><tbody>'+balansRows+'</tbody></table></div>'+
+    '<div class="cd"><div class="ct2"><div class="ac"></div>Energie per maand, gestapeld per drager (MWh)</div>'+
+      '<div class="cw" style="height:300px"><canvas id="cHubMaand"></canvas></div></div>'+
+    '<div class="cd"><div class="ct2"><div class="ac"></div>Electrificatiepotentieel (indicatief)</div>'+
+      '<div class="ib2" style="margin-bottom:6px">Verwarmingsdeel gas (seizoen boven baseload) omgezet via een warmtepomp met COP '+cop+'. Indicatief — om de koppelkans te schatten, niet als ontwerp.</div>'+
+      '<div class="kg">'+
+        _kbCard('Verwarming via gas',fmt(MWH(gasHeatKwh)),'MWh (seizoensdeel)')+
+        _kbCard('Elektra nodig (COP '+cop+')',fmt(MWH(elekNodig)),'MWh')+
+        _kbCard('Hub-overschot elektra',fmt(MWH(overschot)),'MWh teruglevering')+
+        _kbCard('Dekking uit overschot',dekkPct.toFixed(0)+'%','van de warmtepompvraag')+
+      '</div></div>';
+  dC('hubSankey');
+  try{
+    CH['hubSankey']=new Chart(document.getElementById('cHubSankey'),{type:'sankey',data:{datasets:[{
+      data:flows,
+      colorFrom:function(c){return _hubNodeColor((c.raw&&c.raw.from)||'');},
+      colorTo:function(c){return _hubNodeColor((c.raw&&c.raw.to)||'');},
+      colorMode:'gradient',borderWidth:0,
+      font:{family:'Barlow',size:12}
+    }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+  }catch(e){
+    console.error('Sankey:',e);
+    var sc=document.getElementById('cHubSankey');
+    if(sc&&sc.parentElement)sc.parentElement.innerHTML='<div class="ib2" style="padding:24px;text-align:center;color:#888">Sankey-grafiek niet beschikbaar (plugin niet geladen). De energiebalans-tabel hieronder toont dezelfde stromen.</div>';
+  }
+  dC('hubMaand');
+  CH['hubMaand']=new Chart(document.getElementById('cHubMaand'),{type:'bar',
+    data:{labels:months.map(function(m){return mndLabel(months,m);}),datasets:carriers.map(function(c){var def=carrierDef(c);
+      return {label:def.label,data:months.map(function(m){return +(((pc[c].monthKwh[m]||0))/1000).toFixed(2);}),backgroundColor:def.kleur,borderRadius:4,stack:'mwh'};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:Object.assign(ax(),{stacked:true,grid:{display:false}}),y:Object.assign(ax('MWh'),{stacked:true})}}});
+}
+
 // Hulpfuncties
 function uid(){return Math.random().toString(36).slice(2,10);}
 function tipIcon(t){return '<span class="tip-icon" data-tip="'+t.replace(/"/g,'&quot;')+'">ⓘ</span>';}
@@ -175,6 +561,7 @@ function openAddComp(){
   document.getElementById('mCT').textContent='Aansluiting toevoegen';
   document.getElementById('btnDelComp').style.display='none';
   document.getElementById('cN').value='';document.getElementById('cE').value='';
+  document.getElementById('cCarrier').value='elektra';document.getElementById('cDeelnemer').value='';
   document.getElementById('cAdres').value='';document.getElementById('cLat').value='';document.getElementById('cLng').value='';
   document.getElementById('cKva').value='';document.getElementById('cZek').value='';
   document.getElementById('cCat').value='Grootverbruik';
@@ -195,6 +582,7 @@ async function openEditComp(id){
   document.getElementById('mCT').textContent='Aansluiting bewerken';
   document.getElementById('btnDelComp').style.display='';
   document.getElementById('cN').value=c.name;document.getElementById('cE').value=c.ean||'';
+  document.getElementById('cCarrier').value=c.carrier||'elektra';document.getElementById('cDeelnemer').value=c.deelnemer||'';
   document.getElementById('cAdres').value=c.adres||'';
   document.getElementById('cLat').value=c.lat!=null?c.lat:'';document.getElementById('cLng').value=c.lng!=null?c.lng:'';
   document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cZek').value=c.zekering||'';
@@ -214,7 +602,10 @@ async function saveComp(){
   var p=ap();var id=editId||uid();
   var _cLat=parseFloat(document.getElementById('cLat').value);
   var _cLng=parseFloat(document.getElementById('cLng').value);
+  var _deeln=document.getElementById('cDeelnemer').value.trim();
   var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),
+    carrier:document.getElementById('cCarrier').value||'elektra',
+    deelnemer:_deeln||name,
     adres:document.getElementById('cAdres').value.trim(),
     lat:isNaN(_cLat)?null:_cLat,lng:isNaN(_cLng)?null:_cLng,
     category:document.getElementById('cCat').value,
@@ -249,12 +640,49 @@ function setPT(type){
 async function runAnalysis(){
   var p=ap();
   if(!p||!p.companies.length){notify('Voeg eerst aansluitingen toe',false);return;}
-  // Laad data voor ALLE aansluitingen — basis = altijd de volledige groep
+  // Multicommodity: analyse draait per drager. Bepaal de actieve drager en toon de keuzebalk.
+  var carriers=projectCarriers();
+  if(_activeCarrier!=='hub'&&carriers.indexOf(_activeCarrier)===-1)_activeCarrier=carriers[0]||'elektra';
+  if(_activeCarrier==='hub'&&_yearFilter==='compare')_yearFilter=null; // vergelijken bestaat niet in hub-modus
+  renderCarrierTabs(carriers);
+  setCarrierView();      // schaal/eenheid/GTV-lijnen voor de grafieken
+  applyTabVisibility();  // drager-afhankelijke tabs (gas: geen overschr./piek/vergelijking)
+  // Hub-modus: cross-carrier energiestromen i.p.v. de per-drager chartketen.
+  if(_activeCarrier==='hub'){
+    try{await renderHub(p);}catch(e){console.error('renderHub:',e);notify('Hub-weergave mislukt: '+e.message,false);}
+    var dlbH=document.getElementById('btnDlGroep');if(dlbH)dlbH.disabled=true;
+    return;
+  }
+  // Aansluitingen van de actieve drager (elektra-only project → alle aansluitingen, ongewijzigd).
+  var carCos=p.companies.filter(function(c){return (c.carrier||'elektra')===_activeCarrier;});
+  if(!carCos.length){notify('Geen aansluitingen voor drager: '+carrierDef(_activeCarrier).label,false);return;}
+  // Laad + normaliseer data per aansluiting (elektra wordt 1-op-1 doorgegeven).
   var withData=[];
-  for(var i=0;i<p.companies.length;i++){
-    var d=await dbGet('ts',p.companies[i].id)||[];
-    if(!d.length){d=genDemo(withData.length);notify('Demodata voor: '+p.companies[i].name);}
-    withData.push(Object.assign({},p.companies[i],{data:d}));
+  for(var i=0;i<carCos.length;i++){
+    var d=await dbGet('ts',carCos[i].id)||[];
+    if(!d.length&&_activeCarrier==='elektra'){d=genDemo(withData.length);notify('Demodata voor: '+carCos[i].name);}
+    withData.push(Object.assign({},carCos[i],{data:_carrierSeries(carCos[i],d)}));
+  }
+  // Jaarfilter / vergelijkmodus: bepaal beschikbare jaren en toon de balk.
+  var years=_collectYears(withData);
+  if(years.length<=1)_yearFilter=null; // één jaar → geen filter/vergelijking mogelijk
+  if(_yearFilter&&_yearFilter!=='compare'&&years.indexOf(_yearFilter)===-1)_yearFilter=null;
+  renderYearTabs(years);
+  applyTabVisibility(); // _yearFilter kan net gewijzigd zijn → tabs opnieuw afstemmen
+  // Vergelijkmodus: render jaarvergelijking (overzicht + jaarprofiel) en stop.
+  if(_yearFilter==='compare'){
+    resetCH();
+    _setComparePanels(true);
+    var oeC=document.getElementById('ovElektra'),ogC=document.getElementById('ovGas');
+    if(oeC)oeC.style.display='none';if(ogC)ogC.style.display='none';
+    try{renderYearComparison(withData);}catch(e){console.error('renderYearComparison:',e);notify('Vergelijking mislukt: '+e.message,false);}
+    var dlbC=document.getElementById('btnDlGroep');if(dlbC)dlbC.disabled=true;
+    notify('Jaren vergeleken ('+carrierDef(_activeCarrier).label+')');
+    return;
+  }
+  _setComparePanels(false);
+  if(_yearFilter){
+    withData=withData.map(function(c){return Object.assign({},c,{data:(c.data||[]).filter(function(d){return String(d.ts).slice(0,4)===_yearFilter;})});});
   }
   _optim.allData=withData;
   resetCH();
@@ -284,10 +712,20 @@ async function runAnalysis(){
   _optim.baseKw=grpKw.slice();_optim.allTs=allTs.slice();
   _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.avgKm=totKm/Math.max(1,withData.length);
   _optim.perKw=perKw;_optim.withData=withData;
-  updateKpisForRes({grpKw:grpKw,withData:withData,gtvA:gtvA,gtvT:gtvT});
-  try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}
+  // Overzicht: gas krijgt een eigen pagina (m³/maand/CO₂/baseload); elektra/warmte de bestaande KPI's.
+  var ovEl=document.getElementById('ovElektra'),ovGas=document.getElementById('ovGas');
+  if(_activeCarrier==='gas'){
+    if(ovEl)ovEl.style.display='none';if(ovGas)ovGas.style.display='';
+    try{renderGasOverzicht(withData,allTs,grpKw,perKw);}catch(e){console.error('renderGasOverzicht:',e);}
+  }else{
+    if(ovGas)ovGas.style.display='none';if(ovEl)ovEl.style.display='';
+    updateKpisForRes({grpKw:grpKw,withData:withData,gtvA:gtvA,gtvT:gtvT});
+  }
+  // Scenario's (zon/batterij) zijn elektra-specifiek — alleen voor de elektra-drager.
+  if(_activeCarrier==='elektra'){try{recalcAllScenarios();}catch(e){console.error('recalcAllScenarios:',e);}}
+  else{try{document.getElementById('scenBanner').style.display='none';}catch(e){}}
   try{renderKaart();}catch(e){}
-  notify('Analyse klaar — '+allTs.length+' overlappende kwartierwaarden');
+  notify('Analyse klaar ('+carrierDef(_activeCarrier).label+') — '+allTs.length+' overlappende waarden');
   var dlBtn=document.getElementById('btnDlGroep');if(dlBtn)dlBtn.disabled=false;
 }
 
@@ -542,6 +980,20 @@ document.addEventListener('DOMContentLoaded',function(){
   // Zijbalk
   document.getElementById('btnAddComp').addEventListener('click',openAddComp);
   document.getElementById('btnRun').addEventListener('click',runAnalysis);
+  // Drager-keuze (multicommodity): wissel actieve drager en herbereken.
+  var carrierBarEl=document.getElementById('carrierBar');
+  if(carrierBarEl)carrierBarEl.addEventListener('click',function(e){
+    var b=e.target.closest('[data-carrier]');if(!b)return;
+    var k=b.getAttribute('data-carrier');
+    if(k===_activeCarrier)return;
+    _activeCarrier=k;resetCH();runAnalysis();
+  });
+  // Jaarfilter (multicommodity/meerjarig): wissel actief jaar en herbereken.
+  var yearBarEl=document.getElementById('yearBar');
+  if(yearBarEl)yearBarEl.addEventListener('change',function(e){
+    var sel=e.target.closest('#yearSel');if(!sel)return;
+    _yearFilter=sel.value||null;resetCH();runAnalysis();
+  });
   document.getElementById('btnDlGroep').addEventListener('click',doDownloadGroepsprofiel);
   // Gedelegeerd: bewerk-knoppen in zijbalk/tabel
   document.getElementById('cList').addEventListener('click',function(e){
