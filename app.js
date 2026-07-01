@@ -539,12 +539,41 @@ function showM(id){document.getElementById(id).style.display='flex';}
 function hideM(id){document.getElementById(id).style.display='none';}
 
 // Projectbeheer
+function openNewProj(){
+  document.getElementById('mProjTitle').textContent='Nieuw project';
+  document.getElementById('btnCreateProj').style.display='';
+  document.getElementById('btnRenameProjSave').style.display='none';
+  document.getElementById('mPN').value='';
+  document.getElementById('mPD').value='';
+  showM('mProj');
+  document.getElementById('mPN').focus();
+}
+
+function openRenameProj(){
+  var p=ap();if(!p)return;
+  document.getElementById('mProjTitle').textContent='Project hernoemen';
+  document.getElementById('btnCreateProj').style.display='none';
+  document.getElementById('btnRenameProjSave').style.display='';
+  document.getElementById('mPN').value=p.name;
+  document.getElementById('mPD').value=p.desc||'';
+  showM('mProj');
+  document.getElementById('mPN').focus();
+}
+
 function createProj(){
   var name=document.getElementById('mPN').value.trim();
   if(!name){notify('Vul een naam in',false);return;}
   var id=uid();
   S.projects.push({id:id,name:name,desc:document.getElementById('mPD').value.trim(),companies:[]});
   S.activeId=id;hideM('mProj');saveMeta();renderAll();notify('Project "'+name+'" aangemaakt');
+}
+
+function renameProj(){
+  var p=ap();if(!p)return;
+  var name=document.getElementById('mPN').value.trim();
+  if(!name){notify('Vul een naam in',false);return;}
+  p.name=name;p.desc=document.getElementById('mPD').value.trim();
+  hideM('mProj');saveMeta();renderAll();notify('Project hernoemd naar "'+name+'"');
 }
 
 function delProj(){
@@ -972,7 +1001,8 @@ document.addEventListener('DOMContentLoaded',function(){
     resetCH();renderAll();
   });
   // Header knoppen
-  document.getElementById('btnNieuwProj').addEventListener('click',function(){showM('mProj');});
+  document.getElementById('btnNieuwProj').addEventListener('click',openNewProj);
+  document.getElementById('btnRenameProj').addEventListener('click',openRenameProj);
   document.getElementById('btnDelProj').addEventListener('click',delProj);
   document.getElementById('btnRapport').addEventListener('click',openRapportModal);
   document.getElementById('btnExpData').addEventListener('click',openExportModal);
@@ -1033,6 +1063,7 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   // Modal knoppen
   document.getElementById('btnCreateProj').addEventListener('click',createProj);
+  document.getElementById('btnRenameProjSave').addEventListener('click',renameProj);
   document.getElementById('btnSaveComp').addEventListener('click',saveComp);
   document.getElementById('btnDelComp').addEventListener('click',deleteComp);
   document.getElementById('btnDownloadPdf').addEventListener('click',downloadRapportPDF);

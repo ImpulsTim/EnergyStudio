@@ -165,5 +165,7 @@ function parseJSON(json){
       }
     }
   }
-  return Object.keys(map).sort().map(function(ts){return{ts:ts,kw:Math.round(map[ts]*1000)/1000};});
+  // Opslag op 1e-6 kW (µW): de bron levert 8 decimalen; grovere afronding (1e-3) stapelt
+  // over 35.040 kwartieren op tot ~0,01 kWh/jaar en haalt de Mark-tolerantie (0,001 kWh) niet.
+  return Object.keys(map).sort().map(function(ts){return{ts:ts,kw:Math.round(map[ts]*1e6)/1e6};});
 }

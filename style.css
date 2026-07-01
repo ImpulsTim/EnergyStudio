@@ -215,29 +215,49 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 .verg-empty .big{font-size:32px;margin-bottom:8px}
 .ac-verg{background:#242b38}
 /* Financieel overzicht tabellen */
-.ehp-ov-blok{margin-bottom:20px}
-.ehp-ov-blok-hdr{background:#2c7fb8;color:#fff;padding:6px 12px;font-weight:600;border-radius:4px 4px 0 0;font-size:13px}
-.ehp-ov-side-hdr{font-weight:600;font-size:12px;padding:6px 8px;color:#fff;margin-bottom:4px}
+.ehp-ov-blok{margin-bottom:24px;border:1px solid #e2e8e2;border-left:5px solid #2c7fb8;border-radius:6px;box-shadow:0 1px 3px rgba(0,0,0,.07);overflow:hidden;padding-bottom:14px}
+.ehp-ov-blok-hdr{background:#2c7fb8;color:#fff;padding:10px 16px;font-weight:700;font-size:15px;letter-spacing:.2px}
+.ehp-ov-side-hdr{font-weight:700;font-size:13px;padding:7px 11px;color:#fff;border-radius:4px 4px 0 0}
 .ehp-ov-side-afn{background:#2c7fb8}
 .ehp-ov-side-prod{background:#c0793c}
-.ehp-ov-tbl{width:100%;border-collapse:collapse;font-size:11px}
-.ehp-ov-tbl th{background:#eaf3f9;text-align:right;padding:4px 6px;border-bottom:1px solid #dce6e0;font-weight:700;font-size:11px}
+.ehp-ov-tbl{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.ehp-ov-tbl th{text-align:right;padding:7px 10px;white-space:nowrap;font-weight:600;font-size:12px;color:#fff}
 .ehp-ov-tbl th:first-child{text-align:left}
-.ehp-ov-tbl td{padding:3px 6px;border-bottom:1px solid #f0f4f2;text-align:right}
-.ehp-ov-tbl td:first-child{text-align:left}
-.ehp-ov-tbl tr.subtotaal td{font-weight:600;border-top:1px solid #dce6e0;background:#f8fbf9}
-.ehp-ov-tbl tr.totaal td{font-weight:700;border-top:2px solid #2c7fb8;font-size:12px}
-.ehp-ov-tbl tr.pct-row td{color:#888;font-size:10px;padding:1px 6px}
+.ehp-ov-col--afn .ehp-ov-tbl th{background:#2c7fb8}
+.ehp-ov-col--prod .ehp-ov-tbl th{background:#c0793c}
+.ehp-ov-tbl td{padding:6px 10px;border-bottom:1px solid #eef3ee;text-align:right;font-weight:500;color:#222}
+.ehp-ov-tbl td:first-child{text-align:left;font-weight:600;color:#111}
+.ehp-ov-tbl tbody tr:hover td{background:#f3f7f5}
+.ehp-ov-tbl tr.subtotaal td{font-weight:600;border-top:1px solid #dce6e0;background:#f6faf8}
+.ehp-ov-tbl tr.totaal td{font-weight:600;border-top:2px solid #2c7fb8;font-size:13px;background:#eef2f0}
+.ehp-ov-tbl tr.pct-row td{color:#999;font-size:11px;padding:2px 10px;font-weight:400}
 /* Gelijktijdigheid-tab */
-.gel-blok{margin-bottom:24px}
-.gel-blok-hdr{background:#2c7fb8;color:#fff;padding:6px 14px;font-weight:700;font-size:13px;border-radius:4px 4px 0 0}
-.gel-tbl{width:100%;border-collapse:collapse;font-size:11px;min-width:900px}
-.gel-tbl th{background:#2d7a4b;color:#fff;text-align:right;padding:5px 7px;white-space:nowrap;font-weight:700;font-size:11px}
+.gel-blok{margin-bottom:28px;border:1px solid #e2e8e2;border-left:5px solid #2c7fb8;border-radius:6px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.07)}
+.gel-blok-hdr{background:#2c7fb8;color:#fff;padding:10px 16px;font-weight:700;font-size:15px;letter-spacing:.2px}
+.gel-tbl{width:100%;border-collapse:collapse;font-size:13.5px;min-width:900px;font-variant-numeric:tabular-nums}
+.gel-tbl th{background:#2c7fb8;color:#fff;text-align:right;padding:8px 11px;white-space:nowrap;font-weight:600;font-size:12px;line-height:1.25}
 .gel-tbl th:first-child{text-align:left}
-.gel-tbl td{padding:3px 7px;text-align:right;border-bottom:1px solid #e8f4e8;white-space:nowrap}
-.gel-tbl td:first-child{text-align:left;font-weight:500}
-.gel-tbl tr:nth-child(even) td{background:#f4fbf4}
-.gel-tbl tr.gel-totaal td{font-weight:700;border-top:2px solid #2d7a4b;background:#e8f4e8}
+.gel-tbl th .tip-icon{color:#fff;opacity:.65;font-size:.78em}
+.gel-tbl th .tip-icon:hover{opacity:1}
+.gel-tbl td{padding:7px 11px;text-align:right;border-bottom:1px solid #eef3ee;white-space:nowrap;font-weight:500;color:#222}
+.gel-tbl td:first-child{text-align:left;font-weight:600;color:#111}
+.gel-tbl tr:nth-child(even) td{background:#f7faf9}
+.gel-tbl tbody tr:hover td{background:#eaf2ef}
+.gel-tbl tr.gel-totaal td{font-weight:600;font-size:13.5px;border-top:2px solid #cfd8d2;background:#eef2f0;color:#111}
+/* Kleurcodering per weergave: platform (blauw) / afnemers (groen) / invoeders (amber) */
+.gel-blok--platform{border-left-color:#2c7fb8}
+.gel-blok--platform .gel-blok-hdr,.gel-blok--platform .gel-tbl th{background:#2c7fb8}
+.gel-blok--afnemers{border-left-color:#2d7a4b}
+.gel-blok--afnemers .gel-blok-hdr,.gel-blok--afnemers .gel-tbl th{background:#2d7a4b}
+.gel-blok--afnemers .gel-tbl tr:nth-child(even) td{background:#f3faf4}
+.gel-blok--invoeders{border-left-color:#c47f1a}
+.gel-blok--invoeders .gel-blok-hdr,.gel-blok--invoeders .gel-tbl th{background:#c47f1a}
+.gel-blok--invoeders .gel-tbl tr:nth-child(even) td{background:#fdf6ea}
+.gel-blok--invoeders .gel-tbl tr.gel-totaal td{background:#f8edd8}
+/* Keuzeknoppen kleuren mee met hun weergave */
+.tab[data-gel-view="platform"].on{color:#2c7fb8;border-bottom-color:#2c7fb8}
+.tab[data-gel-view="afnemers"].on{color:#2d7a4b;border-bottom-color:#2d7a4b}
+.tab[data-gel-view="invoeders"].on{color:#c47f1a;border-bottom-color:#c47f1a}
 /* Rapport opties */
 .rap-opt-lbl{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;padding:5px 6px;border-radius:5px;transition:background .1s;line-height:1.35}
 .rap-opt-lbl:hover{background:#f7fbf5}

@@ -71,6 +71,79 @@
     return null;
   }
 
+  /** Tijdsleutel uit UTC-componenten — "YYYY-MM-DDTHH:MM" (browser-timezone-onafhankelijk). */
+  function _tsKeyUtc(date) {
+    if (!date || !(date instanceof Date) || isNaN(date.getTime())) return '';
+    var y  = date.getUTCFullYear();
+    var mo = String(date.getUTCMonth() + 1).padStart(2, '0');
+    var d  = String(date.getUTCDate()).padStart(2, '0');
+    var h  = String(date.getUTCHours()).padStart(2, '0');
+    var mi = String(date.getUTCMinutes()).padStart(2, '0');
+    return y + '-' + mo + '-' + d + 'T' + h + ':' + mi;
+  }
+
+  /**
+   * Parse een tijdcel naar een Date waarvan de UTC-componenten gelijk zijn aan de
+   * bedoelde wandklok. Hierdoor levert _tsKeyUtc dezelfde sleutel op als de
+   * verbruik/opwek-sleutel (rec.ts.slice(0,16)), ongeacht de browser-timezone.
+   *  - Excel-serial (number): epoch is UTC-gebaseerd → wandklok = UTC-componenten.
+   *  - Date-object (SheetJS cellDates): lokale componenten = wandklok → optillen naar UTC.
+   *  - string: wandklok-componenten via regex (ISO / dd.mm.yyyy / dd/mm/yyyy).
+   */
+  function _parseTsUtc(val) {
+    if (val == null || val === '') return null;
+    if (typeof val === 'number') {
+      var d = new Date(Math.round((val - 25569) * 86400000));
+      return isNaN(d.getTime()) ? null : d;
+    }
+    if (val instanceof Date) {
+      if (isNaN(val.getTime())) return null;
+      return new Date(Date.UTC(val.getFullYear(), val.getMonth(), val.getDate(),
+                               val.getHours(), val.getMinutes(), val.getSeconds()));
+    }
+    var s = String(val).trim().replace(/"/g, '');
+    if (!s) return null;
+    // ISO: "2024-01-01T00:00" of "2024-01-01 00:00"
+    var m = s.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/);
+    if (m) return new Date(Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5]));
+    // Europees punt: "01.01.2024 00:00"
+    m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]));
+    // Slash: "01/01/2024 00:00" (DD/MM/YYYY voor NL)
+    m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})/);
+    if (m) return new Date(Date.UTC(+m[3], +m[2] - 1, +m[1], +m[4], +m[5]));
+    // Fallback: laat de bedoelde wandklok via _parseTs bepalen en til lokaal → UTC.
+    var fb = _parseTs(val);
+    if (!fb) return null;
+    return new Date(Date.UTC(fb.getFullYear(), fb.getMonth(), fb.getDate(),
+                             fb.getHours(), fb.getMinutes(), fb.getSeconds()));
+  }
+
+  // ─── Rapportagetijd-normalisatie (MEPS-JSON: UTC interval-start → lokale eind-sleutel) ──
+  // De bron-JSONs leveren een UTC interval-START. Het Mark-model rapporteert op de lokale
+  // interval-EIND (Europe/Amsterdam). reportKeySite/reportKeyWind zetten een UTC-ISO-timestamp
+  // om naar de sleutel "YYYY-MM-DDTHH:MM" in dezelfde ruimte als de EPEX-labels.
+  var _AMS_FMT = new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Europe/Amsterdam', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hour12: false
+  });
+
+  /** Site-meter: UTC interval-start + 15 min → DST-bewust Europe/Amsterdam → eind-sleutel. */
+  function reportKeySite(utcIso) {
+    var d = new Date(new Date(utcIso).getTime() + 15 * 60000);
+    if (isNaN(d.getTime())) return '';
+    var p = {};
+    _AMS_FMT.formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
+    var hh = p.hour === '24' ? '00' : p.hour;   // Intl kan 24:00 leveren → 00:00
+    return p.year + '-' + p.month + '-' + p.day + 'T' + hh + ':' + p.minute;
+  }
+
+  /** Wind: vaste offset +1u15 (volgt de opwek.xlsx-labels, géén DST-correctie). */
+  function reportKeyWind(utcIso) {
+    var d = new Date(new Date(utcIso).getTime() + 75 * 60000);
+    return _tsKeyUtc(d);   // UTC-componenten = bedoelde naïeve wandklok
+  }
+
   function _findCol(header, synonyms) {
     for (var i = 0; i < header.length; i++) {
       var h = String(header[i] || '').trim().toLowerCase();
@@ -230,7 +303,9 @@
 
     var raw = [];
     for (var r = 1; r < rows.length; r++) {
-      var ts    = _parseTs(rows[r][tidx]);
+      // _parseTsUtc: UTC-componenten = bedoelde wandklok → sleutel matcht verbruik/opwek
+      // (rec.ts.slice(0,16)) ongeacht de browser-timezone (anders schoof EPEX met de lokale offset).
+      var ts    = _parseTsUtc(rows[r][tidx]);
       var price = parseFloat(rows[r][pidx]);
       if (!ts || isNaN(price)) continue;
       raw.push({ts: ts, price: price});
@@ -253,12 +328,12 @@
       for (var i2 = 0; i2 < raw.length; i2++) {
         for (var q = 0; q < 4; q++) {
           var qts = new Date(raw[i2].ts.getTime() + q * 15 * 60000);
-          out.push({'Tijd (UTC)': qts, tijdKey: _tsKey(qts), epex_eur_per_kWh: raw[i2].price});
+          out.push({'Tijd (UTC)': qts, tijdKey: _tsKeyUtc(qts), epex_eur_per_kWh: raw[i2].price});
         }
       }
     } else {
       out = raw.map(function (x) {
-        return {'Tijd (UTC)': x.ts, tijdKey: _tsKey(x.ts), epex_eur_per_kWh: x.price};
+        return {'Tijd (UTC)': x.ts, tijdKey: _tsKeyUtc(x.ts), epex_eur_per_kWh: x.price};
       });
     }
     return out;
@@ -510,7 +585,7 @@
       var r = opwekAlloc[i];
       var k = r.tijdKey;
       if (!byT[k]) byT[k] = {
-        tijdKey: k,
+        'Tijd (UTC)': r['Tijd (UTC)'], tijdKey: k,
         totaal_opwek_kWh: 0, gelijktijdig_kWh: 0, overschot_kWh: 0,
         opwek_zon_kWh: 0, opwek_wind_kWh: 0, opwek_afname_invoeden_kWh: 0,
         gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0,
@@ -673,6 +748,7 @@
         totaal_verbruik_kWh: 0, totaal_bruto_afname_kWh: 0, afname_invoeden_kWh: 0,
         gelijktijdig_kWh: 0, tekort_kWh: 0,
         gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0,
+        attr_opwek_zon_kWh: 0, attr_opwek_wind_kWh: 0,
         kosten_gelijktijdigheid_EUR: 0, kosten_epex_tekort_EUR: 0,
         kosten_onbalans_verbruik_EUR: 0, kosten_platform_EUR: 0,
         kosten_gvo_bilateraal_EUR: 0, kosten_gvo_rest_EUR: 0, kosten_totaal_EUR: 0,
@@ -690,10 +766,16 @@
       loc.gelijktijdig_zon_kWh              += aandeel * (mr.gelijktijdig_zon_kWh || 0);
       loc.gelijktijdig_wind_kWh             += aandeel * (mr.gelijktijdig_wind_kWh || 0);
       loc.gelijktijdig_afname_invoeden_kWh  += aandeel * (mr.gelijktijdig_afname_invoeden_kWh || 0);
+      // Toegerekende gemeenschapsopwek (aandeel-gewogen) — conform Excel-kolommen
+      // "Productie Zon/Wind" in de gebruikerstabel (som over kwartieren = noemer voor
+      // "Gelijk zon/wind %"). Niet de eigen opwekassets.
+      loc.attr_opwek_zon_kWh   += aandeel * (mr.opwek_zon_kWh  || 0);
+      loc.attr_opwek_wind_kWh  += aandeel * (mr.opwek_wind_kWh || 0);
       var mn = r.tijdKey.slice(0, 7);
       if (!loc.monthly[mn]) loc.monthly[mn] = {
         totaal_verbruik_kWh: 0, gelijktijdig_kWh: 0, tekort_kWh: 0,
-        gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0
+        gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0,
+        attr_opwek_zon_kWh: 0, attr_opwek_wind_kWh: 0
       };
       var lm = loc.monthly[mn];
       lm.totaal_verbruik_kWh               += r.gebruik_kWh;
@@ -702,6 +784,8 @@
       lm.gelijktijdig_zon_kWh              += aandeel * (mr.gelijktijdig_zon_kWh || 0);
       lm.gelijktijdig_wind_kWh             += aandeel * (mr.gelijktijdig_wind_kWh || 0);
       lm.gelijktijdig_afname_invoeden_kWh  += aandeel * (mr.gelijktijdig_afname_invoeden_kWh || 0);
+      lm.attr_opwek_zon_kWh                += aandeel * (mr.opwek_zon_kWh  || 0);
+      lm.attr_opwek_wind_kWh               += aandeel * (mr.opwek_wind_kWh || 0);
       loc.kosten_gelijktijdigheid_EUR += aandeel * mr.kosten_gelijktijdigheid_totaal_EUR;
       loc.kosten_epex_tekort_EUR    += aandeel * mr.kosten_epex_tekort_EUR;
       loc.kosten_onbalans_verbruik_EUR += aandeel * mr.kosten_onbalans_verbruik_EUR;
@@ -769,7 +853,9 @@
       kosten_gelijktijdigheid_totaal_EUR: 0, kosten_platform_EUR: 0,
       kosten_gvo_bilateraal_EUR: 0, kosten_gvo_rest_EUR: 0,
       kosten_epex_tekort_EUR: 0, opbrengst_epex_overschot_EUR: 0,
-      kosten_onbalans_totaal_EUR: 0, kosten_totaal_EUR: 0
+      kosten_onbalans_zon_EUR: 0, kosten_onbalans_wind_EUR: 0,
+      kosten_onbalans_verbruik_EUR: 0, kosten_onbalans_totaal_EUR: 0,
+      kosten_totaal_EUR: 0
     };
     model.forEach(function (m) {
       s.totaal_verbruik_kWh += m.totaal_verbruik_kWh;
@@ -792,6 +878,9 @@
       s.kosten_gvo_rest_EUR              += m.kosten_gvo_rest_EUR;
       s.kosten_epex_tekort_EUR           += m.kosten_epex_tekort_EUR;
       s.opbrengst_epex_overschot_EUR     += m.opbrengst_epex_overschot_EUR;
+      s.kosten_onbalans_zon_EUR          += (m.kosten_onbalans_zon_EUR || 0);
+      s.kosten_onbalans_wind_EUR         += (m.kosten_onbalans_wind_EUR || 0);
+      s.kosten_onbalans_verbruik_EUR     += (m.kosten_onbalans_verbruik_EUR || 0);
       s.kosten_onbalans_totaal_EUR       += m.kosten_onbalans_totaal_EUR;
       s.kosten_totaal_EUR                += m.kosten_totaal_EUR;
     });
@@ -816,6 +905,50 @@
     return errors;
   }
 
+  function _sumCol(model, col) {
+    var s = 0;
+    for (var i = 0; i < model.length; i++) s += (model[i][col] || 0);
+    return s;
+  }
+
+  /** Permanente balanscontroles op modeltotalen (spec-prompt stap 5). */
+  function _runBalanceWarnings(model, label) {
+    var gelijktijdig = _sumCol(model, 'gelijktijdig_kWh');
+    var overschot    = _sumCol(model, 'overschot_kWh');
+    var totaalOpwek  = _sumCol(model, 'totaal_opwek_kWh');
+    var verbruik     = _sumCol(model, 'totaal_verbruik_kWh');
+    var tekort       = _sumCol(model, 'tekort_kWh');
+    if (Math.abs(gelijktijdig + overschot - totaalOpwek) > 0.1) {
+      console.warn('[EnergieModel] ⚠️ balanscheck opwek mislukt' + (label ? ' (' + label + ')' : '') + ':',
+        {gelijktijdig: gelijktijdig, overschot: overschot, totaalOpwek: totaalOpwek});
+    }
+    if (Math.abs(gelijktijdig + tekort - verbruik) > 0.1) {
+      console.warn('[EnergieModel] ⚠️ balanscheck verbruik mislukt' + (label ? ' (' + label + ')' : '') + ':',
+        {gelijktijdig: gelijktijdig, tekort: tekort, verbruik: verbruik});
+    }
+  }
+
+  /**
+   * Debug-dump van fase-tussentotalen (alleen als window.EHP_DEBUG truthy is).
+   * Gebruikt om te zien in welke pijplijn-fase een afwijking t.o.v. de EXE ontstaat.
+   */
+  function debugDump(label, rows) {
+    if (!global.EHP_DEBUG || !rows || !rows.length) return;
+    var cols = ['totaal_verbruik_kWh', 'totaal_bruto_afname_kWh', 'afname_invoeden_kWh',
+      'opwek_kWh', 'totaal_opwek_kWh', 'opwek_zon_kWh', 'opwek_wind_kWh', 'opwek_afname_invoeden_kWh',
+      'gelijktijdig_kWh', 'gelijktijdig_zon_kWh', 'gelijktijdig_wind_kWh',
+      'gelijktijdig_afname_invoeden_kWh', 'overschot_kWh', 'tekort_kWh',
+      'kosten_totaal_EUR'];
+    var dump = {};
+    cols.forEach(function (c) {
+      var s = _sumCol(rows, c);
+      if (s !== 0) dump[c] = Math.round(s * 100) / 100;
+    });
+    dump['(aantal rijen)'] = rows.length;
+    try { console.groupCollapsed('[EnergieModel debug] ' + label); console.table(dump); console.groupEnd(); }
+    catch (_) { console.log('[EnergieModel debug] ' + label, dump); }
+  }
+
   // ─── Engine: hoofdorkestratie (spec sectie 6) ───────────────────────────────
 
   function buildModel(inputs) {
@@ -834,36 +967,70 @@
     var opwekCorr  = corrResult.opwek;
     var controle   = corrResult.controle.slice();
 
+    // Stap 2b: mastertijdlijn-filter. Zodra er EPEX geladen is, vormt de unieke set
+    // EPEX-sleutels de rapportagetijdlijn (conform Mark). Matching gebeurt uitsluitend op
+    // die sleutels; de unie in stap 8 wordt daardoor vanzelf een intersectie. Zonder EPEX
+    // blijft het oude gedrag (unie van verbruik+opwek) intact.
+    if (epex.length) {
+      var masterSet = {};
+      epex.forEach(function (r) { masterSet[r.tijdKey] = 1; });
+      var vIn = v.length, oIn = opwekCorr.length;
+      v         = v.filter(function (r) { return masterSet[r.tijdKey]; });
+      opwekCorr = opwekCorr.filter(function (r) { return masterSet[r.tijdKey]; });
+      controle.push({Controle: 'master_timeline_keys', Waarde: Object.keys(masterSet).length});
+      controle.push({Controle: 'verbruik_buiten_master_geschrapt', Waarde: vIn - v.length});
+      controle.push({Controle: 'opwek_buiten_master_geschrapt', Waarde: oIn - opwekCorr.length});
+    }
+
     // Stap 3
     var verbruikByTijdMap  = _aggregateVerbruik(v);
     var verbruikKwartier   = Object.keys(verbruikByTijdMap).sort()
                                    .map(function (k) { return verbruikByTijdMap[k]; });
     var verbruikByTijdLookup = {};
     verbruikKwartier.forEach(function (r) { verbruikByTijdLookup[r.tijdKey] = r.totaal_verbruik_kWh; });
+    debugDump('na verbruik-aggregatie', verbruikKwartier);
 
     // Stap 4
     var opwekAlloc = (verbruikKwartier.length && opwekCorr.length)
       ? allocateOpwekPriority(opwekCorr, verbruikByTijdLookup)
       : [];
+    debugDump('na allocate_opwek_priority', opwekAlloc);
 
     // Stap 5+6: aggregeer opwek-alloc per tijd + pivot per Type_norm
     var opwekByTijdMap = _aggregateOpwekAlloc(opwekAlloc);
 
     // Stap 8: bouw model-rijen
+    // EPEX-prijs per sleutel. Dubbele sleutels (najaars-DST: 2025-10-26 02:00–02:45 komen
+    // tweemaal voor) worden gemiddeld, conform het Mark-model.
+    var epexSum = {}, epexCnt = {};
+    epex.forEach(function (r) {
+      epexSum[r.tijdKey] = (epexSum[r.tijdKey] || 0) + r.epex_eur_per_kWh;
+      epexCnt[r.tijdKey] = (epexCnt[r.tijdKey] || 0) + 1;
+    });
     var epexByTijd = {};
-    epex.forEach(function (r) { epexByTijd[r.tijdKey] = r.epex_eur_per_kWh; });
+    Object.keys(epexSum).forEach(function (k) { epexByTijd[k] = epexSum[k] / epexCnt[k]; });
 
-    var model = verbruikKwartier.map(function (vk) {
-      var ok         = opwekByTijdMap[vk.tijdKey] || {};
-      var epexPrijs  = epexByTijd[vk.tijdKey] || 0;
+    // Unie van verbruik- én opwek-kwartieren (outer-join, conform Python).
+    // Opwek in kwartieren zonder positieve gemeenschapsafname mag niet wegvallen:
+    // anders wordt de opwek-noemer (wind / afname_invoeden) structureel te laag.
+    var alleTijdKeys = {};
+    Object.keys(verbruikByTijdMap).forEach(function (k) { alleTijdKeys[k] = 1; });
+    Object.keys(opwekByTijdMap).forEach(function (k) { alleTijdKeys[k] = 1; });
+    var modelKeys = Object.keys(alleTijdKeys).sort();
+
+    var model = modelKeys.map(function (tijdKey) {
+      var vk         = verbruikByTijdMap[tijdKey] || {};
+      var ok         = opwekByTijdMap[tijdKey] || {};
+      var epexPrijs  = epexByTijd[tijdKey] || 0;
       var gelijktijdig = ok.gelijktijdig_kWh || 0;
-      var tekort      = Math.max(0, vk.totaal_verbruik_kWh - gelijktijdig);
+      var verbruikQ  = vk.totaal_verbruik_kWh || 0;
+      var tekort      = Math.max(0, verbruikQ - gelijktijdig);
       return {
-        'Tijd (UTC)':                      vk['Tijd (UTC)'],
-        tijdKey:                           vk.tijdKey,
-        totaal_verbruik_kWh:               vk.totaal_verbruik_kWh,
-        totaal_bruto_afname_kWh:           vk.totaal_bruto_afname_kWh,
-        afname_invoeden_kWh:               vk.afname_invoeden_kWh,
+        'Tijd (UTC)':                      vk['Tijd (UTC)'] || ok['Tijd (UTC)'],
+        tijdKey:                           tijdKey,
+        totaal_verbruik_kWh:               verbruikQ,
+        totaal_bruto_afname_kWh:           vk.totaal_bruto_afname_kWh || 0,
+        afname_invoeden_kWh:               vk.afname_invoeden_kWh || 0,
         prosumer_opwek_kWh:                0,
         zelfconsumptie_kWh:                0,
         totaal_opwek_kWh:                  ok.totaal_opwek_kWh || 0,
@@ -883,22 +1050,30 @@
       };
     });
 
+    debugDump('na join + tekort', model);
+
     // Stap 9
     model = applyEconomicColumns(model, p);
+    debugDump('na apply_economic_columns', model);
 
     // Stap 10
     var samenvatting = _summarize(model);
 
-    // Sanity
+    // Sanity + permanente balanschecks
     var sanityErr = _runSanityChecks(model);
     if (sanityErr.length) controle.push({Controle: 'sanity_fouten', Waarde: sanityErr.length + ' afwijkingen (zie console)'});
+    _runBalanceWarnings(model, 'basis');
 
     // Stap 11: forward
     var model_forward    = null;
     var samenvatting_fwd = null;
     var fwdRes = makeForwardModel(model, forwardcurve, p, scenario);
     model_forward = fwdRes.model;
-    if (model_forward) samenvatting_fwd = _summarize(model_forward);
+    if (model_forward) {
+      samenvatting_fwd = _summarize(model_forward);
+      debugDump('forward — na apply_economic_columns', model_forward);
+      _runBalanceWarnings(model_forward, 'forward');
+    }
     if (fwdRes.controle && fwdRes.controle.length) controle = controle.concat(fwdRes.controle);
 
     // Stap 12: per-deelnemer
@@ -946,6 +1121,8 @@
     readEpexExcel:          readEpexExcel,
     readTarievenExcel:      readTarievenExcel,
     readForwardcurveExcel:  readForwardcurveExcel,
+    reportKeySite:          reportKeySite,
+    reportKeyWind:          reportKeyWind,
     buildModel:             buildModel,
     applyEconomicColumns:   applyEconomicColumns,
     makeForwardModel:       makeForwardModel,

@@ -14,30 +14,30 @@
 // --- Defaults / configuratie -------------------------------------------------
 
 var REKEN_DEFAULTS={
-  // Energiebelasting elektriciteit, €/kWh EXCL. btw, oplopende kWh-grenzen.
-  // LET OP: NL-defaults zijn indicatief — verifieer per jaar tegen de Belastingdienst.
+  // Energiebelasting elektriciteit, €/kWh EXCL. btw. Officiële NL-tarieven (Belastingdienst).
+  // Verifieer per jaar; tarieven wijzigen jaarlijks.
   energiebelasting:{
-    // Jaarspecifieke staffels; kies via opts.jaar. Onbekend jaar → .staffel (default).
+    // Jaarspecifieke staffels; kies via opts.jaar. Onbekend/leeg jaar → .staffel (default = 2025).
+    // Bron-tabel splitst 0–2.900 / 2.901–10.000 kWh, maar die tarieven zijn identiek → hier
+    // samengevoegd tot één schijf 0–10.000. De hoogste schijf (>10 mln kWh) gebruikt het
+    // ZAKELIJKE tarief (deze tool is voor zakelijke/coöperatieve aansluitingen).
+    // NB 2022: het laagste tarief is tijdelijk verlaagd en daardoor lager dan schijf 2 (geen fout).
     staffels:{
-      2024:[
-        {tot:10000,    tarief:0.1228},
-        {tot:50000,    tarief:0.1048},
-        {tot:10000000, tarief:0.0408},
-        {tot:Infinity, tarief:0.0016}
-      ],
-      2025:[
-        {tot:10000,    tarief:0.1316},
-        {tot:50000,    tarief:0.1063},
-        {tot:10000000, tarief:0.0390},
-        {tot:Infinity, tarief:0.0012}
-      ]
+      2019:[{tot:10000,tarief:0.09863},{tot:50000,tarief:0.05337},{tot:10000000,tarief:0.01421},{tot:Infinity,tarief:0.00058}],
+      2020:[{tot:10000,tarief:0.09770},{tot:50000,tarief:0.05083},{tot:10000000,tarief:0.01353},{tot:Infinity,tarief:0.00055}],
+      2021:[{tot:10000,tarief:0.09428},{tot:50000,tarief:0.05164},{tot:10000000,tarief:0.01375},{tot:Infinity,tarief:0.00056}],
+      2022:[{tot:10000,tarief:0.03679},{tot:50000,tarief:0.04361},{tot:10000000,tarief:0.01189},{tot:Infinity,tarief:0.00057}],
+      2023:[{tot:10000,tarief:0.12599},{tot:50000,tarief:0.10046},{tot:10000000,tarief:0.03942},{tot:Infinity,tarief:0.00115}],
+      2024:[{tot:10000,tarief:0.10880},{tot:50000,tarief:0.09037},{tot:10000000,tarief:0.03943},{tot:Infinity,tarief:0.00188}],
+      2025:[{tot:10000,tarief:0.10154},{tot:50000,tarief:0.06937},{tot:10000000,tarief:0.03868},{tot:Infinity,tarief:0.00321}],
+      2026:[{tot:10000,tarief:0.09161},{tot:50000,tarief:0.06671},{tot:10000000,tarief:0.03735},{tot:Infinity,tarief:0.00310}]
     },
-    // Default-staffel (gebruikt als geen/onbekend jaar is opgegeven).
+    // Default-staffel (gebruikt als geen/onbekend jaar is opgegeven) = 2025.
     staffel:[
-      {tot:10000,    tarief:0.1228},   // schijf 1: 0 – 10.000 kWh
-      {tot:50000,    tarief:0.1048},   // schijf 2: 10.000 – 50.000 kWh
-      {tot:10000000, tarief:0.0408},   // schijf 3: 50.000 – 10.000.000 kWh
-      {tot:Infinity, tarief:0.0016}    // schijf 4: > 10.000.000 kWh
+      {tot:10000,    tarief:0.10154},   // schijf 1: 0 – 10.000 kWh
+      {tot:50000,    tarief:0.06937},   // schijf 2: 10.000 – 50.000 kWh
+      {tot:10000000, tarief:0.03868},   // schijf 3: 50.000 – 10.000.000 kWh
+      {tot:Infinity, tarief:0.00321}    // schijf 4: > 10.000.000 kWh (zakelijk)
     ],
     heffingskorting:0,  // vermindering energiebelasting €/jaar per aansluiting (default uit; instelbaar)
     waarschuwing:'Fiscale behandeling is afhankelijk van de juridische leveringsstructuur.'

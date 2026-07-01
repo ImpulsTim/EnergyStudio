@@ -43,9 +43,14 @@ function drawOvsch(allTs,gA,gT,gtvA,gtvT){
   );
 }
 
-function renderHeatmap(gridId,legId,matrix,total,rgb,lbl){
+function renderHeatmap(gridId,legId,matrix,total,rgb,lbl,opts){
   var grid=document.getElementById(gridId);
   if(!grid)return;
+  opts=opts||{};
+  var cellFmt=opts.cellFmt||function(c,mn,hLbl){return lbl+' '+MND[mn]+' '+hLbl+': '+c+' overschr.';};
+  var legSuffix=opts.legSuffix||'max/uur';
+  // Zonder valueFmt: exact het oude gedrag (max ongeformatteerd, totaal met nl-NL scheidingstekens)
+  var valueFmt=opts.valueFmt||null;
   // Vind maximum voor kleurschaling
   var max=0;
   for(var h=0;h<24;h++)for(var m=0;m<12;m++)if(matrix[h][m]>max)max=matrix[h][m];
@@ -65,7 +70,7 @@ function renderHeatmap(gridId,legId,matrix,total,rgb,lbl){
         var alpha=(0.18+intensity*0.82).toFixed(2);
         bg='rgba('+rgb+','+alpha+')';
       }
-      var title=lbl+' '+MND[mn]+' '+hLbl+': '+c+' overschr.';
+      var title=cellFmt(c,mn,hLbl);
       html+='<div class="hm-cell" style="background:'+bg+'" title="'+title+'"></div>';
     }
   }
@@ -75,8 +80,8 @@ function renderHeatmap(gridId,legId,matrix,total,rgb,lbl){
   if(leg){
     leg.innerHTML='<span>0</span>'+
       '<span class="hm-bar" style="background:linear-gradient(90deg,rgba('+rgb+',0.18) 0%,rgba('+rgb+',1) 100%)"></span>'+
-      '<span>'+(max||0)+' max/uur</span>'+
-      '<span style="margin-left:auto;color:#666"><strong>'+total.toLocaleString('nl-NL')+'</strong> totaal</span>';
+      '<span>'+(valueFmt?valueFmt(max||0):(max||0))+' '+legSuffix+'</span>'+
+      '<span style="margin-left:auto;color:#666"><strong>'+(valueFmt?valueFmt(total):total.toLocaleString('nl-NL'))+'</strong> totaal</span>';
   }
 }
 
