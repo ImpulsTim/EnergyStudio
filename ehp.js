@@ -730,10 +730,8 @@ function renderEhpResults(res){
   _ehpRenderPlatWeekChart();
   _ehpDrawPlatMonthChart(res.ehpMonthImp||{},res.ehpMonthExp||{});
 
-  // Kansen-tab grafieken (paneel hidden, resize bij tab-switch)
-  _ehpNetPosMonth='all';
-  _ehpRenderNetPositieChart();
-  _ehpDrawKansenHeatmap();
+  // Kansen-tab: markt-mismatchanalyse (DOM-heatmaps, geen canvas — geen resize nodig)
+  _ehpRenderUrgentie();
   _ehpRenderKansenTabel();
 
   // Niet-leden grafieken
@@ -768,7 +766,7 @@ function _ehpAttachTabs(){
     if(panel)panel.classList.add('on');
     // Charts in hidden panels hadden size 0 bij eerste render — resize na DOM-update
     setTimeout(function(){
-      ['ehpGelEpex','ehpPlatWeek','ehpPlatMonth','ehpNonMem','ehpWeek','ehpMonth','ehpNetPos'].forEach(function(k){
+      ['ehpGelEpex','ehpPlatWeek','ehpPlatMonth','ehpNonMem','ehpWeek','ehpMonth'].forEach(function(k){
         if(CH[k])try{CH[k].resize();}catch(_){}
       });
     },30);
@@ -852,140 +850,238 @@ function _ehpDrawGelEpexChart(matchAvg,totAvg,epexAvg,hasEpex){
       scales:scales}});
 }
 
-// --- Kansen-tab: netto positie & EPEX, heatmap netinkoop, top kansvensters --
+// --- Kansen-tab: markt-mismatchanalyse (urgentie dure inkoop / goedkope teruglevering) --
 
-var _ehpNetPosMonth='all'; // 'all' of 'YYYY-MM'
-
-function setEhpNetPosMonth(val){
-  _ehpNetPosMonth=val||'all';
-  _ehpRenderNetPositieChart();
+// Prijstertielen (33e/67e percentiel EPEX) over de hele periode — gedeelde referentie voor
+// zowel de urgentie-heatmaps als de top-kansvensters-tabel, zodat "hoge/lage prijs" overal
+// hetzelfde betekent.
+function _ehpPriceTerciles(res){
+  var vals=[];
+  (res.model||[]).forEach(function(r){
+    if(typeof r.epex_eur_per_kWh==='number')vals.push(r.epex_eur_per_kWh);
+  });
+  if(vals.length<10)return null;
+  vals.sort(function(a,b){return a-b;});
+  return{p33:vals[Math.floor(vals.length*0.33)],p67:vals[Math.floor(vals.length*0.67)]};
 }
 
-function _ehpRenderNetPositieChart(){
-  var res=_ehpLast;if(!res||!res.model)return;
-  var mf=_ehpNetPosMonth,S=672;
-  var tekortSum=new Array(S).fill(0),overschotSum=new Array(S).fill(0),kwCnt=new Array(S).fill(0);
-  var epexSum=new Array(S).fill(0),epexCnt=new Array(S).fill(0);
-  res.model.forEach(function(r){
-    if(mf!=='all'&&r.tijdKey.slice(0,7)!==mf)return;
-    var d=r['Tijd (UTC)'];if(!d)return;
-    var dow=(d.getDay()+6)%7;
-    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
-    if(sl<0||sl>=S)return;
-    tekortSum[sl]+=(r.tekort_kWh||0)/0.25;
-    overschotSum[sl]+=(r.overschot_kWh||0)/0.25;
-    kwCnt[sl]++;
-    if(typeof r.epex_eur_per_kWh==='number'){epexSum[sl]+=r.epex_eur_per_kWh;epexCnt[sl]++;}
-  });
-  var tekortAvg=tekortSum.map(function(s,i){return kwCnt[i]>0?+(s/kwCnt[i]).toFixed(2):0;});
-  var overschotAvg=overschotSum.map(function(s,i){return kwCnt[i]>0?+(s/kwCnt[i]).toFixed(2):0;});
-  var epexAvg=epexSum.map(function(s,i){return epexCnt[i]>0?+(s/epexCnt[i]*1000).toFixed(1):null;}); // €/MWh
-  var hasEpex=epexAvg.some(function(v){return v!==null&&v!==0;});
-  _ehpDrawNetPositieChart(tekortAvg,overschotAvg,epexAvg,hasEpex);
-}
-
-function _ehpDrawNetPositieChart(tekortAvg,overschotAvg,epexAvg,hasEpex){
-  if(CH['ehpNetPos']){CH['ehpNetPos'].destroy();delete CH['ehpNetPos'];}
-  var canvas=document.getElementById('cEhpNetPos');
-  if(!canvas)return;
-  var res=_ehpLast,cfg=(res&&(res.cfg||res.tarieven_cfg))||{};
-  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'],labels=[];
-  for(var i=0;i<672;i++){
-    var sl=i%96,h=Math.floor(sl/4),mm=(sl%4)*15;
-    if(sl===0)labels.push(DN[Math.floor(i/96)]);
-    else if(h%6===0&&mm===0)labels.push(h+':00');
-    else labels.push('');
-  }
-  var datasets=[
-    {label:'Teruglevering aan net (kW)',data:overschotAvg,yAxisID:'y',
-     borderColor:'#95a5a6',backgroundColor:'transparent',fill:false,
-     tension:0.3,pointRadius:0,borderWidth:1.5},
-    {label:'Netinkoop van net (kW)',data:tekortAvg,yAxisID:'y',
-     borderColor:'#2c7fb8',backgroundColor:'transparent',fill:false,
-     tension:0.3,pointRadius:0,borderWidth:1.5}
-  ];
-  if(hasEpex)datasets.push(
-    {label:'Gem. EPEX-prijs (€/MWh)',data:epexAvg,yAxisID:'yEpex',
-     borderColor:'#e67e22',backgroundColor:'transparent',fill:false,
-     borderDash:[3,2],tension:0.3,pointRadius:0,borderWidth:1.5,spanGaps:true});
-  // Interne verrekenprijzen (indien ingesteld) als platte referentielijn tegen dezelfde as als EPEX
-  if(hasEpex)[
-    {key:'gel_zon_mwh',lbl:'Interne prijs zon (€/MWh)',color:'#d4a017'},
-    {key:'gel_wind_mwh',lbl:'Interne prijs wind (€/MWh)',color:'#16a085'}
-  ].forEach(function(rl){
-    var v=cfg[rl.key];
-    if(!v)return;
-    datasets.push({label:rl.lbl,data:new Array(672).fill(v),yAxisID:'yEpex',
-      borderColor:rl.color,backgroundColor:'transparent',fill:false,
-      borderDash:[1,2],tension:0,pointRadius:0,borderWidth:1});
-  });
-  var scales={
-    x:{ticks:{color:'#999',font:{family:'Barlow',size:11},autoSkip:false,maxRotation:0,
-       callback:function(v,i){return labels[i]||null;}},grid:{color:'#f3f7f4'}},
-    y:Object.assign(ax('kW'),{min:0})
+// Percentielrang (0-1) van v binnen de gesorteerde array sortedVals (fractie ≤ v), via
+// binary search. Robuuster tegen uitschieters dan een lineaire min-max-normalisatie —
+// belangrijk bij EPEX-prijspieken.
+function _ehpRankFn(sortedVals){
+  return function(v){
+    if(!sortedVals.length)return 0;
+    var lo=0,hi=sortedVals.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(sortedVals[mid]<=v)lo=mid+1;else hi=mid;}
+    return lo/sortedVals.length;
   };
-  if(hasEpex)scales.yEpex={position:'right',
-    ticks:{color:'#e67e22',font:{family:'Barlow',size:11}},
-    title:{display:true,text:'EPEX / interne prijs (€/MWh)',color:'#e67e22',font:{family:'Barlow',size:11}},
-    grid:{drawOnChartArea:false}};
-  CH['ehpNetPos']=new Chart(canvas,{type:'line',
-    data:{labels:labels,datasets:datasets},
-    options:{responsive:true,maintainAspectRatio:false,
-      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}},
-        tooltip:{callbacks:{title:function(items){
-          var idx=items[0].dataIndex,dow=Math.floor(idx/96),sl=idx%96;
-          var h=Math.floor(sl/4),m=(sl%4)*15;
-          return DN[dow]+' '+String(h).padStart(2,'0')+':'+String(m).padStart(2,'0');
-        }}}},
-      scales:scales}});
 }
 
-// Heatmap: kosten van netinkoop (tekort × EPEX) per uur van de dag × maand.
-// Hergebruikt de generieke renderHeatmap() (charts/overschrijdingen.js) met euro-opts.
-function _ehpKansenHeatmapAggregate(res){
-  var matrix=[];for(var h=0;h<24;h++)matrix.push(new Array(12).fill(0));
-  var total=0;
+// Eenvoudige weekindex (0-52) o.b.v. dag-van-het-jaar/7 — bewust geen strikte ISO 8601-
+// weeknummering (die kent lastige jaarovergangen), dit is een verkennende heatmap-as.
+function _ehpWeekIdx(d){
+  var start=new Date(d.getFullYear(),0,1); // lokale middernacht 1 januari — zelfde tijdzone-referentie als d.getFullYear()
+  var diffDays=Math.floor((d-start)/86400000);
+  return Math.max(0,Math.min(52,Math.floor(diffDays/7)));
+}
+
+// Dag-van-het-jaar (0-365) — zelfde tijdzone-referentie als _ehpWeekIdx.
+function _ehpDayIdx(d){
+  var start=new Date(d.getFullYear(),0,1);
+  var diffDays=Math.floor((d-start)/86400000);
+  return Math.max(0,Math.min(365,diffDays));
+}
+
+function _ehpUrgLabel(score,th){
+  if(!th||score<th.p50)return'Laag';
+  if(score<th.p80)return'Middel';
+  if(score<th.p95)return'Hoog';
+  return'Zeer hoog';
+}
+
+// Combineert prijs- en volume-urgentie (elk een percentielrang 0-1) tot één continue
+// 0-1-urgentiescore per kwartier (score = prijsurgentie × volume-urgentie — een "AND"-
+// combinatie: alleen als beide écht extreem zijn wordt de score hoog). Aggregeert daarna
+// naar een 24×nCols-matrix (uur × week of uur × dag, afhankelijk van idxFn/nCols) en bepaalt
+// de P50/P80/P95 van de eigen scoreverdeling als zelf-kalibrerende grens voor "hoge urgentie"
+// (KPI's) resp. de labels (tooltip).
+function _ehpUrgentieSide(res,field,priceUrgencyFn,volSortedVals,idxFn,nCols){
+  var volRank=_ehpRankFn(volSortedVals);
+  var rows=[];
   (res.model||[]).forEach(function(r){
     var d=r['Tijd (UTC)'];if(!d)return;
-    var c=r.kosten_epex_tekort_EUR||0;
-    if(c<=0)return; // alleen daadwerkelijke netinkoopkosten tonen
-    matrix[d.getHours()][d.getMonth()]+=c;
-    total+=c;
+    var v=r[field]||0;if(v<=0)return;
+    var p=r.epex_eur_per_kWh;if(typeof p!=='number')return;
+    rows.push({h:d.getHours(),wi:idxFn(d),v:v,p:p,s:priceUrgencyFn(p)*volRank(v)});
   });
-  return{matrix:matrix,total:total};
+  if(!rows.length)return null;
+  var sortedScores=rows.map(function(x){return x.s;}).sort(function(a,b){return a-b;});
+  function pct(q){return sortedScores[Math.min(sortedScores.length-1,Math.floor(sortedScores.length*q))];}
+  var th={p50:pct(0.50),p80:pct(0.80),p95:pct(0.95)};
+
+  var score=[],kwh=[],epexSum=[],epexCnt=[],cnt=[];
+  for(var h=0;h<24;h++){
+    score.push(new Array(nCols).fill(0));kwh.push(new Array(nCols).fill(0));
+    epexSum.push(new Array(nCols).fill(0));epexCnt.push(new Array(nCols).fill(0));cnt.push(new Array(nCols).fill(0));
+  }
+  var kwhTot=0,kwhHoog=0,nHoog=0,sSumAll=0;
+  rows.forEach(function(x){
+    score[x.h][x.wi]+=x.s;kwh[x.h][x.wi]+=x.v;epexSum[x.h][x.wi]+=x.p;epexCnt[x.h][x.wi]++;cnt[x.h][x.wi]++;
+    kwhTot+=x.v;sSumAll+=x.s;
+    if(x.s>=th.p80){nHoog++;kwhHoog+=x.v;}
+  });
+  for(h=0;h<24;h++)for(var wk=0;wk<nCols;wk++)if(cnt[h][wk]>0)score[h][wk]=score[h][wk]/cnt[h][wk];
+  return{
+    scoreMatrix:score,kwhMatrix:kwh,epexSumMatrix:epexSum,epexCntMatrix:epexCnt,thresholds:th,
+    avgScoreAll:sSumAll/rows.length,
+    aandeelHoog:kwhTot>0?kwhHoog/kwhTot*100:0,
+    urenHoog:nHoog/4
+  };
 }
 
-function _ehpDrawKansenHeatmap(){
-  var res=_ehpLast;if(!res||!res.model)return;
-  var agg=_ehpKansenHeatmapAggregate(res);
-  var eurFmt=function(v){return '€ '+Math.round(v).toLocaleString('nl-NL');};
-  renderHeatmap('ehpHmKans','ehpHmKansLeg',agg.matrix,agg.total,'44,127,184','Netinkoop',{
-    cellFmt:function(c,mn,hLbl){return 'Netinkoop '+MND[mn]+' '+hLbl+': '+eurFmt(c);},
-    legSuffix:'max €/uur-bucket',
-    valueFmt:eurFmt
+// Hoofdberekening voor de Kansen-tab: bouwt de urgentiematrices voor beide zijden en een
+// voorzichtig geformuleerde interpretatie (zie notitie §11), o.b.v. het aandeel volume dat
+// in de hoogste urgentieklassen valt. granularity: 'week' (default, 53 kolommen) of 'dag'
+// (366 kolommen) — bepaalt alleen de kolomindeling van de heatmap-matrices.
+function _ehpUrgentieCompute(res,granularity){
+  res=res||_ehpLast;
+  if(!res||!res.model||!res.model.length)return null;
+  var idxFn=granularity==='dag'?_ehpDayIdx:_ehpWeekIdx;
+  var nCols=granularity==='dag'?366:53;
+  var prices=[];
+  res.model.forEach(function(r){if(typeof r.epex_eur_per_kWh==='number')prices.push(r.epex_eur_per_kWh);});
+  if(prices.length<10)return null;
+  prices.sort(function(a,b){return a-b;});
+  var priceRank=_ehpRankFn(prices); // 0-1, 1 = duurste prijs van de periode
+
+  var tekortVals=[],overschotVals=[];
+  res.model.forEach(function(r){
+    if((r.tekort_kWh||0)>0)tekortVals.push(r.tekort_kWh);
+    if((r.overschot_kWh||0)>0)overschotVals.push(r.overschot_kWh);
   });
+  tekortVals.sort(function(a,b){return a-b;});
+  overschotVals.sort(function(a,b){return a-b;});
+  if(!tekortVals.length||!overschotVals.length)return null;
+
+  var tekort=_ehpUrgentieSide(res,'tekort_kWh',priceRank,tekortVals,idxFn,nCols);
+  var overschot=_ehpUrgentieSide(res,'overschot_kWh',function(p){return 1-priceRank(p);},overschotVals,idxFn,nCols);
+  if(!tekort||!overschot)return null;
+
+  // 20% aandeel hoge/zeer hoge urgentie in volume als grens tussen "veel" en "weinig" —
+  // een expliciete, uitlegbare drempel (geen verzonnen precisie), zie notitie §11.
+  var veelTekort=tekort.aandeelHoog>=20,veelOverschot=overschot.aandeelHoog>=20;
+  var interpretatie;
+  if(veelTekort&&!veelOverschot)
+    interpretatie='De groep lijkt vooral tekort te hebben op dure momenten. Extra lokale opwek, flexibiliteit of batterijontlading kan hier een mogelijke verbeterkans zijn.';
+  else if(!veelTekort&&veelOverschot)
+    interpretatie='De groep lijkt vooral benuttingsverlies van bestaande opwek te hebben. Extra lokale afname, opslag of vraagverschuiving kan hier een mogelijke verbeterkans zijn.';
+  else if(veelTekort&&veelOverschot)
+    interpretatie='Er lijkt een timingmismatch te zijn tussen opwek en verbruik. Opslag, flexibiliteit of aanvulling met andere deelnemersprofielen kan hier relevant zijn.';
+  else
+    interpretatie='De groep lijkt vanuit marktperspectief relatief goed gematcht. Verdere optimalisatie kan nog mogelijk zijn, maar de urgentie lijkt beperkt.';
+
+  return{tekort:tekort,overschot:overschot,interpretatie:interpretatie};
+}
+
+// Referentielabel voor een dag-van-het-jaar-index (0-365) — gebruikt een vaste niet-
+// schrikkeljaar-referentie, uitsluitend voor weergave (niet voor de berekening zelf).
+function _ehpDayLabel(dayIdx){
+  var ref=new Date(2001,0,1+dayIdx);
+  return ref.getDate()+' '+MND[ref.getMonth()];
+}
+
+var _ehpUrgGran='week'; // 'week' (53 kolommen) of 'dag' (366 kolommen)
+
+function setEhpUrgGran(val){
+  _ehpUrgGran=val;
+  _ehpUpdateUrgGranBtns();
+  _ehpRenderUrgentie();
+}
+
+function _ehpUpdateUrgGranBtns(){
+  document.querySelectorAll('#ehpUrgGranFilter button').forEach(function(btn){
+    var act=btn.getAttribute('data-gran')===_ehpUrgGran;
+    btn.style.background=act?'#46962b':'#eef2ec';
+    btn.style.color=act?'#fff':'#555';
+    btn.style.fontWeight=act?'700':'400';
+  });
+}
+
+// Vult de KPI-kaarten, de twee urgentie-heatmaps en de interpretatietekst van de Kansen-tab.
+function _ehpRenderUrgentie(){
+  var res=_ehpLast;if(!res)return;
+  var gran=_ehpUrgGran;
+  var urg=_ehpUrgentieCompute(res,gran);
+  var kpiEl=document.getElementById('ehpUrgentieKpis');
+  var wrapEl=document.getElementById('ehpUrgentieWrap');
+  var interpEl=document.getElementById('ehpUrgentieInterpretatie');
+  if(!urg){
+    if(kpiEl)kpiEl.innerHTML='';
+    if(wrapEl)wrapEl.style.display='none';
+    if(interpEl)interpEl.innerHTML='<div class="ib2">Onvoldoende EPEX-prijsdata voor een markt-mismatchanalyse.</div>';
+    return;
+  }
+  if(wrapEl)wrapEl.style.display='';
+  if(kpiEl)kpiEl.innerHTML=[
+    ['Netinkoop · hoge urgentie',urg.tekort.aandeelHoog.toFixed(1)+'%','van het inkoopvolume'],
+    ['Teruglevering · hoge urgentie',urg.overschot.aandeelHoog.toFixed(1)+'%','van het terugleveringsvolume'],
+    ['Hoge-urgentie-uren inkoop',Math.round(urg.tekort.urenHoog).toLocaleString('nl-NL'),'uur in de periode'],
+    ['Hoge-urgentie-uren teruglevering',Math.round(urg.overschot.urenHoog).toLocaleString('nl-NL'),'uur in de periode']
+  ].map(function(k){
+    return '<div class="kb"><div class="kl">'+k[0]+'</div><div class="kv" style="font-size:15px">'+k[1]+'</div><div class="ku">'+k[2]+'</div></div>';
+  }).join('');
+
+  var nCols,colLabels,colLbl,idxToLabel;
+  if(gran==='dag'){
+    nCols=366;colLabels=new Array(366).fill('');
+    for(var mo=0;mo<12;mo++)colLabels[Math.floor((new Date(2001,mo,1)-new Date(2001,0,1))/86400000)]=MND[mo];
+    idxToLabel=_ehpDayLabel;
+  }else{
+    nCols=53;colLabels=[];
+    // Weeknummers spaarzaam labelen (elke 4e kolom) om het kopje leesbaar te houden bij 53 kolommen.
+    for(var wk=0;wk<53;wk++)colLabels.push(wk%4===0?String(wk+1):'');
+    idxToLabel=function(wi){return'Week '+(wi+1);};
+  }
+
+  [
+    {gridId:'ehpHmUrgTekort',legId:'ehpHmUrgTekortLeg',side:urg.tekort,rgb:'44,127,184'},
+    {gridId:'ehpHmUrgOverschot',legId:'ehpHmUrgOverschotLeg',side:urg.overschot,rgb:'70,150,43'}
+  ].forEach(function(h){
+    var side=h.side;
+    renderHeatmap(h.gridId,h.legId,side.scoreMatrix,side.avgScoreAll,h.rgb,'Urgentie',{
+      cols:nCols,colLabels:colLabels,
+      cellFmt:function(c,wi,hLbl){
+        var hr=parseInt(hLbl,10);
+        var kwhVal=side.kwhMatrix[hr][wi],eCnt=side.epexCntMatrix[hr][wi];
+        var priceTxt=eCnt>0?_e2(side.epexSumMatrix[hr][wi]/eCnt*100)+' ct/kWh':'—';
+        return idxToLabel(wi)+' '+hLbl+' — urgentie '+_ehpUrgLabel(c,side.thresholds).toLowerCase()+
+          ' (score '+Math.round(c*100)+'/100): '+Math.round(kwhVal).toLocaleString('nl-NL')+' kWh, gem. '+priceTxt;
+      },
+      legSuffix:'max. gem. score/cel (×100)',
+      valueFmt:function(v){return Math.round(v*100);}
+    });
+  });
+
+  if(interpEl)interpEl.innerHTML='<div class="ib2">Mogelijke interpretatie: '+urg.interpretatie+'</div>';
+  _ehpUpdateUrgGranBtns();
 }
 
 // Top kansvensters: buckets op seizoen × dagtype × dagdeel, gerangschikt op financiële/
 // volume-relevantie. Eén gedeelde compute-functie voor zowel de live tab als het rapport.
 var _EHP_KANS_TXT={
   tekort:'Structureel tekortmoment: de groep koopt hier relatief veel in van het net. Extra lokale opwek, batterijontlading of vraagverschuiving kan hier interessant zijn.',
-  tekort_gevoelig:'Prijsgevoelig tekortmoment: netinkoop valt hier vaak samen met een hogere EPEX-prijs dan gemiddeld. Extra lokale opwek of flexibiliteit op dit moment kan extra waardevol zijn.',
+  tekort_gevoelig:'Prijsgevoelig tekortmoment: netinkoop valt hier vaak samen met EPEX-prijzen in het duurste derde deel van de periode. Extra lokale opwek of flexibiliteit op dit moment kan extra waardevol zijn.',
   overschot:'Structureel overschotmoment: lokale opwek wordt hier vaak niet intern benut. Extra afname, opslag of slim laden kan een mogelijk aandachtspunt zijn.',
-  overschot_gevoelig:'Prijsgevoelig overschotmoment: teruglevering valt hier vaak samen met een lagere EPEX-prijs dan gemiddeld. Beter benutten van dit overschot kan de businesscase verbeteren.'
+  overschot_gevoelig:'Prijsgevoelig overschotmoment: teruglevering valt hier vaak samen met EPEX-prijzen in het goedkoopste derde deel van de periode. Beter benutten van dit overschot kan een mogelijke verbeterkans zijn.'
 };
 
 function _ehpKansenCompute(res){
   res=res||_ehpLast;
-  if(!res||!res.model||!res.model.length)return{buckets:[],epexAvgAll:null};
+  if(!res||!res.model||!res.model.length)return{buckets:[]};
   var DAGDEEL=['Nacht (00-06u)','Ochtend (06-12u)','Middag (12-18u)','Avond (18-24u)'];
   var SEIZ_LBL={win:'Winter',spr:'Lente',sum:'Zomer',aut:'Herfst'};
   var buckets={};
-  var epexAllSum=0,epexAllCnt=0;
-  res.model.forEach(function(r){
-    if(typeof r.epex_eur_per_kWh==='number'){epexAllSum+=r.epex_eur_per_kWh;epexAllCnt++;}
-  });
-  var epexAvgAll=epexAllCnt>0?epexAllSum/epexAllCnt:null;
+  var priceTerc=_ehpPriceTerciles(res);
 
   res.model.forEach(function(r){
     var d=r['Tijd (UTC)'];if(!d)return;
@@ -1010,9 +1106,9 @@ function _ehpKansenCompute(res){
     var b=buckets[key];
     var dominant=b.tekortKwh>=b.overschotKwh?'tekort':'overschot';
     var gevoelig=false;
-    if(epexAvgAll!=null){
-      if(dominant==='tekort'&&b.epexTekortCnt>0)gevoelig=(b.epexTekortSum/b.epexTekortCnt)>epexAvgAll;
-      if(dominant==='overschot'&&b.epexOverschotCnt>0)gevoelig=(b.epexOverschotSum/b.epexOverschotCnt)<epexAvgAll;
+    if(priceTerc){
+      if(dominant==='tekort'&&b.epexTekortCnt>0)gevoelig=(b.epexTekortSum/b.epexTekortCnt)>priceTerc.p67;
+      if(dominant==='overschot'&&b.epexOverschotCnt>0)gevoelig=(b.epexOverschotSum/b.epexOverschotCnt)<priceTerc.p33;
     }
     var type=dominant+(gevoelig?'_gevoelig':'');
     // Gem. EPEX-prijs tijdens de dominante (tekort- resp. overschot-)kwartieren van dit venster
@@ -1037,7 +1133,7 @@ function _ehpKansenCompute(res){
   var overschotTop=list.filter(function(x){return x.dominant==='overschot'&&x.rank>0;})
     .sort(function(a,b){return b.rank-a.rank;}).slice(0,4);
 
-  return{buckets:tekortTop.concat(overschotTop),epexAvgAll:epexAvgAll};
+  return{buckets:tekortTop.concat(overschotTop)};
 }
 
 function _ehpRenderKansenTabel(){
@@ -1062,53 +1158,46 @@ function _ehpKansenTableHtml(buckets){
 }
 
 function _ehpKansenHtml(res){
-  var months={};
-  (res.model||[]).forEach(function(r){months[r.tijdKey.slice(0,7)]=1;});
-  var monthOpts=Object.keys(months).sort().map(function(mn){
-    var p=mn.split('-');return '<option value="'+mn+'">'+MND[parseInt(p[1],10)-1]+" '"+p[0].slice(2)+'</option>';
-  }).join('');
-
-  var netPosHtml=
+  var urgHtml=
+    '<div class="kg" id="ehpUrgentieKpis"></div>'+
     '<div class="cd">'+
-      '<div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#2c7fb8"></div>'+
-      'Netto positie collectief &amp; EPEX-prijs — '+_ehpEsc(res.platName)+
-      '<div style="margin-left:auto;display:flex;gap:6px;align-items:center">'+
-        '<label for="ehpNetPosMonth" style="font-size:12px;color:#777;font-family:Barlow,sans-serif">Periode</label>'+
-        '<select id="ehpNetPosMonth" onchange="setEhpNetPosMonth(this.value)" '+
-          'style="font-size:12px;padding:5px 9px;border:1px solid #d6e0d2;border-radius:8px;font-family:Barlow,sans-serif;background:#fff;cursor:pointer">'+
-          '<option value="all">Heel het jaar</option>'+monthOpts+
-        '</select>'+
+      '<div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#2c7fb8"></div>Markt-mismatchanalyse — '+_ehpEsc(res.platName)+
+      '<div id="ehpUrgGranFilter" style="margin-left:auto;display:flex;gap:3px">'+
+        '<button data-gran="week" onclick="setEhpUrgGran(\'week\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Per week</button>'+
+        '<button data-gran="dag" onclick="setEhpUrgGran(\'dag\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Per dag</button>'+
       '</div>'+
       '</div>'+
-      '<div class="ib2" style="margin-bottom:8px">Gemiddeld vermogen per kwartier van de week. '+
-      'Grijs = teruglevering aan het net (overschot opwek), blauw = netinkoop (tekort verbruik). '+
-      'De oranje stippellijn is de gemiddelde EPEX-prijs; de dunne stippellijnen zijn — indien ingesteld — de interne verrekenprijzen '+
-      'voor zon/wind, zodat zichtbaar is wanneer de EPEX-prijs boven of onder de interne prijs ligt.</div>'+
-      '<div class="cw" style="height:420px"><canvas id="cEhpNetPos" role="img"></canvas></div>'+
-    '</div>';
-
-  var heatHtml=
-    '<div class="cd">'+
-      '<div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Heatmap netinkoop en prijsgevoeligheid</div>'+
-      '<div class="ib2" style="margin-bottom:8px">Kleurintensiteit = de kosten van netinkoop (tekort × EPEX-prijs) per uur van de dag en maand van het jaar. '+
-      'Donkerder = een financieel relevanter moment voor extra lokale opwek, opslag of vraagsturing.</div>'+
-      '<div class="hm-wrap" style="grid-template-columns:1fr">'+
+      '<div class="ib2" style="margin-bottom:8px">Deze analyse laat zien waar prijsongunstige markturen samenvallen met relevante energievolumes. '+
+      'Donkere vlakken geven kansvensters aan waar extra opwek, flexibiliteit, opslag of betere lokale benutting mogelijk waarde kan toevoegen.</div>'+
+      '<div class="hm-wrap" id="ehpUrgentieWrap" style="grid-template-columns:1fr">'+
         '<div class="hm-block">'+
-          '<div class="hm" id="ehpHmKans"></div>'+
-          '<div class="hm-leg" id="ehpHmKansLeg"></div>'+
+          '<div class="hm-h">Urgentie dure inkoop</div>'+
+          '<div class="hm" id="ehpHmUrgTekort"></div>'+
+          '<div class="hm-leg" id="ehpHmUrgTekortLeg"></div>'+
+        '</div>'+
+        '<div class="hm-block">'+
+          '<div class="hm-h">Urgentie goedkope teruglevering</div>'+
+          '<div class="hm" id="ehpHmUrgOverschot"></div>'+
+          '<div class="hm-leg" id="ehpHmUrgOverschotLeg"></div>'+
         '</div>'+
       '</div>'+
+      '<div class="ib2" style="margin-top:8px">Elke cel = een uur van de dag (rij) × een week of dag van het jaar (kolom, kies hierboven). Kleurintensiteit = '+
+      'urgentie: een gecombineerde, indicatieve maat voor prijsongunstigheid én volume (laag · middel · hoog · zeer hoog). Boven: netinkoop tijdens relatief '+
+      'dure EPEX-uren. Onder: teruglevering tijdens relatief goedkope, zeer lage of negatieve EPEX-uren. Beweeg over een cel voor de periode, het '+
+      'onderliggende volume en de gemiddelde EPEX-prijs. De indicator wijst mogelijke kansvensters aan en vervangt geen gedetailleerde '+
+      'businesscaseberekening.</div>'+
+      '<div id="ehpUrgentieInterpretatie"></div>'+
     '</div>';
 
   var kansenHtml=
     '<div class="cd">'+
       '<div class="ct2"><div class="ac" style="background:#46962b"></div>Top kansvensters voor verbetering</div>'+
       '<div class="ib2" style="margin-bottom:8px">De tijdvensters met de grootste tekort- of overschotvolumes, met een indicatie of het moment '+
-      'ook prijsgevoelig is (EPEX-prijs afwijkend van het periodegemiddelde). Dit zijn indicatieve aandachtspunten, geen automatisch advies.</div>'+
+      'ook prijsgevoelig is (EPEX-prijs in het duurste resp. goedkoopste derde deel van de periode). Dit zijn indicatieve aandachtspunten, geen automatisch advies.</div>'+
       '<div id="ehpKansenTbl"></div>'+
     '</div>';
 
-  return netPosHtml+heatHtml+kansenHtml;
+  return urgHtml+kansenHtml;
 }
 
 // --- Platform week/maand grafieken -------------------------------------------

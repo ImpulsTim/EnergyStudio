@@ -168,8 +168,8 @@ body{font-family:'Barlow',sans-serif;background:#f2f8fa;color:#242b38;font-size:
 @media(max-width:900px){.hm-wrap{grid-template-columns:1fr}}
 .hm-block{min-width:0}
 .hm-h{font-size:13px;font-weight:700;color:#666;text-transform:uppercase;letter-spacing:.6px;margin-bottom:6px}
-.hm{display:grid;grid-template-columns:32px repeat(12,1fr);grid-auto-rows:16px;gap:1px;font-family:'Barlow',sans-serif;font-size:11px;color:#888}
-.hm .hm-corner,.hm .hm-mh,.hm .hm-yh{background:transparent;display:flex;align-items:center;justify-content:center;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.4px}
+.hm{display:grid;grid-template-columns:32px repeat(12,1fr);grid-auto-rows:16px;gap:1px;font-family:'Barlow',sans-serif;font-size:11px;color:#888;overflow-x:auto}
+.hm .hm-corner,.hm .hm-mh,.hm .hm-yh{background:transparent;display:flex;align-items:center;justify-content:center;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.4px;min-width:0;overflow:hidden;white-space:nowrap}
 .hm .hm-mh{font-size:11px}
 .hm .hm-yh{font-size:11px;justify-content:flex-end;padding-right:4px}
 .hm-cell{background:#fafafa;border-radius:1px;cursor:default;transition:transform .08s ease}

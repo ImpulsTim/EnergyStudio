@@ -47,22 +47,27 @@ function renderHeatmap(gridId,legId,matrix,total,rgb,lbl,opts){
   var grid=document.getElementById(gridId);
   if(!grid)return;
   opts=opts||{};
-  var cellFmt=opts.cellFmt||function(c,mn,hLbl){return lbl+' '+MND[mn]+' '+hLbl+': '+c+' overschr.';};
+  // opts.cols/opts.colLabels: optionele kolomindeling (default 12 maanden), zodat dezelfde
+  // renderer ook een uur×week-grid (bv. 53 kolommen) kan tekenen.
+  var nCols=opts.cols||12;
+  var colLabels=opts.colLabels||MND;
+  var colTrack=opts.colWidth||'1fr'; // vaste px-breedte i.p.v. 1fr voorkomt afrondingsverschillen bij veel kolommen
+  var cellFmt=opts.cellFmt||function(c,mn,hLbl){return lbl+' '+(colLabels[mn]||('#'+(mn+1)))+' '+hLbl+': '+c+' overschr.';};
   var legSuffix=opts.legSuffix||'max/uur';
   // Zonder valueFmt: exact het oude gedrag (max ongeformatteerd, totaal met nl-NL scheidingstekens)
   var valueFmt=opts.valueFmt||null;
   // Vind maximum voor kleurschaling
   var max=0;
-  for(var h=0;h<24;h++)for(var m=0;m<12;m++)if(matrix[h][m]>max)max=matrix[h][m];
+  for(var h=0;h<24;h++)for(var m=0;m<nCols;m++)if(matrix[h][m]>max)max=matrix[h][m];
   var html='';
-  // Kop-rij: lege hoek + 12 maanden
+  // Kop-rij: lege hoek + kolomlabels
   html+='<div class="hm-corner"></div>';
-  for(var mi=0;mi<12;mi++)html+='<div class="hm-mh">'+MND[mi]+'</div>';
+  for(var mi=0;mi<nCols;mi++)html+='<div class="hm-mh">'+(colLabels[mi]||'')+'</div>';
   // 24 rijen
   for(var hr=0;hr<24;hr++){
     var hLbl=(hr<10?'0':'')+hr+'h';
     html+='<div class="hm-yh">'+hLbl+'</div>';
-    for(var mn=0;mn<12;mn++){
+    for(var mn=0;mn<nCols;mn++){
       var c=matrix[hr][mn];
       var bg='#fafafa';
       if(max>0&&c>0){
@@ -75,6 +80,7 @@ function renderHeatmap(gridId,legId,matrix,total,rgb,lbl,opts){
     }
   }
   grid.innerHTML=html;
+  grid.style.gridTemplateColumns='32px repeat('+nCols+','+colTrack+')';
   // Legenda met gradient
   var leg=document.getElementById(legId);
   if(leg){

@@ -119,9 +119,11 @@ async function buildEhpRapport(opts){
     try{flowSvg=_ehpFlowSvg(res);}catch(e){console.error('flowSvg:',e);}
     var gelEpexImg=await _rapCi('cEhpGelEpex',230);
 
-    // Kansen-tab: netto positie & EPEX, top kansvensters (zelfde live
-    // canvases/berekening als de Kansen-tab in de app, alleen als afbeelding vastgelegd).
-    var netPosImg=await _rapCi('cEhpNetPos',340);
+    // Kansen-tab: markt-mismatchanalyse (KPI's + urgentie-heatmaps) en top kansvensters
+    // (zelfde live DOM/berekening als de Kansen-tab in de app, als afbeelding vastgelegd).
+    var urgKpisImg=await _rapCihEl(document.getElementById('ehpUrgentieKpis'),1040);
+    var urgHeatImg=await _rapCihEl(document.getElementById('ehpUrgentieWrap'),1040,
+      'width:auto;max-width:100%;max-height:120mm;height:auto;display:block;margin:0 auto');
     var kans=_ehpKansenCompute(res);
 
     // Bestaande UI-tabellen vastleggen (hergebruik van de app-logica en -styling):
@@ -134,7 +136,7 @@ async function buildEhpRapport(opts){
 
     sections.push(buildPlatformSection(res,{
       flowSvg:flowSvg,gelEpexImg:gelEpexImg,
-      netPosImg:netPosImg,kansenBuckets:kans.buckets,
+      urgKpisImg:urgKpisImg,urgHeatImg:urgHeatImg,kansenBuckets:kans.buckets,
       platGel:gelCap.platform,memberGel:gelCap.members,
       finBloks:finBloks,factuur:factuurMap
     },pi+1));
@@ -316,12 +318,13 @@ async function buildEhpRapport(opts){
         pageFooter()+'</div>';
     }
 
-    // ── PAGINA: Netto positie collectief & EPEX-prijs ──
-    if(cap.netPosImg){
-      pages+='<div class="page pb">'+pageHdr+shdr('Netto positie & EPEX-prijs')+
-        '<p class="rintro">Gemiddeld vermogen per kwartier van de week: netinkoop van het net en teruglevering aan het net, afgezet tegen de gemiddelde EPEX-prijs. De dunne stippellijnen zijn — indien ingesteld — de interne verrekenprijzen voor zon/wind, zodat zichtbaar is wanneer de EPEX-prijs boven of onder de interne prijs ligt.</p>'+
-        '<div class="rchart">'+cap.netPosImg+'</div>'+
-        '<div class="rib2">Netinkoop tijdens hoge EPEX-momenten wijst op een mogelijk aandachtspunt voor extra lokale opwek, opslag of vraagsturing. Teruglevering tijdens lage EPEX-momenten wijst op een mogelijke kans om verbruik beter te laten samenvallen met de beschikbare opwek.</div>'+
+    // ── PAGINA: Markt-mismatchanalyse (urgentie dure inkoop / goedkope teruglevering) ──
+    if(cap.urgHeatImg){
+      pages+='<div class="page pb">'+pageHdr+shdr('Markt-mismatchanalyse')+
+        '<p class="rintro">Deze analyse laat zien waar prijsongunstige markturen samenvallen met relevante energievolumes. Donkere vlakken geven kansvensters aan waar extra opwek, flexibiliteit, opslag of betere lokale benutting mogelijk waarde kan toevoegen. De urgentie is een indicatieve, gecombineerde score van prijsongunstigheid en volume — geen automatische businesscaseberekening.</p>'+
+        (cap.urgKpisImg?'<div class="rchart">'+cap.urgKpisImg+'</div>':'')+
+        '<div class="rchart">'+cap.urgHeatImg+'</div>'+
+        '<div class="rib2">Links: netinkoop tijdens relatief dure EPEX-uren. Rechts: teruglevering tijdens relatief goedkope, zeer lage of negatieve EPEX-uren.</div>'+
         pageFooter()+'</div>';
     }
 
