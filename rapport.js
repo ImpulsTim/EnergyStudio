@@ -127,7 +127,11 @@ function rapportCss(){
     '.ehp-bar{display:flex;height:11px;border-radius:6px;overflow:hidden;background:#eef2ec;margin:4px 0 2px}',
     '.ehp-bar span{display:block;height:100%;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
     '.ehp-bar-lbl{font-size:7.5pt;color:#888;margin-bottom:6px}',
-    '.ehp-pc-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;align-items:start}'
+    '.ehp-pc-grid{display:grid;grid-template-columns:1.1fr 1fr;gap:12px;align-items:start}',
+    '.ehp-heat-page{display:flex;flex-direction:column;min-height:180mm}',
+    '.ehp-heat-page .rintro{margin-bottom:5px}',
+    '.ehp-heat-frame{flex:1;min-height:0;display:flex;align-items:center;justify-content:center;margin:0 0 6px}',
+    '.ehp-heat-img{width:100%!important;max-width:100%!important;height:126mm!important;object-fit:contain;display:block;margin:0 auto}'
   ].join('');
 }
 
