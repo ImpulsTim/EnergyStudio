@@ -53,9 +53,16 @@ function _renderWeek() {
     color: function (ctx) { return ctx.tick.value === 0 ? '#242b38' : '#f3f7f4'; },
     lineWidth: function (ctx) { return ctx.tick.value === 0 ? 2 : 0.5; }
   };
+  var DN2 = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+  function _wTipTitle(items) {
+    if (!items || !items.length) return '';
+    var i = items[0].dataIndex;
+    var dow = Math.floor(i / 96), h = Math.floor((i % 96) / 4), m = (i % 4) * 15;
+    return DN2[dow] + ' ' + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
   var tOpts = {
     responsive: true, maintainAspectRatio: false, animation: false,
-    plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
+    plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } }, tooltip: { callbacks: { title: _wTipTitle } } },
     scales: {
       x: { ticks: { color: '#999', font: { family: 'Barlow', size: 11 }, maxTicksLimit: 20, autoSkip: false, callback: function (v, i) { return lb[i] || null; } }, grid: { color: '#f3f7f4' } },
       y: Object.assign(ax(_cv.unit), { grid: zeroLine })
@@ -81,7 +88,7 @@ function _renderWeek() {
   CH['weekP'] = new Chart(document.getElementById('cWeekP'), {
     type: 'line', data: { labels: lb, datasets: cos.map(function (c, i) {
       return { label: c.name, data: ps[i].map(function (s) { return s.length ? +(s.reduce(function (a, b) { return a + b; }, 0) / s.length * _cv.scale).toFixed(3) : null; }), borderColor: PAL[i % PAL.length], fill: false, tension: .3, pointRadius: 0, borderWidth: 1.8 };
-    }) }, options: Object.assign({}, tOpts, { plugins: { legend: { display: false } } })
+    }) }, options: Object.assign({}, tOpts, { plugins: Object.assign({}, tOpts.plugins, { legend: { display: false } }) })
   });
 
   _updateWeekFilterBtns();

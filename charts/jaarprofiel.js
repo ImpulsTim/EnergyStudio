@@ -28,6 +28,15 @@ function _jDecimate(kw, ts, maxPts) {
   return { kw: outKw, ts: outTs };
 }
 
+function _jTipTitle(items) {
+  if (!items || !items.length) return '';
+  var d = new Date(items[0].label);
+  if (isNaN(d)) return items[0].label || '';
+  var DN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+  return DN[d.getDay()] + ' ' + d.getDate() + ' ' + MND[d.getMonth()] + ' ' + d.getFullYear() + ', ' +
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+
 function _jFormatTick(ts, span) {
   var d = new Date(ts);
   var DN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
@@ -194,7 +203,7 @@ function panJ() {
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } } },
+      plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } }, tooltip: { callbacks: { title: _jTipTitle } } },
       scales: {
         x: {
           ticks: {
@@ -230,7 +239,7 @@ function panJ() {
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: _jTipTitle } } },
       scales: {
         x: {
           ticks: {

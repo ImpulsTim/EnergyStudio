@@ -4,6 +4,64 @@ var editId=null,pendData=null,pendName='',pType='static';
 var CH={},_piek=null,_jaarState=null,_jZoom=1;
 var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],allData:[],activeScenId:'basis',scenResults:{}};
 
+// --- Globale grafiek-hover -----------------------------------------------------
+// Maakt tooltips overal langs de x-as bereikbaar (geen precies mikken meer) en
+// toont alle reeksen op het aangewezen moment tegelijk, met een verticale hulplijn.
+// Geldt voor ALLE Chart.js-grafieken in de app. Guard: alleen als Chart geladen is
+// (offline snapshot zonder CDN slaat dit over).
+if (window.Chart) {
+  Chart.defaults.interaction = { mode: 'index', intersect: false, axis: 'x' };
+  Chart.defaults.plugins.tooltip.mode = 'index';
+  Chart.defaults.plugins.tooltip.intersect = false;
+
+  // Consistente huisstijl-tooltip.
+  Object.assign(Chart.defaults.plugins.tooltip, {
+    backgroundColor: 'rgba(36,43,56,.94)', titleColor: '#fff', bodyColor: '#eef2ec',
+    padding: 10, cornerRadius: 6, boxPadding: 4, borderColor: 'rgba(255,255,255,.08)', borderWidth: 1,
+    titleFont: { family: 'Barlow', size: 12, weight: '600' },
+    bodyFont: { family: 'Barlow', size: 12 }
+  });
+
+  // Getalnotatie + eenheid uit de titel van de waarde-as (al gezet via ax(_cv.unit)).
+  // Werkt voor verticale én horizontale (indexAxis:'y') bar/line-grafieken; exotische
+  // types (doughnut e.d. met eigen label-callback) vallen terug op de standaardwaarde.
+  Chart.defaults.plugins.tooltip.callbacks.label = function (ctx) {
+    var horiz = ctx.chart.options.indexAxis === 'y';
+    var v = horiz ? ctx.parsed.x : ctx.parsed.y;
+    if (v == null || typeof v !== 'number') return ctx.formattedValue;
+    var sc = ctx.chart.scales[horiz ? (ctx.dataset.xAxisID || 'x') : (ctx.dataset.yAxisID || 'y')];
+    var unit = (sc && sc.options && sc.options.title && sc.options.title.text) || '';
+    var num = Math.abs(v) < 100 ? v.toLocaleString('nl-NL', { maximumFractionDigits: 2 }) : fmt(v);
+    return (ctx.dataset.label ? ctx.dataset.label + ': ' : '') + num + (unit ? ' ' + unit : '');
+  };
+
+  // Vlakke GTV-referentielijnen en lege punten weglaten uit de tooltip.
+  Chart.defaults.plugins.tooltip.filter = function (item) {
+    return item.raw != null && !/^GTV/.test(item.dataset.label || '');
+  };
+
+  // Verticale hulplijn (crosshair) op de actieve x-positie.
+  Chart.register({
+    id: 'crosshair',
+    afterDraw: function (chart) {
+      var t = chart.tooltip;
+      if (!t || !t._active || !t._active.length || !chart.chartArea) return;
+      // Alleen bij een verticale x-index (niet op doughnut/pie of horizontale bars).
+      if (!chart.scales || !chart.scales.x || chart.options.indexAxis === 'y') return;
+      var x = t._active[0].element.x, a = chart.chartArea, c = chart.ctx;
+      c.save();
+      c.beginPath();
+      c.moveTo(x, a.top);
+      c.lineTo(x, a.bottom);
+      c.lineWidth = 1;
+      c.strokeStyle = 'rgba(70,150,43,.45)';
+      c.setLineDash([4, 3]);
+      c.stroke();
+      c.restore();
+    }
+  });
+}
+
 // --- Multicommodity ----------------------------------------------------------
 // Actieve energiedrager waarvoor het groepsprofiel berekend/getoond wordt.
 // Default 'elektra' → bestaand gedrag. De analyse draait per drager apart.
@@ -377,7 +435,13 @@ async function renderHub(p){
       colorTo:function(c){return _hubNodeColor((c.raw&&c.raw.to)||'');},
       colorMode:'gradient',borderWidth:0,
       font:{family:'Barlow',size:12}
-    }]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}}});
+    }]},options:{responsive:true,maintainAspectRatio:false,
+      // Sankey heeft geen x-index/y-as: globale index-hover + label/filter uitzetten, eigen tooltip.
+      interaction:{mode:'nearest',intersect:true},
+      plugins:{legend:{display:false},tooltip:{mode:'nearest',intersect:true,
+        filter:function(){return true;},
+        callbacks:{title:function(){return '';},
+          label:function(c){var r=(c&&c.raw)||{};return (r.from||'')+' → '+(r.to||'')+': '+fmt(r.flow||0)+' MWh';}}}}}});
   }catch(e){
     console.error('Sankey:',e);
     var sc=document.getElementById('cHubSankey');
