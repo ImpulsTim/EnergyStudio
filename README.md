@@ -10,7 +10,8 @@ Browserapplicatie voor het analyseren van collectieve energieprofielen, groeps-G
 - Groeps-GTV, pieken, overschrijdingen, weekprofielen en jaarprofielen analyseren.
 - Scenario's doorrekenen, zoals zonnepanelen en batterijopslag.
 - Energiehandelsplatformen (EHP) modelleren met opwek, EPEX/forwardprijzen, gelijktijdigheid, GVO en onbalans.
-- Rapporten genereren voor GTO en EHP, inclusief HTML/PDF-export.
+- Individuele aansluitingen analyseren: kengetallen, netcongestie (GTV), baseload, top-10 pieken en jaar-/week-/duurbelastingprofiel.
+- Rapporten genereren voor GTO, EHP en individuele analyses, inclusief HTML/PDF-export.
 - Projectdata exporteren en importeren, optioneel versleuteld met AES-256.
 
 ## Snel starten
@@ -84,7 +85,8 @@ De applicatie kan verschillende bestanden genereren:
 - volledige projectexport als JSON;
 - versleutelde projectexport;
 - GTO-rapport als HTML/PDF;
-- EHP-rapport als HTML/PDF.
+- EHP-rapport als HTML/PDF;
+- individueel analyserapport als HTML/PDF.
 
 Alle projectdata wordt lokaal in de browser opgeslagen via IndexedDB. Er is geen backend in deze repository.
 
@@ -113,12 +115,14 @@ Belangrijkste externe libraries via CDN:
 ├── rekenkern.js            # Analyse- en rekenlogica
 ├── energiemodel.js         # EnergieModel/EHP-rekenmodel
 ├── ehp.js                  # EHP-interface en berekeningen
+├── individueel.js          # Individuele analyse: rekenkern + UI
 ├── financieel.js           # Financiele analyses
 ├── rapport.js              # GTO-rapportage
 ├── rapport_ehp.js          # EHP-rapportage
+├── rapport_ind.js          # Individueel analyserapport
 ├── crypto.js               # Versleutelde export/import
 ├── tarieven.js             # Tarief- en systeemdefinities
-└── charts/                 # Grafiekmodules
+└── charts/                 # Grafiekmodules (incl. individueel.js)
 ```
 
 ## Ontwikkelen

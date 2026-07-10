@@ -482,7 +482,7 @@ function setKpi(id,val,alert){var el=document.getElementById(id);el.textContent=
 function mndLabel(mnds,m){var parts=m.split('-');var mo=parseInt(parts[1]);var y=parts[0];var multi=mnds.some(function(x){return x.slice(0,4)!==mnds[0].slice(0,4);});return MND[mo-1]+(multi?" '"+y.slice(2):'');}
 
 // Renderen
-function renderAll(){renderProjSel();renderSidebar();renderHdrProj();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}try{renderHome();}catch(e){}}
+function renderAll(){renderProjSel();renderSidebar();renderHdrProj();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}try{renderHome();}catch(e){}try{renderInd();}catch(e){}}
 
 function renderHdrProj(){
   var el=document.getElementById('hdrProj');

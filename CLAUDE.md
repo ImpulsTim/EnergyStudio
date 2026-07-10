@@ -4,9 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-**Energiegroepsprofiel** — a single-file web application for Dutch energy cooperatives (Impuls Zeeland) to analyze collective energy consumption profiles. The entire application lives in `index.html` (~1,425 lines). No build step, no server, no npm.
+**Energy Studio** — a web application for Dutch energy cooperatives (Impuls Zeeland) to analyze energy consumption profiles. No build step, no server, no npm. To run: open `index.html` in a modern browser.
 
-To run: open `index.html` in a modern browser.
+> Note: this file is partly historical. The app is no longer a single file — `index.html` holds the markup and loads a set of global-scope vanilla-JS modules (order matters; new modules load before `app.js`). See `README.md` for the current, accurate file list.
+
+**Three top-level modules**, switched by the `.nav-tools` buttons + `PAGE_MAP` and the `.nav-btn` click loop in `ehp.js`; each is a full-page `<div class="app ehp-hide" id="pageXxx">` (sidebar `.sb` + content `.ct`), lazily rendered on nav-switch and from `renderAll()` (app.js):
+- **Groepsprofiel (GTO)** — `#pageGto`, driven by `runAnalysis()` (app.js) + `charts/*.js` + report `rapport.js`.
+- **Energiehandelsplatform (EHP)** — `#pageEhp`, `ehp.js` + `energiemodel.js` + report `rapport_ehp.js`.
+- **Individuele analyse** — `#pageInd`, single-connection analysis: `individueel.js` (pure `calcInd()` + UI) + `charts/individueel.js` (5 charts on `cInd*` canvases) + report `rapport_ind.js`. Reuses `dbGet('ts',id)`, `_carrierSeries()`, `isDL()`, `sdesc()`, shared report helpers (`rapportCss`/`_rapCi`/`_fmt*`) and the shared preview modal `#mRap`. Stateless (no new persisted project data). Piek/dal and baseload method are isolated in `IND_CFG` at the top of `individueel.js`.
 
 ## Architecture
 

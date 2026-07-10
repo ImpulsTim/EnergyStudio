@@ -23,6 +23,7 @@ function _ehpDefaults(){
     platform_mwh:0,gvo_bil_mwh:0,gvo_rest_mwh:0,
     onb_zon_pct:0.20,onb_wind_pct:0.20,onb_vb_pct:0.08,
     onb_zon_risico_mwh:90,onb_wind_risico_mwh:60,onb_vb_risico_mwh:25,
+    retail_opslag_mwh:20,
     // Backward compat (EUR/kWh) — afgeleid bij _ehpCommit; gebruikt door financieel.js / rapport_ehp.js
     pZon:0.020,pWind:0.020,pOverig:0,fee:0,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
     ebOn:false,ebJaar:'2025',ebGrondslag:'bruto',heffingskorting:0,btwOn:false,btwPct:21,
@@ -69,6 +70,7 @@ function renderEHP(){
   _sv2('ehpOnbZonRisico',c.onb_zon_risico_mwh!=null?c.onb_zon_risico_mwh:0);
   _sv2('ehpOnbWindRisico',c.onb_wind_risico_mwh!=null?c.onb_wind_risico_mwh:0);
   _sv2('ehpOnbVbRisico', c.onb_vb_risico_mwh!=null?c.onb_vb_risico_mwh:0);
+  _sv2('ehpRetailOpslagMwh', c.retail_opslag_mwh!=null?c.retail_opslag_mwh:20);
   _ehpUpdateFileStatus(plat);
   var chkEl=function(id,v){var el=document.getElementById(id);if(el)el.checked=!!v;};
   chkEl('ehpEbOn',c.ebOn);
@@ -181,6 +183,7 @@ function _ehpCommit(){
     onb_zon_risico_mwh:num('ehpOnbZonRisico',0),
     onb_wind_risico_mwh:num('ehpOnbWindRisico',0),
     onb_vb_risico_mwh:num('ehpOnbVbRisico',0),
+    retail_opslag_mwh:num('ehpRetailOpslagMwh',20),
     // Backward compat (EUR/kWh) — voor financieel.js / rekenkern.js / rapport_ehp.js
     pZon:gZon/1000,pWind:gWind/1000,pOverig:gAI/1000,
     fee:gPlat/1000,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
@@ -327,7 +330,8 @@ async function calcEHP(){
     onbalans_verbruik_pct:            cfg.onb_vb_pct||0,
     onbalans_zon_risicoprijs:         (cfg.onb_zon_risico_mwh||0)/1000,
     onbalans_wind_risicoprijs:        (cfg.onb_wind_risico_mwh||0)/1000,
-    onbalans_verbruik_risicoprijs:    (cfg.onb_vb_risico_mwh||0)/1000
+    onbalans_verbruik_risicoprijs:    (cfg.onb_vb_risico_mwh||0)/1000,
+    retail_opslag:                    (cfg.retail_opslag_mwh||0)/1000
   };
 
   // --- EnergieModel.buildModel aanroepen ---
@@ -494,7 +498,8 @@ async function calcEHP(){
       gel_ai_mwh:cfg.gel_ai_mwh||0,platform_mwh:cfg.platform_mwh||0,
       gvo_bil_mwh:cfg.gvo_bil_mwh||0,gvo_rest_mwh:cfg.gvo_rest_mwh||0,
       onb_zon_risico_mwh:cfg.onb_zon_risico_mwh||0,
-      onb_wind_risico_mwh:cfg.onb_wind_risico_mwh||0
+      onb_wind_risico_mwh:cfg.onb_wind_risico_mwh||0,
+      retail_opslag_mwh:cfg.retail_opslag_mwh||0
     }
   };
 
@@ -1662,6 +1667,18 @@ function _ehpOverzichtHtml(res){
       '</tbody></table>';
   }
 
+  function buildWaardeBlok(s){
+    var pw=EnergieModel.platformWaarde(s);
+    if(!pw)return '';
+    return '<div style="margin:14px 14px 0">'+
+      '<div class="kg">'+
+        '<div class="kb'+(pw.invoederVoordeel_EUR<0?' red':'')+'"><div class="kl">Invoeders t.o.v. EPEX-only</div><div class="kv">'+_eMoney(pw.invoederVoordeel_EUR)+'</div><div class="ku">gelijktijdigheidstarief vs. spotverkoop, op gematcht volume</div></div>'+
+        '<div class="kb'+(pw.afnemerVoordeel_EUR<0?' red':'')+'"><div class="kl">Afnemers t.o.v. retailbenchmark</div><div class="kv">'+_eMoney(pw.afnemerVoordeel_EUR)+'</div><div class="ku">gelijktijdigheidstarief vs. EPEX + retailopslag, op gematcht volume</div></div>'+
+      '</div>'+
+      '<div class="ib2">Positief = beter af dan het genoemde alternatief. Een negatief getal is een legitieme uitkomst, geen fout — het tarief helt op dit moment richting de andere partij.</div>'+
+    '</div>';
+  }
+
   function buildBlok(s,label){
     if(!s)return '';
     return '<div class="ehp-ov-blok">'+
@@ -1669,7 +1686,9 @@ function _ehpOverzichtHtml(res){
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:10px 14px 0">'+
         '<div class="ehp-ov-col--afn"><div class="ehp-ov-side-hdr ehp-ov-side-afn">Afnemers — hele gemeenschap</div>'+buildAfnemersTbl(s)+'</div>'+
         '<div class="ehp-ov-col--prod"><div class="ehp-ov-side-hdr ehp-ov-side-prod">Producenten — hele gemeenschap</div>'+buildProducersTbl(s)+'</div>'+
-      '</div></div>';
+      '</div>'+
+      buildWaardeBlok(s)+
+      '</div>';
   }
 
   if(!sam)return '';
@@ -2077,7 +2096,7 @@ function _ehpGelijktijdheidHtml(res){
 
 // --- Event listeners ---------------------------------------------------------
 
-var PAGE_MAP={home:'pageHome',gto:'pageGto',ehp:'pageEhp'};
+var PAGE_MAP={home:'pageHome',gto:'pageGto',ehp:'pageEhp',ind:'pageInd'};
 document.addEventListener('DOMContentLoaded',function(){
   document.querySelectorAll('.nav-btn').forEach(function(btn){
     btn.addEventListener('click',function(){
@@ -2089,6 +2108,7 @@ document.addEventListener('DOMContentLoaded',function(){
       });
       if(tool==='ehp'){try{renderEHP();}catch(e){console.error('renderEHP:',e);}}
       if(tool==='home'){try{renderHome();}catch(e){console.error('renderHome:',e);}}
+      if(tool==='ind'){try{renderInd();}catch(e){console.error('renderInd:',e);}}
     });
   });
   document.getElementById('btnAddEhp').addEventListener('click',addEhp);

@@ -540,7 +540,7 @@ async function buildRapport(opts){
     var imgs={
       jaar:selHas('jaar')?await ci('cJaarG',310):'',
       week:selHas('week')?await ci('cWeek',380):'',
-      gelijktKpis:'',gelijktW:'',bdkA:'',bdkT:'',ovKpis:'',heat:'',piekLeg:'',piekA:'',piekT:'',gto:'',
+      gelijktKpis:'',gelijktW:'',bdk:'',ovKpis:'',heat:'',piekLeg:'',piekA:'',piekT:'',gto:'',
       pvYear:hasPV?await ci('cPVYear',320):'',
       pvMonth:hasPV?await ci('cPVMonth',280,false):'',
       batYear:hasBat?await ci('cBatYear',320):'',
@@ -551,10 +551,9 @@ async function buildRapport(opts){
       imgs.gelijktKpis=await cihEl(byId('gelijktKpis'));
       imgs.gelijktW=await ci('cGelijktWeek',340);
     }
-    // BDK: beide curves naast elkaar op half-breedte
+    // BDK: gecombineerde curve op volle breedte
     if(selHas('bdk')){
-      imgs.bdkA=await ci('cBdk',340,false);
-      imgs.bdkT=await ci('cBdkT',340,false);
+      imgs.bdk=await ci('cBdk',380);
     }
     // Overschrijdingen: KPI-grid + heatmap (alleen .hm-wrap; heatmap met max-hoogte
     //   zodat kernparameters + heatmap samen binnen één landscape-vel passen)
@@ -788,9 +787,8 @@ async function buildRapport(opts){
     if(imgs.gelijktKpis||imgs.gelijktW)blocks.push({label:'Gelijktijdigheid',html:
       (imgs.gelijktKpis?'<div class="rchart"><h3>Kernparameters gelijktijdigheid</h3>'+imgs.gelijktKpis+'</div>':'')+
       (imgs.gelijktW?'<div class="rchart"><h3>Weekpatroon gelijktijdigheid</h3>'+imgs.gelijktW+'</div>':'')});
-    if(imgs.bdkA||imgs.bdkT)blocks.push({label:'Belastingduurkromme',html:'<div class="r2col">'+
-      (imgs.bdkA?'<div class="rchart"><h3>BDK — afname</h3>'+imgs.bdkA+'</div>':'')+
-      (imgs.bdkT?'<div class="rchart"><h3>BDK — teruglevering</h3>'+imgs.bdkT+'</div>':'')+'</div>'});
+    if(imgs.bdk)blocks.push({label:'Belastingduurkromme',html:
+      '<div class="rchart"><h3>Belastingduurkromme — afname naar teruglevering (kW)</h3>'+imgs.bdk+'</div>'});
     // Overschrijdingen: kernparameters + heatmap samen op één pagina
     if(imgs.ovKpis||imgs.heat)blocks.push({label:'Overschrijdingen',html:
       (imgs.ovKpis?'<div class="rchart"><h3>Kernparameters overschrijdingen</h3>'+imgs.ovKpis+'</div>':'')+

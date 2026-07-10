@@ -319,6 +319,7 @@
 </div>
 <div class="nav-tools">
   <button class="nav-btn on" data-tool="home">Projecten</button>
+  <button class="nav-btn" data-tool="ind">Individuele analyse</button>
   <button class="nav-btn" data-tool="gto">Groepsprofiel (GTO)</button>
   <button class="nav-btn" data-tool="ehp">Energiehandelsplatform</button>
 </div>
@@ -343,6 +344,7 @@
       <div class="home-row">
         <button class="b" id="btnRapport"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport GTO</button>
         <button class="b" id="btnRapportEhpHome" style="background:#46962b"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport EHP</button>
+        <button class="b" id="btnRapportIndHome" style="background:#46962b"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport Individueel</button>
         <button class="b" id="btnExpData"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Exporteer</button>
         <label class="b" style="cursor:pointer"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Importeer<input type="file" id="impIn" accept=".json" style="display:none"></label>
       </div>
@@ -534,12 +536,9 @@
     <!-- BDK -->
     <div class="pn" id="tBdk">
       <div class="kg" id="bdkKpis"></div>
-      <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme — afname</div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme</div>
         <div class="lg" id="bdkLeg"></div>
-        <div class="cw" style="height:380px"><canvas id="cBdk" role="img" aria-label="BDK afname"></canvas></div></div>
-      <div class="cd"><div class="ct2"><div class="ac"></div>Belastingduurkromme — teruglevering</div>
-        <div class="lg" id="bdkLegT"></div>
-        <div class="cw" style="height:380px"><canvas id="cBdkT" role="img" aria-label="BDK teruglevering"></canvas></div></div>
+        <div class="cw" style="height:420px"><canvas id="cBdk" role="img" aria-label="Belastingduurkromme, afname naar teruglevering"></canvas></div></div>
     </div>
     <!-- OVERSCHRIJDINGEN -->
     <div class="pn" id="tOvsch">
@@ -709,6 +708,8 @@
           <div class="fgr"><label>Wind risicoprijs €/MWh<span class="tip-icon" data-tip="Risicoprijs voor wind-onbalans (€/MWh).">ⓘ</span></label><input type="number" id="ehpOnbWindRisico" step="1" value="60"></div>
           <div class="fgr"><label>Verbruik afwijking %<span class="tip-icon" data-tip="Onbalansverwachting voor verbruik als % van het verbruik.">ⓘ</span></label><input type="number" id="ehpOnbVbPct" step="0.1" value="8"></div>
           <div class="fgr"><label>Verbruik risicoprijs €/MWh<span class="tip-icon" data-tip="Risicoprijs voor verbruik-onbalans (€/MWh).">ⓘ</span></label><input type="number" id="ehpOnbVbRisico" step="1" value="25"></div>
+          <div class="st" style="margin-top:8px">Retail-benchmark (waardevergelijking)</div>
+          <div class="fgr"><label>Retailopslag €/MWh<span class="tip-icon" data-tip="Indicatieve leveranciersmarge + onbalansopslag bovenop de kale EPEX-prijs, uitsluitend voor de 'waarde van het platform'-vergelijking (niet gebruikt in de werkelijke afrekening). Vraag na bij de leverancier voor een realistisch getal.">ⓘ</span></label><input type="number" id="ehpRetailOpslagMwh" step="1" value="20"></div>
           <div class="st" style="margin-top:8px">Fiscaal</div>
           <label class="rap-opt-lbl" style="margin-bottom:4px">
             <input type="checkbox" id="ehpEbOn"> Energiebelasting toepassen
@@ -739,6 +740,28 @@
   </div>
   <div class="ct">
     <div id="ehpResults"><div class="verg-empty"><div class="big">⇄</div>Selecteer of maak een handelsplatform en klik op <strong>Bereken handelsplatform</strong>.</div></div>
+  </div>
+</div>
+<div class="app ehp-hide" id="pageInd">
+  <div class="sb">
+    <div style="margin-bottom:12px">
+      <div class="st">Aansluitingen</div>
+      <div class="cl" id="indList"><div style="padding:10px 0;text-align:center;font-size:13px;color:#aaa">Nog geen aansluitingen</div></div>
+      <button class="b" id="btnIndAddComp" style="width:100%;margin-top:6px">+ Aansluiting toevoegen</button>
+      <div class="ib2" style="margin-top:8px;font-size:11px">Kies een aansluiting en klik op <strong>Bereken profiel</strong>. Data en contractgegevens beheer je bij <strong>Projecten → aansluiting bewerken</strong>.</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <div class="st">Analyse</div>
+      <button class="b dk" id="btnIndBereken" style="width:100%">Bereken profiel</button>
+    </div>
+    <div>
+      <div class="st">Rapport</div>
+      <button class="b" id="btnRapportInd" style="width:100%;background:#46962b"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;margin-right:4px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>Rapport individueel</button>
+      <div class="ib2" style="margin-top:8px;font-size:11px">Analyse van één aansluiting: verbruik piek/dal, netcongestie, pieken en belastingduurkrommen.</div>
+    </div>
+  </div>
+  <div class="ct">
+    <div id="indResults"><div class="verg-empty"><div class="big">📊</div>Selecteer links een aansluiting om de individuele analyse te bekijken.</div></div>
   </div>
 </div>
 <!-- Modals -->
@@ -943,6 +966,36 @@
   </div>
 </div>
 
+<!-- Individueel-rapport opties modal -->
+<div class="mbg" id="mIndRapOpts" style="display:none">
+  <div class="mo" style="max-width:640px">
+    <div class="mh">Individueel rapport genereren<button class="mx" id="btnCloseIndRapOpts">×</button></div>
+    <div>
+      <div class="sh">Aansluitingen in het rapport</div>
+      <div style="font-size:12px;color:#888;margin:-2px 0 8px">Vink aan welke aansluitingen je opneemt. Elke aansluiting krijgt een eigen sectie met kengetallen, grafieken en top-pieken.</div>
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <button type="button" class="b" id="btnIndRoptAll" style="background:transparent;border:1.5px solid #ccc;color:#555;padding:3px 10px;font-size:12px">Alles</button>
+        <button type="button" class="b" id="btnIndRoptNone" style="background:transparent;border:1.5px solid #ccc;color:#555;padding:3px 10px;font-size:12px">Niets</button>
+      </div>
+      <div id="indRapConnList" style="display:flex;flex-direction:column;gap:0;margin-bottom:4px;max-height:260px;overflow-y:auto"></div>
+      <div class="sh" style="margin-top:14px">Onderdelen in het rapport</div>
+      <div style="font-size:12px;color:#888;margin:-2px 0 8px">Vink aan welke onderdelen je per aansluiting wilt opnemen.</div>
+      <div id="indRapSectionList" style="display:grid;grid-template-columns:1fr 1fr;gap:2px 10px">
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="kengetallen" checked> Kengetallen</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="congestie" checked> Netcongestie &amp; top-pieken</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="jaar" checked> Jaarprofiel</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="week" checked> Weekprofiel</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="maand" checked> Netto maandverbruik</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="indrap-sec" data-section="bdk" checked> Belastingduurkromme</label>
+      </div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="b" style="background:transparent;border:1.5px solid #ccc;color:#555" id="btnCloseIndRapOpts2">Annuleren</button>
+      <button class="b" id="btnGenIndRap" style="background:#46962b"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Rapport genereren</button>
+    </div>
+  </div>
+</div>
+
 <!-- Rapport preview modal -->
 <div class="mbg" id="mRap" style="display:none">
   <div class="mo" style="max-width:820px;padding:0;overflow:hidden">
@@ -1117,11 +1170,14 @@
 <script src="charts/optimalisatie.js"></script>
 <script src="charts/gelijktijdigheid.js"></script>
 <script src="charts/kaart.js"></script>
+<script src="charts/individueel.js"></script>
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
 <script src="energiemodel.js"></script>
 <script src="ehp.js"></script>
 <script src="rapport_ehp.js"></script>
+<script src="individueel.js"></script>
+<script src="rapport_ind.js"></script>
 <script src="financieel.js"></script>
 <script src="access.js"></script>
 <script src="app.js"></script>

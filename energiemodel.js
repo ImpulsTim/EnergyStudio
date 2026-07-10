@@ -637,6 +637,11 @@
       m.opbrengst_epex_overschot_zon_EUR  = (m.overschot_zon_kWh  || 0)  * (m.epex_eur_per_kWh || 0);
       m.opbrengst_epex_overschot_wind_EUR = (m.overschot_wind_kWh || 0)  * (m.epex_eur_per_kWh || 0);
 
+      // Waarde-van-het-platform-vergelijking (spec: alleen op gematcht volume, per kwartier
+      // vermenigvuldigd i.v.m. cannibalisatie-correlatie tussen gelijktijdigheid en EPEX-prijs)
+      m.opbrengst_epex_gelijktijdig_EUR = m.gelijktijdig_kWh * (m.epex_eur_per_kWh || 0);
+      m.kosten_retail_gelijktijdig_EUR  = m.gelijktijdig_kWh * ((m.epex_eur_per_kWh || 0) + pg('retail_opslag'));
+
       m.onbalans_afwijking_zon_kWh      = (m.opwek_zon_kWh || 0)        * pg('onbalans_zon_pct');
       m.onbalans_afwijking_wind_kWh     = (m.opwek_wind_kWh || 0)       * pg('onbalans_wind_pct');
       m.onbalans_afwijking_verbruik_kWh = m.totaal_verbruik_kWh          * pg('onbalans_verbruik_pct');
@@ -855,7 +860,8 @@
       kosten_epex_tekort_EUR: 0, opbrengst_epex_overschot_EUR: 0,
       kosten_onbalans_zon_EUR: 0, kosten_onbalans_wind_EUR: 0,
       kosten_onbalans_verbruik_EUR: 0, kosten_onbalans_totaal_EUR: 0,
-      kosten_totaal_EUR: 0
+      kosten_totaal_EUR: 0,
+      opbrengst_epex_gelijktijdig_EUR: 0, kosten_retail_gelijktijdig_EUR: 0
     };
     model.forEach(function (m) {
       s.totaal_verbruik_kWh += m.totaal_verbruik_kWh;
@@ -878,6 +884,8 @@
       s.kosten_gvo_rest_EUR              += m.kosten_gvo_rest_EUR;
       s.kosten_epex_tekort_EUR           += m.kosten_epex_tekort_EUR;
       s.opbrengst_epex_overschot_EUR     += m.opbrengst_epex_overschot_EUR;
+      s.opbrengst_epex_gelijktijdig_EUR  += (m.opbrengst_epex_gelijktijdig_EUR || 0);
+      s.kosten_retail_gelijktijdig_EUR   += (m.kosten_retail_gelijktijdig_EUR || 0);
       s.kosten_onbalans_zon_EUR          += (m.kosten_onbalans_zon_EUR || 0);
       s.kosten_onbalans_wind_EUR         += (m.kosten_onbalans_wind_EUR || 0);
       s.kosten_onbalans_verbruik_EUR     += (m.kosten_onbalans_verbruik_EUR || 0);
@@ -887,6 +895,17 @@
     s.gelijktijdigheid_pct_van_verbruik = safeDiv(s.gelijktijdig_kWh, s.totaal_verbruik_kWh) * 100;
     s.gelijktijdigheid_pct_van_opwek    = safeDiv(s.gelijktijdig_kWh, s.totaal_opwek_kWh)    * 100;
     return s;
+  }
+
+  // Waarde van het platform: wat invoeders/afnemers op het gematchte volume overhouden
+  // t.o.v. hun eigen marktalternatief (EPEX-only resp. EPEX + retailopslag).
+  function platformWaarde(s) {
+    if (!s) return null;
+    var kGel = s.kosten_gelijktijdigheid_totaal_EUR || 0;
+    return {
+      invoederVoordeel_EUR: kGel - (s.opbrengst_epex_gelijktijdig_EUR || 0),
+      afnemerVoordeel_EUR:  (s.kosten_retail_gelijktijdig_EUR || 0) - kGel
+    };
   }
 
   // ─── Engine: sanity checks ──────────────────────────────────────────────────
@@ -1126,7 +1145,8 @@
     buildModel:             buildModel,
     applyEconomicColumns:   applyEconomicColumns,
     makeForwardModel:       makeForwardModel,
-    validateAgainstReference: validateAgainstReference
+    validateAgainstReference: validateAgainstReference,
+    platformWaarde:         platformWaarde
   };
 
 })(window);
