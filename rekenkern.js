@@ -185,8 +185,8 @@ function calculateBtw(componenten,opts){
 
 // --- Netkosten (Stedin) ------------------------------------------------------
 
-// Pure herschrijving van drawKosten() uit charts/kosten.js: aansluitvergoeding,
-// vastrecht transport, kW-contract (GTV-A), kW-max (piek per maand) en dubbeltarief.
+// Aansluitvergoeding, vastrecht transport, kW-contract (GTV-A), kW-max (piek per
+// maand) en dubbeltarief.
 // Uitbreidingen (additief; totaal ongewijzigd zolang overschrijdingsTarief/terugleverPiekTarief 0):
 //   - gecontracteerd transportvermogen (company.gecontracteerdVermogen, default gtvA);
 //   - overschrijdingskosten per maand bij maandpiek afname > gecontracteerd vermogen;

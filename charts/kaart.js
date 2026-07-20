@@ -48,9 +48,12 @@ function initKaart(){
   var el=document.getElementById('kaartMap');
   if(!el||typeof L==='undefined')return;
   _kaartMap=L.map('kaartMap',{preferCanvas:false,zoomSnap:0.05,zoomDelta:0.05,wheelPxPerZoomLevel:60}).setView([51.50,3.80],12);
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-    crossOrigin:'anonymous',maxZoom:19
+  // CARTO Positron basemap: gratis, CORS-vriendelijk (nodig voor de html-to-image
+  // rapport-capture) en zonder API-key. Vervangt de OSM-tegels die sinds kort met
+  // "Access blocked" (403) worden geweigerd wegens hun tile-usage-policy.
+  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
+    subdomains:'abcd',crossOrigin:'anonymous',maxZoom:20
   }).addTo(_kaartMap);
   _kaartLG=L.layerGroup().addTo(_kaartMap);
   setTimeout(function(){_kaartMap.invalidateSize();},100);

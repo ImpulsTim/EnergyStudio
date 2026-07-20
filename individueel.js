@@ -73,7 +73,6 @@ function calcInd(c,series){
   var nOverA=0,nOverT=0;
   var gA=new Array(n),gT=new Array(n);
   var mMap={};
-  var slots=new Array(672);
 
   for(var i=0;i<n;i++){
     var v=kw[i], t=ts[i];
@@ -90,11 +89,6 @@ function calcInd(c,series){
     var ym=t.slice(0,7);
     if(!mMap[ym])mMap[ym]={a:0,t:0};
     mMap[ym].a+=kwhA;mMap[ym].t+=kwhT;
-    var dt=new Date(t);
-    if(!isNaN(dt)){
-      var sl=((dt.getDay()+6)%7)*96+Math.floor((dt.getHours()*60+dt.getMinutes())/15);
-      if(sl>=0&&sl<672){var o=slots[sl]||(slots[sl]={sum:0,n:0,mn:Infinity,mx:-Infinity});o.sum+=v;o.n++;if(v<o.mn)o.mn=v;if(v>o.mx)o.mx=v;}
-    }
   }
 
   var totUren=n*0.25;
@@ -108,13 +102,6 @@ function calcInd(c,series){
     afnameKwh:mKeys.map(function(k){return mMap[k].a;}),
     terugKwh:mKeys.map(function(k){return mMap[k].t;}),
     nettoKwh:mKeys.map(function(k){return mMap[k].a-mMap[k].t;})};
-
-  var week={avg:new Array(672),mn:new Array(672),mx:new Array(672)};
-  for(var w=0;w<672;w++){
-    var s=slots[w];
-    if(s&&s.n){week.avg[w]=+(s.sum/s.n).toFixed(2);week.mn[w]=+s.mn.toFixed(2);week.mx[w]=+s.mx.toFixed(2);}
-    else{week.avg[w]=null;week.mn[w]=null;week.mx[w]=null;}
-  }
 
   // Gecombineerde belastingduurkromme: rauwe signed kwartierreeks aflopend gesorteerd
   // → S-curve van meeste afname (links) naar meeste teruglevering (rechts). Volledig
@@ -136,7 +123,7 @@ function calcInd(c,series){
       overA:heeftGtvA?Math.max(0,maxA-gtvA):null,overT:heeftGtvT?Math.max(0,maxT-gtvT):null,
       nOverA:heeftGtvA?nOverA:null,nOverT:heeftGtvT?nOverT:null,
       heeftGtvA:heeftGtvA,heeftGtvT:heeftGtvT},
-    topA:topA,topT:topT,maand:maand,week:week,bdk:bdk,bdkFull:bdkFull,
+    topA:topA,topT:topT,maand:maand,bdk:bdk,bdkFull:bdkFull,
     serie:{ts:ts,kw:kw}
   };
   return a;
@@ -236,7 +223,7 @@ async function runIndAnalysis(allowDemo){
   renderIndResults(c,a);
   try{drawIndJaar(a.serie.ts,a.serie.kw,a.aansluiting.gtvA,a.aansluiting.gtvT);}catch(e){console.error('drawIndJaar:',e);}
   try{drawIndMaand(a.maand);}catch(e){console.error('drawIndMaand:',e);}
-  try{drawIndWeek(a.week,a.aansluiting.gtvA,a.aansluiting.gtvT);}catch(e){console.error('drawIndWeek:',e);}
+  try{drawIndWeek(a.serie,a.aansluiting.gtvA,a.aansluiting.gtvT);}catch(e){console.error('drawIndWeek:',e);}
   try{drawIndBdk(a.bdk,a.bdkFull,a.aansluiting.gtvA,a.aansluiting.gtvT);}catch(e){console.error('drawIndBdk:',e);}
 }
 
@@ -314,7 +301,14 @@ function renderIndResults(c,a){
     '</div>'+
     '<div class="cw" style="height:420px"><canvas id="cIndJaar"></canvas></div></div>';
   var maandCard='<div class="cd"><div class="ct2"><span class="ac"></span>Netto verbruik per maand</div><div class="ib2" style="font-size:12px;margin-top:0">Netto = verbruik − teruglevering. Negatief betekent dat er in die maand méér is teruggeleverd dan afgenomen.</div><div class="cw" style="height:300px"><canvas id="cIndMaand"></canvas></div></div>';
-  var weekCard='<div class="cd"><div class="ct2"><span class="ac"></span>Weekprofiel — gemiddeld / min / max</div><div class="cw" style="height:380px"><canvas id="cIndWeek"></canvas></div></div>';
+  var _indMndAbbr=['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
+  var _wkBtnCss='font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif';
+  var _wkFilterBtns='<button data-mf="all" onclick="setIndWeekMonthFilter(\'all\')" style="'+_wkBtnCss+'">Heel het jaar</button>'+
+    _indMndAbbr.map(function(m,i){return '<button data-mf="'+i+'" onclick="setIndWeekMonthFilter('+i+')" style="'+_wkBtnCss+'">'+m+'</button>';}).join('');
+  var weekCard='<div class="cd"><div class="ct2"><span class="ac"></span>Weekprofiel — gemiddeld / min / max'+
+    '<div id="indWeekMFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+_wkFilterBtns+'</div></div>'+
+    '<div class="ib2" style="font-size:12px;margin-top:0">Filter op maand om seizoensinvloeden te zien — het weekpatroon wordt dan alleen over de gekozen maand berekend.</div>'+
+    '<div class="cw" style="height:380px"><canvas id="cIndWeek"></canvas></div></div>';
   var bdkLeg='<div class="lg">'+
     '<span class="li"><span class="ld" style="background:#46962b"></span>Afname</span>'+
     '<span class="li"><span class="ld" style="background:#fbba00"></span>Teruglevering</span>'+

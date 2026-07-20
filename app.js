@@ -243,8 +243,8 @@ function setCarrierView(){
 // Tabs die per drager zichtbaar zijn (null = alle). Gas/warmte: geen GTV-overschrijding,
 // elektra-piekanalyse of scenario-vergelijking.
 var CARRIER_TABS={
-  gas:['tOv','tJaar','tWeek','tGelijkt','tKost','tKaart'],
-  warmte:['tOv','tJaar','tWeek','tGelijkt','tKost','tKaart'],
+  gas:['tOv','tJaar','tWeek','tGelijkt','tKaart'],
+  warmte:['tOv','tJaar','tWeek','tGelijkt','tKaart'],
   hub:['tHub']
 };
 function applyTabVisibility(){
@@ -800,7 +800,6 @@ async function runAnalysis(){
   try{drawBDK(perKw,gA,gT,withData,gtvA,gtvT);}catch(e){console.error('drawBDK:',e);}
   try{drawOvsch(allTs,gA,gT,gtvA,gtvT);}catch(e){console.error('drawOvsch:',e);}
   try{drawPiek(allTs,perKw,grpKw,withData);}catch(e){console.error('drawPiek:',e);}
-  try{drawKosten(allTs,perKw,withData);}catch(e){console.error('drawKosten:',e);}
   var totKm=withData.reduce(function(s,c){return s+(ST[c.stedinT||'none']||ST.none).km;},0);
   _optim.baseKw=grpKw.slice();_optim.allTs=allTs.slice();
   _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.avgKm=totKm/Math.max(1,withData.length);

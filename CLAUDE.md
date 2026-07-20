@@ -38,7 +38,7 @@ CSV / JSON import → parseCSV() / parseJSON() → IndexedDB (EGP_v4) → runAna
 | Connection management | `openAddComp()`, `saveComp()`, `deleteComp()` |
 | Data import | `handleFile()`, `parseCSV()`, `parseJSON()` |
 | Analysis engine | `runAnalysis()`, `genDemo()` |
-| Charts (6 types) | `drawJaar()`, `drawWeek()`, `drawBDK()`, `drawOvsch()`, `drawPiek()`, `drawKosten()` |
+| Charts (5 types) | `drawJaar()`, `drawWeek()`, `drawBDK()`, `drawOvsch()`, `drawPiek()` |
 | IndexedDB helpers | `dbGet()`, `dbSet()`, `dbDel()` |
 | Export | `doExportData()`, `doExportRapport()`, `doDownloadApp()` |
 
@@ -48,7 +48,6 @@ CSV / JSON import → parseCSV() / parseJSON() → IndexedDB (EGP_v4) → runAna
 3. BDK (Belastingduurkurve) — peak duration curve
 4. Overschrijdingen — threshold exceedance detection
 5. Piekanalyse — monthly peak analysis
-6. Kosten — financial/cost analysis
 
 **Key configuration objects in JS:**
 - `SA` — tariff types (LS, MSdist, TrafoHS1, etc.)

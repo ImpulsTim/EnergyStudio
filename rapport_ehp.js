@@ -306,15 +306,25 @@ async function buildEhpRapport(opts){
       '<div class="rib2">De interne verrekenprijzen zijn de binnen het collectief afgesproken tarieven waartegen opwek onderling wordt verrekend. De gemiddelde verkoop-/inkoopprijs is gewogen naar het intern verrekende volume per bron.</div>'+
       pageFooter()+'</div>':'';
 
-    // ── PAGINA('s): Gelijktijdigheid platform (maandtabel; EPEX + forward) ──
-    if(sec.platformGel)(cap.platGel||[]).forEach(function(g){
-      var gl=(g.label||'').replace(/^Gemeenschap\s*[—-]\s*/,'');
-      pages+='<div class="page pb">'+pageHdr+shdr('Gelijktijdigheid platform'+(gl?' — '+_ehpEsc(gl):''))+
+    // ── PAGINA: Energiestromen (direct na het platformoverzicht) ──
+    if(sec.flow&&flowSvg){
+      pages+='<div class="page pb">'+pageHdr+shdr('Energiestromen')+
+        '<p class="rintro">Schematische weergave van de energiestromen over de hele periode: van opwekbronnen via de interne pool naar de deelnemers, met overschot naar en tekort van het net. Lijndikte ∝ kWh.</p>'+
+        '<div class="ehp-flow-box">'+flowSvg+'</div>'+
+        '<div class="rib2">De <strong>pool</strong> is het intern verrekende volume ('+_ehpRapMwh(res.totMatchedKwh)+'). Wat niet intern gematcht kan worden, gaat naar het net (overschot) of wordt van het net betrokken (tekort).</div>'+
+        pageFooter()+'</div>';
+    }
+
+    // ── PAGINA: Gelijktijdigheid platform (maandtabel) ──
+    // De gelijktijdigheid is puur fysiek (opwek/afname-matching) en dus identiek voor
+    // het EPEX- en het forward-scenario; daarom tonen we hier één tabel.
+    if(sec.platformGel&&(cap.platGel||[]).length){
+      pages+='<div class="page pb">'+pageHdr+shdr('Gelijktijdigheid platform')+
         '<p class="rintro">Maandoverzicht van de bruto afname, opwek per bron en het gelijktijdig (intern gesaldeerde) volume van de hele gemeenschap, met de bijbehorende gelijktijdigheidspercentages.</p>'+
-        '<div class="rchart">'+g.img+'</div>'+
+        '<div class="rchart">'+cap.platGel[0].img+'</div>'+
         _ehpGelLegend('platform')+
         pageFooter()+'</div>';
-    });
+    }
 
     // ── PAGINA('s): Financieel overzicht (EPEX historisch + forward scenario) ──
     if(sec.financial)(cap.finBloks||[]).forEach(function(b){
@@ -323,15 +333,6 @@ async function buildEhpRapport(opts){
         '<div class="rchart">'+b.img+'</div>'+
         pageFooter()+'</div>';
     });
-
-    // ── PAGINA: Energiestromen ──
-    if(sec.flow&&flowSvg){
-      pages+='<div class="page pb">'+pageHdr+shdr('Energiestromen')+
-        '<p class="rintro">Schematische weergave van de energiestromen over de hele periode: van opwekbronnen via de interne pool naar de deelnemers, met overschot naar en tekort van het net. Lijndikte ∝ kWh.</p>'+
-        '<div class="ehp-flow-box">'+flowSvg+'</div>'+
-        '<div class="rib2">De <strong>pool</strong> is het intern verrekende volume ('+_ehpRapMwh(res.totMatchedKwh)+'). Wat niet intern gematcht kan worden, gaat naar het net (overschot) of wordt van het net betrokken (tekort).</div>'+
-        pageFooter()+'</div>';
-    }
 
     // ── PAGINA: Weekpatroon gelijktijdigheid & EPEX-prijs ──
     if(sec.weekEpex&&cap.gelEpexImg){
@@ -639,10 +640,12 @@ async function _ehpRapCaptureGel(res){
     return await _rapCihEl(el,w);
   }
   try{
+    // Alleen de eerste platformtabel: EPEX- en forward-gelijktijdigheid zijn fysiek
+    // identiek, dus het rapport toont er maar één (scheelt ook een dure capture).
     var plats=box.querySelectorAll('[data-gel-pane="platform"] .gel-blok--platform');
-    for(var i=0;i<plats.length;i++){
-      var h=plats[i].querySelector('.gel-blok-hdr');
-      var img=await capGel(plats[i]);
+    if(plats.length){
+      var h=plats[0].querySelector('.gel-blok-hdr');
+      var img=await capGel(plats[0]);
       if(img)out.platform.push({label:h?h.textContent.trim():'',img:img});
     }
     // Afnemers-tabel (afnamezijde) per deelnemer.

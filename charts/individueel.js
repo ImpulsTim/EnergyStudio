@@ -175,11 +175,44 @@ function drawIndMaand(maand){
 
 // 3) Weekprofiel — gemiddeld vermogen + min/max-band over ma–zo (7×96 kwartieren),
 //    met GTV/GTV-T-referentielijnen en geaccentueerde 0-lijn (patroon weekprofiel.js).
-function drawIndWeek(week,gtvA,gtvT){
+//    Seizoensfilter zoals de GTO (weekprofiel.js): de kwartierslots worden uit de ruwe
+//    reeks herberekend over alle maanden of alleen de geselecteerde maand, zodat de
+//    seizoensinvloed op het weekpatroon zichtbaar wordt.
+var _indWCache=null;        // {ts,kw,gtvA,gtvT} — ruwe reeks + GTV-referenties
+var _indWMonthFilter=null;  // null = alle maanden, 0–11 = specifieke maand
+
+function drawIndWeek(serie,gtvA,gtvT){
+  _indWCache={ts:(serie&&serie.ts)||[],kw:(serie&&serie.kw)||[],gtvA:gtvA,gtvT:gtvT};
+  _indWMonthFilter=null;
+  _renderIndWeek();
+}
+
+function _renderIndWeek(){
+  if(!_indWCache)return;
   dC('indWeek');
   var cv=document.getElementById('cIndWeek');
   if(!cv)return;
+  var ts=_indWCache.ts,kw=_indWCache.kw,gtvA=_indWCache.gtvA,gtvT=_indWCache.gtvT,mf=_indWMonthFilter;
   var S2=7*96;
+  // Kwartierslots (ma 00:00 … zo 23:45) opnieuw opbouwen, eventueel op één maand.
+  var slots=new Array(S2);
+  for(var q=0;q<ts.length;q++){
+    var v=kw[q];
+    if(v==null)continue;
+    var d=new Date(ts[q]);
+    if(isNaN(d))continue;
+    if(mf!==null&&d.getMonth()!==mf)continue;
+    var sl=((d.getDay()+6)%7)*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    if(sl<0||sl>=S2)continue;
+    var o=slots[sl]||(slots[sl]={sum:0,n:0,mn:Infinity,mx:-Infinity});
+    o.sum+=v;o.n++;if(v<o.mn)o.mn=v;if(v>o.mx)o.mx=v;
+  }
+  var avg=new Array(S2),mn=new Array(S2),mx=new Array(S2);
+  for(var w=0;w<S2;w++){
+    var s=slots[w];
+    if(s&&s.n){avg[w]=+(s.sum/s.n).toFixed(2);mn[w]=+s.mn.toFixed(2);mx[w]=+s.mx.toFixed(2);}
+    else{avg[w]=null;mn[w]=null;mx[w]=null;}
+  }
   var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'];
   var lb=[];
   for(var i=0;i<S2;i++){
@@ -189,9 +222,9 @@ function drawIndWeek(week,gtvA,gtvT){
   function _wTip(items){if(!items||!items.length)return'';var i=items[0].dataIndex;var dow=Math.floor(i/96),h=Math.floor((i%96)/4),mm=(i%4)*15;return DN[dow]+' '+String(h).padStart(2,'0')+':'+String(mm).padStart(2,'0');}
   var zeroLine={color:function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';},lineWidth:function(ctx){return ctx.tick.value===0?2:0.5;}};
   var ds=[
-    {label:'Max',data:week.mx,borderColor:'rgba(70,150,43,.45)',backgroundColor:'rgba(70,150,43,.09)',fill:'+1',tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3],spanGaps:true},
-    {label:'Min',data:week.mn,borderColor:'rgba(70,150,43,.45)',fill:false,tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3],spanGaps:true},
-    {label:'Gemiddeld',data:week.avg,borderColor:'#46962b',fill:false,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}
+    {label:'Max',data:mx,borderColor:'rgba(70,150,43,.45)',backgroundColor:'rgba(70,150,43,.09)',fill:'+1',tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3],spanGaps:true},
+    {label:'Min',data:mn,borderColor:'rgba(70,150,43,.45)',fill:false,tension:.3,pointRadius:0,borderWidth:1.5,borderDash:[4,3],spanGaps:true},
+    {label:'Gemiddeld',data:avg,borderColor:'#46962b',fill:false,tension:.3,pointRadius:0,borderWidth:2,spanGaps:true}
   ];
   if(gtvA>0)ds.push({label:'GTV',data:new Array(S2).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false});
   if(gtvT>0)ds.push({label:'GTV-T',data:new Array(S2).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false});
@@ -202,6 +235,23 @@ function drawIndWeek(week,gtvA,gtvT){
       scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},maxTicksLimit:20,autoSkip:false,callback:function(v,i){return lb[i]||null;}},grid:{color:'#f3f7f4'}},
         y:Object.assign(ax('kW'),{grid:zeroLine})}}
   });
+  _updateIndWeekFilterBtns();
+}
+
+function _updateIndWeekFilterBtns(){
+  var btns=document.querySelectorAll('#indWeekMFilter button');
+  btns.forEach(function(btn){
+    var val=btn.getAttribute('data-mf');
+    var isActive=val==='all'?_indWMonthFilter===null:parseInt(val,10)===_indWMonthFilter;
+    btn.style.background=isActive?'#46962b':'#eef2ec';
+    btn.style.color=isActive?'#fff':'#555';
+    btn.style.fontWeight=isActive?'700':'400';
+  });
+}
+
+function setIndWeekMonthFilter(val){
+  _indWMonthFilter=val==='all'?null:parseInt(val,10);
+  _renderIndWeek();
 }
 
 // 4) Belastingduurkromme — signed vermogen, aflopend gesorteerd van meeste afname
