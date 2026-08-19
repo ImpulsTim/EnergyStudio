@@ -28,6 +28,61 @@ function _jDecimate(kw, ts, maxPts) {
   return { kw: outKw, ts: outTs };
 }
 
+// Splitst een signed reeks in een afname- (>=0) en een teruglevering-reeks (<=0), zodat de
+// kleurgrens exact op y=0 ligt. Chart.js kleurt via `segment.borderColor` per lijnsegment op
+// basis van het linker punt (`ctx.p0`) en kan een nuldoorgang dus niet splitsen: een segment
+// dat door nul gaat krijgt volledig de kleur van zijn beginpunt.
+//   opts.insert !== false : voegt bij elke tekenwissel een extra punt met waarde 0 in (label
+//     via opts.lerpLabel, anders het linker label) -> geometrisch exact; arrays worden langer.
+//   opts.insert === false : lengte blijft gelijk; de 0 komt op de aangrenzende index in beide
+//     reeksen. Afwijking < 1 interval; voor grafieken waar de labels en andere datasets
+//     dezelfde index delen (BDK).
+// Retourneert {labels, pos, neg}; pos/neg bevatten null waar de andere reeks geldt.
+function signSplit(vals, labels, opts) {
+  opts = opts || {};
+  var ins = opts.insert !== false;
+  var L = [], P = [], N = [];
+  for (var i = 0; i < vals.length; i++) {
+    var v = vals[i];
+    L.push(labels ? labels[i] : i);
+    P.push(v == null ? null : (v >= 0 ? v : null));
+    N.push(v == null ? null : (v <= 0 ? v : null));
+    if (!ins) continue;
+    var a = v, b = vals[i + 1];
+    if (a == null || b == null) continue;
+    if ((a > 0 && b < 0) || (a < 0 && b > 0)) {
+      var f = a / (a - b); // fractie van het interval tot de nuldoorgang
+      L.push(labels ? (opts.lerpLabel ? opts.lerpLabel(labels[i], labels[i + 1], f) : labels[i]) : i + f);
+      P.push(0); N.push(0);
+    }
+  }
+  if (!ins) {
+    // Zonder extra punt: laat beide lijnen de nullijn raken op de aangrenzende index.
+    for (var k = 0; k < vals.length - 1; k++) {
+      var p = vals[k], q = vals[k + 1];
+      if (p == null || q == null) continue;
+      if (p > 0 && q < 0) { N[k] = 0; P[k + 1] = 0; }
+      else if (p < 0 && q > 0) { P[k] = 0; N[k + 1] = 0; }
+    }
+  }
+  return { labels: L, pos: P, neg: N };
+}
+
+// Lokale ISO-string op fractie f tussen twee labels. Labels worden elders met new Date() als
+// LOKALE tijd geparsed (_jTipTitle/_jFormatTick) en met slice(0,10) als datum gebruikt
+// (drag-zoom), dus toISOString() (UTC) mag hier niet — dat verschuift 1-2 uur in NL.
+// Seconden/ms staan erbij zodat een ingevoegd nulpunt nooit exact hetzelfde label krijgt als
+// zijn buur; _jFormatTick/_jTipTitle tonen toch alleen tot op de minuut.
+function _jLerpTs(t0, t1, f) {
+  var m0 = new Date(t0).getTime(), m1 = new Date(t1).getTime();
+  if (isNaN(m0) || isNaN(m1)) return t0;
+  var ms = Math.min(m1 - 1, Math.max(m0 + 1, Math.round(m0 + (m1 - m0) * f)));
+  var d = new Date(ms);
+  var p = function (n, w) { return String(n).padStart(w || 2, '0'); };
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+    'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':' + p(d.getSeconds()) + '.' + p(d.getMilliseconds(), 3);
+}
+
 function _jTipTitle(items) {
   if (!items || !items.length) return '';
   var d = new Date(items[0].label);
@@ -180,30 +235,35 @@ function panJ() {
   var gridColor = function (ctx) { return ctx.tick.value === 0 ? '#242b38' : '#f3f7f4'; };
   var gridWidth = function (ctx) { return ctx.tick.value === 0 ? 2 : 0.5; };
 
+  // Twee datasets i.p.v. één: kleurgrens exact op de nullijn (zie signSplit).
+  var sp = signSplit(decKwS, dec.ts, { lerpLabel: _jLerpTs });
+
   dC('jaarG');
   CH['jaarG'] = new Chart(document.getElementById('cJaarG'), {
     type: 'line',
     data: {
-      labels: dec.ts,
+      labels: sp.labels,
       datasets: [
         {
-          label: 'Vermogen groep', data: decKwS,
-          borderColor: '#46962b',
-          backgroundColor: function (ctx) { return ctx.raw >= 0 ? 'rgba(70,150,43,.12)' : 'rgba(251,186,0,.12)'; },
-          fill: true, tension: 0, pointRadius: 0, borderWidth: 2,
-          segment: {
-            borderColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? '#46962b' : '#fbba00'; },
-            backgroundColor: function (ctx) { return ctx.p0.parsed.y >= 0 ? 'rgba(70,150,43,.08)' : 'rgba(251,186,0,.08)'; }
-          }
+          label: 'Afname', data: sp.pos,
+          borderColor: '#46962b', backgroundColor: 'rgba(70,150,43,.12)',
+          fill: 'origin', spanGaps: false, tension: 0, pointRadius: 0, borderWidth: 2
+        },
+        {
+          label: 'Teruglevering', data: sp.neg,
+          borderColor: '#fbba00', backgroundColor: 'rgba(251,186,0,.12)',
+          fill: 'origin', spanGaps: false, tension: 0, pointRadius: 0, borderWidth: 2
         }
       ].concat(_cv.showGtv ? [
-        { label: 'GTV ' + gtvA + 'kW', data: new Array(decKwS.length).fill(gtvA), borderColor: '#c0392b', borderDash: [6, 3], pointRadius: 0, borderWidth: 1.5, fill: false },
-        { label: 'GTV-T -' + gtvT + 'kW', data: new Array(decKwS.length).fill(-gtvT), borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }
+        { label: 'GTV ' + gtvA + 'kW', data: new Array(sp.labels.length).fill(gtvA), borderColor: '#c0392b', borderDash: [6, 3], pointRadius: 0, borderWidth: 1.5, fill: false },
+        { label: 'GTV-T -' + gtvT + 'kW', data: new Array(sp.labels.length).fill(-gtvT), borderColor: '#e67e22', borderDash: [4, 4], pointRadius: 0, borderWidth: 1.5, fill: false }
       ] : [])
     },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { labels: { color: '#888', font: { family: 'Barlow', size: 11 }, boxWidth: 10 } }, tooltip: { callbacks: { title: _jTipTitle } } },
+      // Chart.js-legenda uit: de HTML-legenda boven het canvas (index.html) toont nu exact
+      // dezelfde vier items. Gelijk aan de andere grafieken in de app.
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: _jTipTitle } } },
       scales: {
         x: {
           ticks: {

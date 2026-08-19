@@ -13,7 +13,7 @@ function drawBDK(perKw,gA,gT,cos,gtvA,gtvT){
   var grpSigned=gA.map(function(v,i){return v-gT[i];});
   var grp=_scl(sdesc(grpSigned,N));
   var legBase='';for(var i=0;i<cos.length;i++)legBase+='<span class="li"><span class="ld" style="background:'+PAL[i%PAL.length]+'"></span>'+cos[i].name+'</span>';
-  legBase+='<span class="li"><span class="ld" style="background:#242b38;width:14px;height:4px;border-radius:2px"></span><strong>Groep totaal</strong></span>';
+  legBase+='<span class="li"><span class="ld" style="background:linear-gradient(90deg,#46962b 50%,#fbba00 50%);width:14px;height:4px;border-radius:2px"></span><strong>Groep totaal</strong></span>';
   if(_cv.showGtv&&gtvA>0)legBase+='<span class="li"><span class="ld" style="background:#c0392b"></span>GTV afname</span>';
   if(_cv.showGtv&&gtvT>0)legBase+='<span class="li"><span class="ld" style="background:#e67e22"></span>GTV-T teruglevering</span>';
   document.getElementById('bdkLeg').innerHTML=legBase;
@@ -28,8 +28,12 @@ function drawBDK(perKw,gA,gT,cos,gtvA,gtvT){
   var refs=[];
   if(_cv.showGtv&&gtvA>0)refs.push({label:'GTV',data:new Array(N).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false,yAxisID:'y'});
   if(_cv.showGtv&&gtvT>0)refs.push({label:'GTV-T',data:new Array(N).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false,yAxisID:'y'});
+  // Twee datasets i.p.v. één: kleurgrens exact op de nullijn (zie signSplit in jaarprofiel.js).
+  // insert:false — xl en de per-aansluiting-datasets delen dezelfde index, en _bdkPct rekent
+  // met dataIndex/N. De aflopend gesorteerde curve heeft precies één nuldoorgang.
+  var spG=signSplit(grp,null,{insert:false});
   CH['bdk']=new Chart(document.getElementById('cBdk'),{type:'line',data:{labels:xl,datasets:dsCo.concat(refs).concat([
-    {label:'Groep totaal',data:grp,borderColor:'#242b38',fill:false,tension:0,pointRadius:0,borderWidth:3.5,yAxisID:'y',order:0,
-     segment:{borderColor:function(ctx){return ctx.p0.parsed.y>=0?'#46962b':'#fbba00';}}}
+    {label:'Groep afname',data:spG.pos,borderColor:'#46962b',fill:false,spanGaps:false,tension:0,pointRadius:0,borderWidth:3.5,yAxisID:'y',order:0},
+    {label:'Groep teruglevering',data:spG.neg,borderColor:'#fbba00',fill:false,spanGaps:false,tension:0,pointRadius:0,borderWidth:3.5,yAxisID:'y',order:0}
   ])},options:opts});
 }
