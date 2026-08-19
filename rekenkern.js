@@ -66,6 +66,75 @@ function _aantalMaanden(data,override){
   return Object.keys(s).length||12;
 }
 
+// --- Datadekking per maand ---------------------------------------------------
+//
+// Maandgrafieken sommeren kWh per kalendermaand. Ontbreekt er data (begin/eind van
+// de meetperiode, meteruitval, afkapping door het jaarfilter), dan wordt de staaf
+// lager zonder dat dat iets over het verbruik zegt. maandDekking() bepaalt per maand
+// hoeveel van de verwachte kwartieren er werkelijk zijn, zodat de grafieken die
+// maanden kunnen arceren en afgeleide getallen (baseload, jaar-extrapolatie) de
+// onvolledige maanden kunnen overslaan.
+//
+// Drempel: alles onder 99% van de verwachte kwartieren geldt als onvolledig.
+// Zomertijd kost hooguit 4 kwartieren in maart/oktober (2972 van 2976 = 99,87%),
+// dus die maanden blijven terecht "volledig"; vanaf ~7 uur ontbrekende data slaat
+// de markering aan.
+var MAAND_DEKKING_DREMPEL=0.99;
+
+// Aantal dagen in 'YYYY-MM' — via UTC zodat er geen tijdzone-drift optreedt.
+function _dagenInMaand(ym){
+  var y=parseInt(String(ym).slice(0,4),10),m=parseInt(String(ym).slice(5,7),10);
+  if(!(y>0)||!(m>=1&&m<=12))return 30;
+  return new Date(Date.UTC(y,m,0)).getUTCDate();
+}
+
+// tsList: array timestamps ('YYYY-MM-DDTHH:MM') of objecten met .ts.
+// opts.perDag: meetpunten per dag (default 96 = kwartierraster; de hele app
+//   resampelt naar kwartieren, ook gas/warmte via _carrierSeries()).
+// Levert {byKey:{'YYYY-MM':{n,verwacht,dekking,volledig,dagen,dagenInMaand}},keys,onvolledig}.
+function maandDekking(tsList,opts){
+  opts=opts||{};
+  var perDag=_num(opts.perDag,96);
+  var acc={};
+  (tsList||[]).forEach(function(d){
+    if(d==null)return;
+    var t=String((d&&d.ts!=null)?d.ts:d);
+    if(t.length<7)return;
+    var ym=t.slice(0,7);
+    var a=acc[ym]||(acc[ym]={kw:{},dg:{}});
+    a.kw[t.slice(0,16)]=1;  // dedup op minuut — neutraliseert DST-duplicaten
+    a.dg[t.slice(0,10)]=1;
+  });
+  var keys=Object.keys(acc).sort(),byKey={},onvolledig=[];
+  keys.forEach(function(k){
+    var dim=_dagenInMaand(k),verwacht=dim*perDag;
+    var n=Object.keys(acc[k].kw).length;
+    var dekking=verwacht>0?Math.min(1,n/verwacht):0;
+    var volledig=dekking>=MAAND_DEKKING_DREMPEL;
+    byKey[k]={n:n,verwacht:verwacht,dekking:dekking,volledig:volledig,
+      dagen:Object.keys(acc[k].dg).length,dagenInMaand:dim};
+    if(!volledig)onvolledig.push(k);
+  });
+  return {byKey:byKey,keys:keys,onvolledig:onvolledig};
+}
+
+// Onbekende maand → behandel als volledig (geen valse markering bij ontbrekende dekkingsinfo).
+function _dek(dekking,key){
+  var d=dekking&&dekking.byKey&&dekking.byKey[key];
+  return d||{n:0,verwacht:0,dekking:1,volledig:true,dagen:0,dagenInMaand:_dagenInMaand(key)};
+}
+
+// Markeert een aslabel van een onvolledige maand met een asterisk.
+function maandDekkingLabel(lbl,d){return (d&&d.volledig===false)?(lbl+'*'):lbl;}
+
+// Regels voor tooltip.callbacks.afterBody — leeg voor een volledige maand.
+function maandDekkingTip(d){
+  if(!d||d.volledig!==false)return [];
+  return ['⚠ Onvolledige maand',
+    d.dagen+' van '+d.dagenInMaand+' dagen data ('+Math.round(d.dekking*100)+'%)',
+    'Niet vergelijkbaar met volledige maanden.'];
+}
+
 // --- Contract normaliseren ---------------------------------------------------
 
 // Levert een volledig contract-object met defaults en legacy-fallback

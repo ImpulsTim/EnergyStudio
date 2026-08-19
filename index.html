@@ -482,6 +482,7 @@
       <div id="jaarCompare" style="display:none">
         <div class="cd"><div class="ct2"><div class="ac"></div>Verbruik per maand — per jaar vergeleken</div>
           <div class="lg" id="yrLegM"></div>
+          <div id="yrMaandWarn"></div>
           <div class="cw" style="height:340px"><canvas id="cYrMaand" role="img" aria-label="Jaarvergelijking per maand"></canvas></div></div>
         <div class="cd"><div class="ct2"><div class="ac"></div>Verbruik per dag — per jaar vergeleken</div>
           <div class="cw" style="height:340px"><canvas id="cYrDag" role="img" aria-label="Jaarvergelijking per dag"></canvas></div></div>
@@ -530,6 +531,7 @@
       <div class="cd"><div class="ct2"><div class="ac" style="background:#46962b"></div>Weekpatroon gelijktijdigheid</div>
         <div class="cw" style="height:260px"><canvas id="cGelijktWeek"></canvas></div></div>
       <div class="cd"><div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Maandoverzicht gesaldeerd vs. teruggeleverd</div>
+        <div id="gelijktMaandWarn"></div>
         <div class="cw" style="height:220px"><canvas id="cGelijktMaand"></canvas></div></div>
     </div>
     <!-- BDK -->
@@ -604,6 +606,7 @@
       <div class="cd"><div class="ct2"><div class="ac"></div>Maandpieken — individueel vs. collectief</div>
         <div class="ib">Som individueel = optelling van de hoogste kwartierwaarden per aansluiting. Collectief = maandpiek van het groepsprofiel. Afname en teruglevering worden apart weergegeven.</div>
         <div class="lg" id="pLeg"></div>
+        <div id="pMaandWarn"></div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
           <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#46962b;margin-bottom:4px">Afname (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekA" role="img"></canvas></div></div>
           <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekT" role="img"></canvas></div></div>
@@ -752,6 +755,7 @@
     </div>
   </div>
   <div class="ct">
+    <div id="indYearBar" style="display:none;gap:8px;margin-bottom:9px;flex-wrap:wrap;align-items:center"></div>
     <div id="indResults"><div class="verg-empty"><div class="big">📊</div>Selecteer links een aansluiting om de individuele analyse te bekijken.</div></div>
   </div>
 </div>

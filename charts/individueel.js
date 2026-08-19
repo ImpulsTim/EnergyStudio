@@ -94,23 +94,24 @@ function panIndJaar(){
   if(lblEl)lblEl.textContent=days<=1?'1 dag':days<=14?days+' dagen':days<=60?Math.round(days/7)+' weken':Math.round(days/30.5)+' maanden';
   var gridColor=function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';};
   var gridWidth=function(ctx){return ctx.tick.value===0?2:0.5;};
+  // Twee datasets i.p.v. één: kleurgrens exact op de nullijn (zie signSplit in jaarprofiel.js).
+  var sp=signSplit(dec.kw,dec.ts,{lerpLabel:(typeof _jLerpTs==='function')?_jLerpTs:null});
   var refs=[];
-  if(gtvA>0)refs.push({label:'GTV '+gtvA+'kW',data:new Array(dec.kw.length).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false});
-  if(gtvT>0)refs.push({label:'GTV-T -'+gtvT+'kW',data:new Array(dec.kw.length).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false});
+  if(gtvA>0)refs.push({label:'GTV '+gtvA+'kW',data:new Array(sp.labels.length).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false});
+  if(gtvT>0)refs.push({label:'GTV-T -'+gtvT+'kW',data:new Array(sp.labels.length).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false});
   dC('indJaar');
   var cv=document.getElementById('cIndJaar');
   if(!cv)return;
   CH['indJaar']=new Chart(cv,{
     type:'line',
-    data:{labels:dec.ts,datasets:[{
-      label:'Vermogen',data:dec.kw,
-      borderColor:'#46962b',
-      backgroundColor:function(ctx){return ctx.raw>=0?'rgba(70,150,43,.12)':'rgba(251,186,0,.12)';},
-      fill:true,tension:0,pointRadius:0,borderWidth:1.6,
-      segment:{
-        borderColor:function(ctx){return ctx.p0.parsed.y>=0?'#46962b':'#fbba00';},
-        backgroundColor:function(ctx){return ctx.p0.parsed.y>=0?'rgba(70,150,43,.10)':'rgba(251,186,0,.10)';}
-      }
+    data:{labels:sp.labels,datasets:[{
+      label:'Afname',data:sp.pos,
+      borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.12)',
+      fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:1.6
+    },{
+      label:'Teruglevering',data:sp.neg,
+      borderColor:'#fbba00',backgroundColor:'rgba(251,186,0,.12)',
+      fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:1.6
     }].concat(refs)},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
       plugins:{legend:{display:false},tooltip:{callbacks:{title:(typeof _jTipTitle==='function')?_jTipTitle:undefined}}},
@@ -154,21 +155,42 @@ function drawIndJaar(ts,kw,gtvA,gtvT){
 }
 
 // 2) Netto verbruik per maand — staaf per maand, groen (netto afname) of geel (netto
-//    teruglevering); geaccentueerde 0-lijn.
+//    teruglevering); geaccentueerde 0-lijn. Maanden met onvolledige meetdata (zie
+//    maandDekking() in rekenkern.js) worden gearceerd met contour en krijgen een
+//    asterisk bij het label, zodat een lagere staaf niet als lager verbruik leest.
 function drawIndMaand(maand){
   dC('indMaand');
   var cv=document.getElementById('cIndMaand');
   if(!cv)return;
   var keys=(maand&&maand.keys)||[];
-  var labels=keys.map(function(k){return (typeof mndLabel==='function')?mndLabel(keys,k):k;});
   var data=(maand&&maand.nettoKwh)||[];
-  var colors=data.map(function(v){return v>=0?'rgba(70,150,43,.8)':'rgba(251,186,0,.85)';});
+  var vol=(maand&&maand.volledig)||[];
+  var isVol=function(i){return vol[i]!==false;};
+  var labels=keys.map(function(k,i){
+    var l=(typeof mndLabel==='function')?mndLabel(keys,k):k;
+    return isVol(i)?l:(l+'*');
+  });
+  // Tekenkleur volgt het teken van de waarde (groen = netto afname, geel = netto teruglevering).
+  var kleur=function(i){return data[i]>=0?'#46962b':'#fbba00';};
+  var vlak=function(i){return data[i]>=0?'rgba(70,150,43,.8)':'rgba(251,186,0,.85)';};
+  var ds={label:'Netto verbruik',data:data,borderRadius:4,
+    backgroundColor:data.map(function(_,i){return isVol(i)?vlak(i):hatchPat(kleur(i));}),
+    borderColor:data.map(function(_,i){return kleur(i);}),
+    borderWidth:data.map(function(_,i){return isVol(i)?0:1.5;}),
+    borderSkipped:false};
   var zeroGrid={color:function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';},lineWidth:function(ctx){return ctx.tick.value===0?2:0.5;}};
   CH['indMaand']=new Chart(cv,{
     type:'bar',
-    data:{labels:labels,datasets:[{label:'Netto verbruik',data:data,backgroundColor:colors,borderRadius:4}]},
+    data:{labels:labels,datasets:[ds]},
     options:{responsive:true,maintainAspectRatio:false,animation:false,
-      plugins:{legend:{display:false}},
+      plugins:{legend:{display:false},
+        tooltip:{callbacks:{afterBody:function(items){
+          if(!items.length)return [];
+          var i=items[0].dataIndex;
+          if(isVol(i))return [];
+          return maandDekkingTip({volledig:false,dekking:(maand.dekking||[])[i]||0,
+            dagen:(maand.dagen||[])[i]||0,dagenInMaand:(maand.dagenInMaand||[])[i]||0});
+        }}}},
       scales:{x:Object.assign(ax(),{grid:{display:false}}),y:Object.assign(ax('kWh'),{grid:zeroGrid})}}
   });
 }
@@ -352,15 +374,18 @@ function panIndBdk(i0,i1){
   if(gtvA>0)refs.push({label:'GTV',data:new Array(bdkView.length).fill(gtvA),borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false});
   if(gtvT>0)refs.push({label:'GTV-T',data:new Array(bdkView.length).fill(-gtvT),borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false});
   function _tipTitle(items){return items&&items.length?items[0].label:'';}
+  // insert:false — xl en refs zijn per index van bdkView afgeleid; de aflopend gesorteerde
+  // curve heeft precies één nuldoorgang (zie signSplit in jaarprofiel.js).
+  var spB=signSplit(bdkView,null,{insert:false});
   dC('indBdk');
   var cv=document.getElementById('cIndBdk');
   if(!cv)return;
   CH['indBdk']=new Chart(cv,{type:'line',data:{labels:xl,datasets:[{
-    label:'Vermogen',data:bdkView,borderColor:'#46962b',
-    backgroundColor:function(ctx){return ctx.raw>=0?'rgba(70,150,43,.10)':'rgba(251,186,0,.10)';},
-    fill:true,tension:0,pointRadius:0,borderWidth:2,
-    segment:{borderColor:function(ctx){return ctx.p0.parsed.y>=0?'#46962b':'#fbba00';},
-             backgroundColor:function(ctx){return ctx.p0.parsed.y>=0?'rgba(70,150,43,.10)':'rgba(251,186,0,.10)';}}
+    label:'Afname',data:spB.pos,borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.10)',
+    fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:2
+  },{
+    label:'Teruglevering',data:spB.neg,borderColor:'#fbba00',backgroundColor:'rgba(251,186,0,.10)',
+    fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:2
   }].concat(refs)},options:{responsive:true,maintainAspectRatio:false,animation:false,
     plugins:{legend:{display:false},tooltip:{callbacks:{title:_tipTitle}}},
     scales:{x:Object.assign(ax('Tijdsduur (%)'),{ticks:Object.assign(ax().ticks,{maxTicksLimit:11})}),

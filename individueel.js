@@ -8,6 +8,7 @@
 
 var _indSelId=null;   // geselecteerde aansluiting (company id)
 var _indLast=null;    // {c, a} laatst berekende analyse (voor het rapport)
+var _indYearFilter=null; // null = alle jaren; anders 'YYYY' — de wens van de gebruiker
 
 // Vastgestelde keuze, geïsoleerd als swap-punt zodat ze los te wisselen is:
 //   piekdal  'contract' = app-conventie isDL (weekend/feestdag/23–07u = dal);
@@ -50,16 +51,53 @@ function _indPiekLbls(){
     : {piek:'normaaluren',dal:'daluren',def:'normaal ma–vr 07:00–23:00 (excl. feestdagen) · dal weekend/feestdag/nacht'};
 }
 
+// --- Jaarfilter --------------------------------------------------------------
+// Zelfde idee als het jaarfilter van de groepsanalyse (app.js _yearFilter /
+// _collectYears / renderYearTabs), maar per aansluiting: de balk verschijnt pas
+// zodra een aansluiting meetdata over meerdere kalenderjaren blijkt te hebben.
+
+// Distinct jaren (YYYY) uit een genormaliseerde reeks [{ts,kw}].
+function _indCollectYears(series){
+  var ys={};
+  (series||[]).forEach(function(d){if(d&&d.ts!=null)ys[String(d.ts).slice(0,4)]=1;});
+  return Object.keys(ys).sort();
+}
+
+function _indHideYearBar(){
+  var bar=document.getElementById('indYearBar');
+  if(bar){bar.style.display='none';bar.innerHTML='';}
+}
+
+// Jaarkeuze-balk boven de resultaten. Toont alleen bij >1 jaar; eff = het jaar
+// waarover daadwerkelijk gerekend is (null = alle jaren).
+function renderIndYearBar(years,eff){
+  var bar=document.getElementById('indYearBar');
+  if(!bar)return;
+  if(!years||years.length<=1){_indHideYearBar();return;}
+  bar.style.display='flex';
+  var opts='<option value="">Alle jaren</option>'+years.map(function(y){
+    return '<option value="'+y+'"'+(eff===y?' selected':'')+'>'+y+'</option>';}).join('');
+  // Wens staat aan maar dit jaar zit niet in deze aansluiting → melden i.p.v. de wens wissen.
+  var hint=eff?('Toont alleen '+eff)
+    :(_indYearFilter?(_indYearFilter+' niet beschikbaar voor deze aansluiting — alle jaren getoond'):'Alle jaren samen');
+  bar.innerHTML='<span style="font-size:12px;color:#888;font-weight:700">Jaar:</span>'+
+    '<select id="indYearSel" style="font-family:Barlow,sans-serif;font-size:13px;padding:5px 9px;border:1.5px solid #dce6e0;border-radius:8px;color:#444;cursor:pointer">'+opts+'</select>'+
+    '<span style="font-size:11px;color:#999">'+_indEsc(hint)+'</span>';
+}
+
 // --- Rekenkern ---------------------------------------------------------------
 // Pure functie: bouwt het analyse-object uit een aansluiting + genormaliseerde
 // reeks [{ts,kw}] (kw>0 afname, kw<0 teruglevering, kWh = |kw|*0.25). Dedupliceert
 // op timestamp (laatste wint) en sorteert — neutraliseert DST-duplicaten, net als de
-// intersectie in de groepsanalyse (app.js runAnalysis).
-function calcInd(c,series){
+// intersectie in de groepsanalyse (app.js runAnalysis). Optioneel jaar ('YYYY')
+// beperkt de analyse tot dat kalenderjaar; alles wat hierna volgt (dataset,
+// kengetallen, maandrollup, top-pieken, bdk, serie) schaalt automatisch mee.
+function calcInd(c,series,jaar){
   c=c||{};
   var map={};
   (series||[]).forEach(function(d){if(d&&d.ts!=null)map[String(d.ts).slice(0,16)]=(+d.kw||0);});
   var ts=Object.keys(map).sort();
+  if(jaar)ts=ts.filter(function(t){return t.slice(0,4)===jaar;});
   var n=ts.length;
   var kw=new Array(n);for(var q=0;q<n;q++)kw[q]=map[ts[q]];
 
@@ -97,11 +135,21 @@ function calcInd(c,series){
   var topA=ts.map(function(t,i){return {ts:t,kw:gA[i]};}).sort(function(x,y){return y.kw-x.kw;}).slice(0,50);
   var topT=ts.map(function(t,i){return {ts:t,kw:gT[i]};}).sort(function(x,y){return y.kw-x.kw;}).slice(0,50);
 
+  // Datadekking per maand: één extra pass over de al gededupliceerde reeks. Maanden
+  // met ontbrekende kwartieren (begin/eind meetperiode, meteruitval, afkapping door
+  // het jaarfilter) worden in de maandgrafiek gearceerd i.p.v. stil lager getekend.
+  var dek=(typeof maandDekking==='function')?maandDekking(ts):{byKey:{}};
+  var _d=function(k){return (typeof _dek==='function')?_dek(dek,k):{volledig:true,dekking:1,dagen:0,dagenInMaand:30};};
   var mKeys=Object.keys(mMap).sort();
   var maand={keys:mKeys,
     afnameKwh:mKeys.map(function(k){return mMap[k].a;}),
     terugKwh:mKeys.map(function(k){return mMap[k].t;}),
-    nettoKwh:mKeys.map(function(k){return mMap[k].a-mMap[k].t;})};
+    nettoKwh:mKeys.map(function(k){return mMap[k].a-mMap[k].t;}),
+    volledig:mKeys.map(function(k){return _d(k).volledig;}),
+    dekking:mKeys.map(function(k){return _d(k).dekking;}),
+    dagen:mKeys.map(function(k){return _d(k).dagen;}),
+    dagenInMaand:mKeys.map(function(k){return _d(k).dagenInMaand;}),
+    dek:dek};  // volledige maandDekking()-uitvoer, voor lookup op maandsleutel
 
   // Gecombineerde belastingduurkromme: rauwe signed kwartierreeks aflopend gesorteerd
   // → S-curve van meeste afname (links) naar meeste teruglevering (rechts). Volledig
@@ -113,7 +161,7 @@ function calcInd(c,series){
   var a={
     dataset:{begin:ts[0]||null,eind:ts[n-1]||null,nPunten:n,totUren:totUren,
       jaren:+(totUren/8760).toFixed(2),adres:c.adres||'',bestand:c.fileName||'',
-      naam:c.name||'',ean:c.ean||'',deelnemer:c.deelnemer||''},
+      naam:c.name||'',ean:c.ean||'',deelnemer:c.deelnemer||'',jaarFilter:jaar||null},
     aansluiting:{zekering:c.zekering||'',kva:(c.kva!=null&&c.kva!=='')?+c.kva:null,gtvA:gtvA,gtvT:gtvT},
     piekdalLbl:lbl,
     energie:{afnameKwh:afnameKwh,afnamePiekKwh:afnamePiekKwh,afnameDalKwh:afnameDalKwh,
@@ -133,15 +181,17 @@ function calcInd(c,series){
 function renderInd(){
   var conns=_indConns();
   // Selectie valideren na projectwissel; anders de eerste aansluiting voorselecteren.
-  if(_indSelId&&!_indConn(_indSelId)){_indSelId=null;_indLast=null;}
+  // Bij een projectwissel vervalt ook de jaarkeuze (andere dataset, andere jaren).
+  if(_indSelId&&!_indConn(_indSelId)){_indSelId=null;_indLast=null;_indYearFilter=null;}
   if(!_indSelId&&conns.length)_indSelId=conns[0].id;
   renderIndList();
   var host=document.getElementById('indResults');
   if(!host)return;
-  if(!conns.length){_indDestroyCharts();_indLast=null;host.innerHTML=_indEmptyHtml();return;}
+  if(!conns.length){_indDestroyCharts();_indHideYearBar();_indLast=null;_indYearFilter=null;host.innerHTML=_indEmptyHtml();return;}
   // Verse resultaten voor de huidige selectie behouden; anders de "klaar om te berekenen"-hint tonen.
   if(!_indLast||_indLast.c.id!==_indSelId){
     _indDestroyCharts();
+    _indHideYearBar();
     host.innerHTML=_indReadyHtml(_indConn(_indSelId));
   }
 }
@@ -180,6 +230,7 @@ function selectIndConn(id){
   _indSelId=id;
   _indLast=null;
   _indDestroyCharts();
+  _indHideYearBar(); // jaarkeuze zelf blijft staan: past hij, dan komt de balk terug na Bereken
   renderIndList();
   var host=document.getElementById('indResults');
   if(host)host.innerHTML=_indReadyHtml(_indConn(id));
@@ -211,14 +262,20 @@ async function runIndAnalysis(allowDemo){
       raw=genDemo(idx<0?0:idx);
       notify('Geen meetdata — demoprofiel getoond voor: '+c.name);
     }else{
-      _indLast=null;_indDestroyCharts();
+      _indLast=null;_indDestroyCharts();_indHideYearBar();
       if(host)host.innerHTML='<div class="verg-empty"><div class="big">⚠️</div>Geen meetdata voor <strong>'+_indEsc(c.name)+'</strong>.<br>Upload eerst een profiel via <strong>Projecten → aansluiting bewerken</strong>.</div>';
       notify('Geen meetdata — upload eerst een profiel',false);
       return;
     }
   }
   var series=(typeof _carrierSeries==='function')?_carrierSeries(c,raw):raw;
-  var a=calcInd(c,series);
+  // Jaarfilter: de wens (_indYearFilter) blijft staan, maar er wordt alleen op
+  // gefilterd als deze aansluiting dat jaar ook echt heeft. Zo wist één aansluiting
+  // zonder dat jaar de keuze niet voor de rest (rapport draait dit in een lus).
+  var years=_indCollectYears(series);
+  var eff=(_indYearFilter&&years.indexOf(_indYearFilter)>=0)?_indYearFilter:null;
+  renderIndYearBar(years,eff);
+  var a=calcInd(c,series,eff);
   _indLast={c:c,a:a};
   renderIndResults(c,a);
   try{drawIndJaar(a.serie.ts,a.serie.kw,a.aansluiting.gtvA,a.aansluiting.gtvT);}catch(e){console.error('drawIndJaar:',e);}
@@ -300,7 +357,11 @@ function renderIndResults(c,a){
       '<span style="font-size:12px;color:#888;min-width:60px;text-align:right" id="indJZoomLbl"></span>'+
     '</div>'+
     '<div class="cw" style="height:420px"><canvas id="cIndJaar"></canvas></div></div>';
-  var maandCard='<div class="cd"><div class="ct2"><span class="ac"></span>Netto verbruik per maand</div><div class="ib2" style="font-size:12px;margin-top:0">Netto = verbruik − teruglevering. Negatief betekent dat er in die maand méér is teruggeleverd dan afgenomen.</div><div class="cw" style="height:300px"><canvas id="cIndMaand"></canvas></div></div>';
+  // Onvolledige maanden (ontbrekende meetdata) krijgen een legenda + waarschuwing;
+  // de bijbehorende staven worden in drawIndMaand() gearceerd.
+  var maandWarn='';
+  try{maandWarn=onvolledigNotice(a.maand.keys,a.maand.dek,'verbruik');}catch(e){}
+  var maandCard='<div class="cd"><div class="ct2"><span class="ac"></span>Netto verbruik per maand</div><div class="ib2" style="font-size:12px;margin-top:0">Netto = verbruik − teruglevering. Negatief betekent dat er in die maand méér is teruggeleverd dan afgenomen.</div>'+maandWarn+'<div class="cw" style="height:300px"><canvas id="cIndMaand"></canvas></div></div>';
   var _indMndAbbr=['Jan','Feb','Mrt','Apr','Mei','Jun','Jul','Aug','Sep','Okt','Nov','Dec'];
   var _wkBtnCss='font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif';
   var _wkFilterBtns='<button data-mf="all" onclick="setIndWeekMonthFilter(\'all\')" style="'+_wkBtnCss+'">Heel het jaar</button>'+
@@ -386,6 +447,14 @@ document.addEventListener('DOMContentLoaded',function(){
   if(list)list.addEventListener('click',function(e){
     var it=e.target.closest('[data-ind-id]');
     if(it)selectIndConn(it.getAttribute('data-ind-id'));
+  });
+  // Jaarkeuze: de <select> wordt bij elke analyse opnieuw opgebouwd → delegeren.
+  var yb=document.getElementById('indYearBar');
+  if(yb)yb.addEventListener('change',function(e){
+    var sel=e.target.closest('#indYearSel');
+    if(!sel)return;
+    _indYearFilter=sel.value||null;
+    runIndAnalysis(true).catch(function(err){console.error('runIndAnalysis:',err);notify('Analyse mislukt: '+err.message,false);});
   });
   var add=document.getElementById('btnIndAddComp');
   if(add)add.addEventListener('click',function(){try{openAddComp();}catch(err){console.error('openAddComp:',err);}});

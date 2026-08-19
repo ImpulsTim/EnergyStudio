@@ -112,7 +112,7 @@ Belangrijkste externe libraries via CDN:
 ├── app.js                  # Applicatiestatus, UI-events en hoofdflow
 ├── db.js                   # IndexedDB-opslag
 ├── parsers.js              # CSV/JSON-prijs- en meetdataparsers
-├── rekenkern.js            # Analyse- en rekenlogica
+├── rekenkern.js            # Analyse- en rekenlogica (incl. maandDekking)
 ├── energiemodel.js         # EnergieModel/EHP-rekenmodel
 ├── ehp.js                  # EHP-interface en berekeningen
 ├── individueel.js          # Individuele analyse: rekenkern + UI
@@ -124,6 +124,14 @@ Belangrijkste externe libraries via CDN:
 ├── tarieven.js             # Tarief- en systeemdefinities
 └── charts/                 # Grafiekmodules (incl. individueel.js)
 ```
+
+## Datadekking per maand
+
+Maandgrafieken sommeren per kalendermaand. Ontbreekt er meetdata — begin/eind van de meetperiode, meteruitval, of afkapping door het jaarfilter — dan wordt een staaf lager zonder dat dat iets over het verbruik zegt. `maandDekking()` in `rekenkern.js` bepaalt per maand welk deel van de verwachte kwartieren (`dagen × 96`) daadwerkelijk aanwezig is. Onder `MAAND_DEKKING_DREMPEL` (99%) geldt een maand als onvolledig; zomertijd kost hooguit 4 kwartieren en valt dus buiten de markering.
+
+Onvolledige maanden worden overal hetzelfde weergegeven: gearceerde staaf met contour (`hatchPat()`/`hatchBar()` in `app.js`), een asterisk bij het aslabel, de exacte dagentelling in de tooltip, en een waarschuwing in de kaart via `onvolledigNotice()`. Ze tellen bovendien niet mee in afgeleide getallen die anders vertekenen: de gas-baseload ("laagste maand") en de jaar-extrapolatie van de GTO-besparing.
+
+Toegepast in: individuele analyse (`charts/individueel.js`), gas- en huboverzicht en jaarvergelijking (`app.js`), gelijktijdigheid (`charts/gelijktijdigheid.js`) en piekanalyse (`charts/piekanalyse.js`).
 
 ## Ontwikkelen
 

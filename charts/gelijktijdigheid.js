@@ -151,22 +151,30 @@ function _renderGelijkt(){
   });
   var mMatched=maanden.map(function(m){return Math.round(maandMap[m].matched);});
   var mExported=maanden.map(function(m){return Math.round(maandMap[m].exported);});
+  // Dekking uit allTs, niet uit maandMap: maandMap vult alleen op kwartieren mét productie,
+  // dus een maand zonder opwek zou daar ten onrechte als "leeg" gelden.
+  var gDek=maandDekking(allTs);
+  var gVol=maanden.map(function(m){return _dek(gDek,m).volledig;});
+  var gWarn=document.getElementById('gelijktMaandWarn');
+  if(gWarn)gWarn.innerHTML=onvolledigNotice(maanden,gDek,'opwek','#46962b');
   var cm=document.getElementById('cGelijktMaand');
   if(cm){
     if(_gMaandChartInst){try{_gMaandChartInst.destroy();}catch(e){}_gMaandChartInst=null;}
     _gMaandChartInst=new Chart(cm,{
       type:'bar',
-      data:{labels:mLbls,datasets:[
-        {label:'Gesaldeerd in groep (kWh)',data:mMatched,backgroundColor:'#46962b',stack:'s'},
-        {label:'Teruggeleverd aan net (kWh)',data:mExported,backgroundColor:'#b2bec3',stack:'s'}
+      data:{labels:mLbls.map(function(l,i){return gVol[i]?l:(l+'*');}),datasets:[
+        Object.assign({label:'Gesaldeerd in groep (kWh)',data:mMatched,stack:'s'},hatchBar(gVol,'#46962b')),
+        Object.assign({label:'Teruggeleverd aan net (kWh)',data:mExported,stack:'s'},hatchBar(gVol,'#b2bec3'))
       ]},
       options:{
         responsive:true,maintainAspectRatio:false,
         plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}},
           tooltip:{callbacks:{afterBody:function(items){
+            if(!items.length)return [];
             var idx=items[0].dataIndex;
             var tot=(mMatched[idx]||0)+(mExported[idx]||0);
-            return tot>0?'Gesaldeerd: '+Math.round((mMatched[idx]||0)/tot*100)+'%':'';
+            var uit=tot>0?['Gesaldeerd: '+Math.round((mMatched[idx]||0)/tot*100)+'%']:[];
+            return uit.concat(maandDekkingTip(_dek(gDek,maanden[idx])));
           }}}},
         scales:{
           x:{stacked:true,ticks:{font:{family:'Barlow',size:11}}},

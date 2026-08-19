@@ -199,6 +199,9 @@ async function buildIndRapport(opts){
   // ─── Sectie per aansluiting ───────────────────────────────────
   function _indRapSection(c,a,imgs,num){
     var ds=a.dataset, ans=a.aansluiting, e=a.energie, cg=a.congestie, lbl=a.piekdalLbl;
+    // Jaarfilter actief → benoemen, zodat het rapport niet onterecht de hele meetperiode claimt.
+    var jf=ds.jaarFilter||null;
+    var perLbl=jf?('kalenderjaar '+jf):'de hele meetperiode';
     function shdr(badge){
       return '<div class="rsh"><div class="rsh-n">'+num+'</div><div class="rsh-t">Aansluiting — '+_indEsc(ds.naam||c.name)+
         (badge?'<span class="rsh-badge" style="margin-left:auto">'+badge+'</span>':'')+'</div></div>';
@@ -207,7 +210,7 @@ async function buildIndRapport(opts){
 
     // PAGINA: Kengetallen
     if(sec.kengetallen){
-      var datasetKg='<div class="rsub"><span class="rsub-num">Dataset</span>meetperiode &amp; profiel</div><div class="kg k4">'+
+      var datasetKg='<div class="rsub"><span class="rsub-num">Dataset</span>'+(jf?('kalenderjaar '+jf):'meetperiode &amp; profiel')+'</div><div class="kg k4">'+
         _indRapCard('Begindatum',_fmtDate(ds.begin)||'—')+
         _indRapCard('Einddatum',_fmtDate(ds.eind)||'—')+
         _indRapCard('Meetpunten',_fmtI(ds.nPunten),'kwartierwaarden · ≈ '+ds.jaren.toLocaleString('nl-NL')+' jaar')+
@@ -229,7 +232,7 @@ async function buildIndRapport(opts){
       '</div>';
       html+='<div class="page pb">'+pageHdr+shdr('Kengetallen')+
         datasetKg+aansluitingKg+energieKg+
-        '<div class="rib">Piek/dal-verdeling: '+lbl.def+'</div>'+
+        '<div class="rib">Piek/dal-verdeling: '+lbl.def+(jf?(' · Alle cijfers in dit rapport zijn berekend over kalenderjaar '+jf):'')+'</div>'+
         pageFooter()+'</div>';
     }
 
@@ -261,7 +264,7 @@ async function buildIndRapport(opts){
     // PAGINA: Jaarprofiel
     if(sec.jaar&&imgs.jaar){
       html+='<div class="page pb">'+pageHdr+shdr('Jaarprofiel')+
-        '<p class="rintro">Gemeten vermogen over de hele meetperiode: afname (groen, boven de nullijn) en teruglevering (geel, onder de nullijn), met de GTV-referentielijnen.</p>'+
+        '<p class="rintro">Gemeten vermogen over '+perLbl+': afname (groen, boven de nullijn) en teruglevering (geel, onder de nullijn), met de GTV-referentielijnen.</p>'+
         '<div class="rchart">'+imgs.jaar+'</div>'+
         '<div class="rib2">Groen = afname, geel = teruglevering. Rood gestippeld = GTV afname, oranje gestippeld = GTV-T teruglevering.</div>'+
         pageFooter()+'</div>';
@@ -277,8 +280,17 @@ async function buildIndRapport(opts){
 
     // PAGINA: Netto verbruik per maand
     if(sec.maand&&imgs.maand){
+      // Onvolledige maanden staan al gearceerd in de grafiek (die wordt als screenshot
+      // overgenomen); hier komt de tekstuele toelichting erbij.
+      var mnd=a.maand||{},mk=mnd.keys||[],onv=[];
+      mk.forEach(function(k,i){
+        if((mnd.volledig||[])[i]===false)
+          onv.push(mndLabel(mk,k)+' ('+((mnd.dagen||[])[i]||0)+' van '+((mnd.dagenInMaand||[])[i]||0)+' dagen)');
+      });
       html+='<div class="page pb">'+pageHdr+shdr('Netto verbruik per maand')+
         '<p class="rintro">Netto verbruik (afname − teruglevering) per maand. Een negatieve staaf betekent dat er in die maand méér is teruggeleverd dan afgenomen.</p>'+
+        (onv.length?('<div class="rib-warn"><strong>Onvolledige '+(onv.length===1?'maand':'maanden')+':</strong> '+onv.join(', ')+
+          '. '+(onv.length===1?'Deze staaf is':'Deze staven zijn')+' gearceerd en met een asterisk gemarkeerd — de lagere waarde komt door ontbrekende meetdata, niet door lager verbruik. Vergelijk deze '+(onv.length===1?'maand':'maanden')+' niet met de volledige maanden.</div>'):'')+
         '<div class="rchart">'+imgs.maand+'</div>'+
         pageFooter()+'</div>';
     }

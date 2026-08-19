@@ -114,11 +114,18 @@ function renderYearComparison(withData){
     if(!d||d.ts==null||d.kw==null)return;
     var ts=String(d.ts),y=ts.slice(0,4),mi=parseInt(ts.slice(5,7),10)-1,md=ts.slice(5,10);
     var e=Math.max(0,d.kw)*0.25;
-    var py=perYear[y]||(perYear[y]={month:[0,0,0,0,0,0,0,0,0,0,0,0],day:{},total:0});
+    var py=perYear[y]||(perYear[y]={month:[0,0,0,0,0,0,0,0,0,0,0,0],day:{},total:0,tsSet:{}});
     if(mi>=0&&mi<12)py.month[mi]+=e;
     py.day[md]=(py.day[md]||0)+e;py.total+=e;
+    py.tsSet[ts]=1;  // dedup over aansluitingen heen, voor de dekkingsberekening
   });});
   var years=Object.keys(perYear).sort();
+  // Datadekking per jaar per maand: een maand met ontbrekende meetdata zou het jaar
+  // anders ten onrechte zuiniger laten lijken dan de andere jaren.
+  years.forEach(function(y){perYear[y].dek=maandDekking(Object.keys(perYear[y].tsSet));});
+  var yrKey=function(y,mi){return y+'-'+(mi<9?'0':'')+(mi+1);};
+  var yrHeeft=function(y,mi){return perYear[y].dek.byKey[yrKey(y,mi)]!=null;};      // maand komt voor in de data
+  var yrVol=function(y,mi){return _dek(perYear[y].dek,yrKey(y,mi)).volledig;};
   var isGas=carrier==='gas',co2f=carrierDef('gas').co2||1.788,cal=carrierDef('gas').calorisch||9.769;
   var rows=years.map(function(y,idx){
     var tot=perYear[y].total/cu.div;
@@ -138,11 +145,38 @@ function renderYearComparison(withData){
     (years.length?rows:'<tr><td colspan="'+(isGas?4:3)+'" style="text-align:center;padding:14px;color:#aaa">Geen data</td></tr>')+'</tbody></table></div>';
   // Maandgrafiek (één lijn per jaar) + legenda.
   var legM='';years.forEach(function(y,idx){legM+='<span class="li"><span class="ld" style="background:'+PAL[idx%PAL.length]+'"></span>'+y+'</span>';});
+  // Onvolledige maanden krijgen een open driehoek i.p.v. een gevulde stip (arcering kan
+  // niet op een lijn); maanden zónder data worden helemaal niet getekend (null = gat).
+  var onvJaar=[];
+  years.forEach(function(y){
+    for(var mi=0;mi<12;mi++)if(yrHeeft(y,mi)&&!yrVol(y,mi))onvJaar.push(MND[mi]+' '+y);
+  });
+  if(onvJaar.length)legM+='<span class="li"><span class="ld" style="background:transparent;border:2px solid #888;border-radius:0;transform:rotate(45deg)"></span>Onvolledige maand</span>';
   var legEl=document.getElementById('yrLegM');if(legEl)legEl.innerHTML=legM;
+  var warnEl=document.getElementById('yrMaandWarn');
+  if(warnEl)warnEl.innerHTML=onvJaar.length?('<div class="opt-warn">⚠ Onvolledige '+(onvJaar.length===1?'maand':'maanden')+': '+onvJaar.join(', ')+
+    '. Deze punten zijn als open driehoek gemarkeerd — de lagere waarde komt door ontbrekende meetdata, niet door lager verbruik. Maanden zonder meetdata worden niet getekend.</div>'):'';
   dC('yrMaand');
   CH['yrMaand']=new Chart(document.getElementById('cYrMaand'),{type:'line',
-    data:{labels:MND,datasets:years.map(function(y,idx){return {label:y,data:perYear[y].month.map(function(v){return +(v/cu.div).toFixed(2);}),borderColor:PAL[idx%PAL.length],backgroundColor:'transparent',fill:false,tension:.3,pointRadius:2,borderWidth:2};})},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax(cu.label)}}});
+    data:{labels:MND,datasets:years.map(function(y,idx){
+      var kl=PAL[idx%PAL.length];
+      return {label:y,
+        data:perYear[y].month.map(function(v,mi){return yrHeeft(y,mi)?+(v/cu.div).toFixed(2):null;}),
+        borderColor:kl,backgroundColor:'transparent',fill:false,tension:.3,borderWidth:2,spanGaps:false,
+        pointStyle:MND.map(function(_,mi){return yrVol(y,mi)?'circle':'triangle';}),
+        pointRadius:MND.map(function(_,mi){return yrVol(y,mi)?2:6;}),
+        pointHoverRadius:MND.map(function(_,mi){return yrVol(y,mi)?4:8;}),
+        pointBackgroundColor:MND.map(function(_,mi){return yrVol(y,mi)?kl:'#fff';}),
+        pointBorderColor:kl,
+        pointBorderWidth:MND.map(function(_,mi){return yrVol(y,mi)?1:2;})};})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{afterLabel:function(ctx){
+        var y=ctx.dataset.label,mi=ctx.dataIndex;
+        if(yrVol(y,mi))return '';
+        var d=_dek(perYear[y].dek,yrKey(y,mi));
+        return '⚠ onvolledig — '+d.dagen+' van '+d.dagenInMaand+' dagen ('+Math.round(d.dekking*100)+'%)';
+      }}}},
+      scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax(cu.label)}}});
   // Daggrafiek (x = MM-DD-unie, één lijn per jaar).
   var mdSet={};years.forEach(function(y){Object.keys(perYear[y].day).forEach(function(md){mdSet[md]=1;});});
   var mds=Object.keys(mdSet).sort();
@@ -287,10 +321,21 @@ function renderGasOverzicht(withData,allTs,grpKw,perKw){
   var monthM3=months.map(function(m){return mMap[m]/cal;});
   var totKwh=months.reduce(function(s,m){return s+mMap[m];},0);
   var totM3=totKwh/cal,totGJ=totKwh/277.778,co2ton=totM3*co2f/1000;
-  var nM=months.length||1,gemM3=totM3/nM;
+  var nM=months.length||1;
+  // Datadekking per maand — onvolledige maanden worden gearceerd én tellen niet mee
+  // in gemiddelde/baseload, anders zou een halve maand die getallen omlaag trekken.
+  var gasDek=maandDekking(allTs);
+  var volM=months.map(function(m){return _dek(gasDek,m).volledig;});
+  var volIdx=months.map(function(_,i){return i;}).filter(function(i){return volM[i];});
+  var nVol=volIdx.length;
+  var gemM3=nVol?volIdx.reduce(function(s,i){return s+monthM3[i];},0)/nVol:(totM3/nM);
   var maxIdx=monthM3.length?monthM3.reduce(function(b,v,i,a){return v>a[b]?i:b;},0):0;
   // Baseload = laagste maand × aantal maanden (proces); rest = seizoen (verwarming).
-  var baseMonthly=monthM3.length?Math.min.apply(null,monthM3):0;
+  // Alleen volledige maanden komen in aanmerking als "laagste maand": een maand met
+  // ontbrekende meetdata is kunstmatig laag en zou de baseload te laag zetten (en het
+  // seizoensdeel dus te hoog). Zonder volledige maand valt het terug op alle maanden.
+  var baseKand=nVol?volIdx.map(function(i){return monthM3[i];}):monthM3;
+  var baseMonthly=baseKand.length?Math.min.apply(null,baseKand):0;
   var baseYear=baseMonthly*nM,seizoen=Math.max(0,totM3-baseYear);
   var seizPct=totM3>0?seizoen/totM3*100:0;
   var perComp=withData.map(function(c,ci){
@@ -302,12 +347,13 @@ function renderGasOverzicht(withData,allTs,grpKw,perKw){
     '<div class="kg">'+
       _kbCard('Totaal gas',fmt(totM3),'m³')+
       _kbCard('Energie',fmt(totKwh),'kWh · '+totGJ.toFixed(1)+' GJ')+
-      _kbCard('Gemiddeld/maand',fmt(gemM3),'m³')+
+      _kbCard('Gemiddeld/maand',fmt(gemM3),'m³'+(nVol&&nVol<months.length?(' · over '+nVol+' volledige '+(nVol===1?'maand':'maanden')):''))+
       _kbCard('Hoogste maand',fmt(monthM3[maxIdx]||0),(months.length?mndLabel(months,months[maxIdx]):'—')+' · m³')+
       _kbCard('CO₂-uitstoot',co2ton.toFixed(1),'ton CO₂ (×'+co2f+' kg/m³)')+
       _kbCard('Verwarming (seizoen)',seizPct.toFixed(0)+'%',fmt(seizoen)+' m³ · baseload '+fmt(baseYear)+' m³')+
     '</div>'+
     '<div class="cd"><div class="ct2"><div class="ac" style="background:'+def.kleur+'"></div>Gasverbruik per maand (hub-totaal)</div>'+
+      onvolledigNotice(months,gasDek,'gasverbruik',def.kleur)+
       '<div class="cw" style="height:300px"><canvas id="cGasMaand"></canvas></div></div>'+
     '<div class="cd"><div class="ct2"><div class="ac" style="background:'+def.kleur+'"></div>Per aansluiting</div>'+
       '<table class="tbl"><thead><tr><th>Aansluiting</th><th>Deelnemer</th><th>m³</th><th>kWh</th><th>CO₂ (ton)</th></tr></thead><tbody>'+
@@ -315,8 +361,11 @@ function renderGasOverzicht(withData,allTs,grpKw,perKw){
       '</tbody></table></div>';
   dC('gasMaand');
   CH['gasMaand']=new Chart(document.getElementById('cGasMaand'),{type:'bar',
-    data:{labels:months.map(function(m){return mndLabel(months,m);}),datasets:[{label:'m³',data:monthM3.map(function(v){return Math.round(v);}),backgroundColor:def.kleur,borderRadius:5}]},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax('m³')}}});
+    data:{labels:months.map(function(m,i){return maandDekkingLabel(mndLabel(months,m),_dek(gasDek,m));}),
+      datasets:[Object.assign({label:'m³',data:monthM3.map(function(v){return Math.round(v);}),borderRadius:5},hatchBar(volM,def.kleur))]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},
+      tooltip:{callbacks:{afterBody:function(items){return items.length?maandDekkingTip(_dek(gasDek,months[items[0].dataIndex])):[];}}}},
+      scales:{x:Object.assign(ax(),{grid:{display:false}}),y:ax('m³')}}});
 }
 
 // --- Centrale hub-weergave (cross-carrier energiestromen) --------------------
@@ -357,7 +406,10 @@ async function computeHubData(p){
     });
     perCarrier[car]={afnameKwh:afnameKwh,opwekKwh:opwekKwh,internMatchedKwh:internKwh,
       netImportKwh:Math.max(0,afnameKwh-internKwh),netExportKwh:Math.max(0,opwekKwh-internKwh),
-      monthKwh:monthKwh,nConn:cos.length};
+      monthKwh:monthKwh,nConn:cos.length,
+      // Datadekking per drager afzonderlijk: een maand kan compleet zijn voor elektra
+      // en tegelijk een gat hebben in gas.
+      dekking:maandDekking(Object.keys(keys))};
   }
   return {carriers:carriers,perCarrier:perCarrier,years:Object.keys(yearsSet).sort()};
 }
@@ -382,8 +434,13 @@ async function renderHub(p){
   // Electrificatiepotentieel: verwarmingsdeel gas (boven baseload) via warmtepomp (COP).
   var cop=(typeof HUB!=='undefined'?HUB.cop:3),gasHeatKwh=0;
   if(pc.gas){
-    var gm=Object.keys(pc.gas.monthKwh).map(function(m){return pc.gas.monthKwh[m];});
-    var nm=gm.length||1,baseMonthly=gm.length?Math.min.apply(null,gm):0;
+    var gk=Object.keys(pc.gas.monthKwh).sort();
+    var gm=gk.map(function(m){return pc.gas.monthKwh[m];});
+    // Alleen volledige maanden komen in aanmerking als baseload-maand: een maand met
+    // ontbrekende meetdata is kunstmatig laag en zou het seizoensdeel te hoog maken.
+    var gmVol=gk.filter(function(m){return _dek(pc.gas.dekking,m).volledig;}).map(function(m){return pc.gas.monthKwh[m];});
+    var kand=gmVol.length?gmVol:gm;
+    var nm=gm.length||1,baseMonthly=kand.length?Math.min.apply(null,kand):0;
     gasHeatKwh=Math.max(0,pc.gas.afnameKwh-baseMonthly*nm);
   }
   var elekNodig=gasHeatKwh/cop,overschot=pc.elektra?pc.elektra.netExportKwh:0;
@@ -402,6 +459,23 @@ async function renderHub(p){
   }
   var mset={};carriers.forEach(function(c){Object.keys(pc[c].monthKwh).forEach(function(m){mset[m]=1;});});
   var months=Object.keys(mset).sort();
+  // Een hub-maand telt pas als volledig wanneer élke drager die er data heeft volledig is;
+  // een gat in één drager maakt de gestapelde staaf immers al te laag.
+  var hubVol=months.map(function(m){
+    return carriers.every(function(c){
+      return pc[c].monthKwh[m]==null||_dek(pc[c].dekking,m).volledig;
+    });
+  });
+  var hubDek={byKey:{}};
+  months.forEach(function(m,i){
+    var slechtste=null;
+    carriers.forEach(function(c){
+      if(pc[c].monthKwh[m]==null)return;
+      var d=_dek(pc[c].dekking,m);
+      if(!slechtste||d.dekking<slechtste.dekking)slechtste=d;
+    });
+    hubDek.byKey[m]=slechtste||_dek(null,m);
+  });
   var balansRows=carriers.map(function(c){var x=pc[c],def=carrierDef(c);
     return '<tr><td><span class="dt" style="background:'+def.kleur+';display:inline-block"></span> '+def.label+'</td><td>'+fmt(MWH(x.afnameKwh))+'</td><td>'+fmt(MWH(x.opwekKwh))+'</td><td>'+fmt(MWH(x.internMatchedKwh))+'</td><td>'+fmt(MWH(x.netImportKwh))+'</td><td>'+fmt(MWH(x.netExportKwh))+'</td></tr>';}).join('');
   host.innerHTML=
@@ -418,6 +492,7 @@ async function renderHub(p){
     '<div class="cd"><div class="ct2"><div class="ac"></div>Energiebalans per drager (MWh)</div>'+
       '<table class="tbl"><thead><tr><th>Drager</th><th>Vraag</th><th>Opwek</th><th>Intern</th><th>Net-import</th><th>Teruglev.</th></tr></thead><tbody>'+balansRows+'</tbody></table></div>'+
     '<div class="cd"><div class="ct2"><div class="ac"></div>Energie per maand, gestapeld per drager (MWh)</div>'+
+      onvolledigNotice(months,hubDek,'energiegebruik')+
       '<div class="cw" style="height:300px"><canvas id="cHubMaand"></canvas></div></div>'+
     '<div class="cd"><div class="ct2"><div class="ac"></div>Electrificatiepotentieel (indicatief)</div>'+
       '<div class="ib2" style="margin-bottom:6px">Verwarmingsdeel gas (seizoen boven baseload) omgezet via een warmtepomp met COP '+cop+'. Indicatief — om de koppelkans te schatten, niet als ontwerp.</div>'+
@@ -449,9 +524,12 @@ async function renderHub(p){
   }
   dC('hubMaand');
   CH['hubMaand']=new Chart(document.getElementById('cHubMaand'),{type:'bar',
-    data:{labels:months.map(function(m){return mndLabel(months,m);}),datasets:carriers.map(function(c){var def=carrierDef(c);
-      return {label:def.label,data:months.map(function(m){return +(((pc[c].monthKwh[m]||0))/1000).toFixed(2);}),backgroundColor:def.kleur,borderRadius:4,stack:'mwh'};})},
-    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},scales:{x:Object.assign(ax(),{stacked:true,grid:{display:false}}),y:Object.assign(ax('MWh'),{stacked:true})}}});
+    data:{labels:months.map(function(m){return maandDekkingLabel(mndLabel(months,m),_dek(hubDek,m));}),
+      datasets:carriers.map(function(c){var def=carrierDef(c);
+      return Object.assign({label:def.label,data:months.map(function(m){return +(((pc[c].monthKwh[m]||0))/1000).toFixed(2);}),borderRadius:4,stack:'mwh'},hatchBar(hubVol,def.kleur));})},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}},
+      tooltip:{callbacks:{afterBody:function(items){return items.length?maandDekkingTip(_dek(hubDek,months[items[0].dataIndex])):[];}}}},
+      scales:{x:Object.assign(ax(),{stacked:true,grid:{display:false}}),y:Object.assign(ax('MWh'),{stacked:true})}}});
 }
 
 // Hulpfuncties
@@ -480,6 +558,57 @@ function dC(id){if(CH[id]){try{CH[id].destroy();}catch(e){}delete CH[id];}}
 function resetCH(){Object.keys(CH).forEach(function(k){dC(k);});CH={};_piek=null;_jaarState=null;}
 function setKpi(id,val,alert){var el=document.getElementById(id);el.textContent=val;el.parentElement.classList.remove('red','grn');el.parentElement.classList.add(alert?'red':'grn');}
 function mndLabel(mnds,m){var parts=m.split('-');var mo=parseInt(parts[1]);var y=parts[0];var multi=mnds.some(function(x){return x.slice(0,4)!==mnds[0].slice(0,4);});return MND[mo-1]+(multi?" '"+y.slice(2):'');}
+
+// --- Arcering voor onvolledige maanden ---------------------------------------
+// Diagonale streepvulling als CanvasPattern; Chart.js accepteert die rechtstreeks
+// als backgroundColor. Gebruikt om staven van maanden met onvolledige meetdata te
+// onderscheiden van gewoon gemeten waarden (zie maandDekking() in rekenkern.js).
+// Gecached per kleur — één 8×8 tegel per kleur volstaat voor alle grafieken.
+var _hatchCache={};
+function hatchPat(color){
+  if(_hatchCache[color])return _hatchCache[color];
+  var c=document.createElement('canvas');c.width=8;c.height=8;
+  var x=c.getContext('2d');
+  if(!x)return color;
+  x.fillStyle='#fff';x.fillRect(0,0,8,8);
+  x.strokeStyle=color;x.lineWidth=2.5;x.lineCap='square';
+  x.beginPath();
+  x.moveTo(-2,6);x.lineTo(6,-2);      // tegel-naad linksboven
+  x.moveTo(2,10);x.lineTo(10,2);      // hoofddiagonaal
+  x.moveTo(6,14);x.lineTo(14,6);      // tegel-naad rechtsonder
+  x.stroke();
+  var p=x.createPattern(c,'repeat');
+  _hatchCache[color]=p||color;
+  return _hatchCache[color];
+}
+
+// Standaardopmaak voor een staafdataset waarvan sommige maanden onvolledig zijn:
+// volledige maand = effen kleur, onvolledige maand = arcering + contour.
+// vol = array booleans (true = volledig), kleur = string of array per index.
+function hatchBar(vol,kleur){
+  var kl=function(i){return (typeof kleur==='function')?kleur(i):(Array.isArray(kleur)?kleur[i]:kleur);};
+  return {
+    backgroundColor:(vol||[]).map(function(v,i){return v?kl(i):hatchPat(kl(i));}),
+    borderColor:(vol||[]).map(function(v,i){return kl(i);}),
+    borderWidth:(vol||[]).map(function(v){return v?0:1.5;}),
+    borderSkipped:false
+  };
+}
+
+// Legenda-swatch + waarschuwingstekst voor onvolledige maanden (huisstijl .lg/.opt-warn).
+// mKeys = maandsleutels 'YYYY-MM' in grafiekvolgorde, dekking = resultaat van maandDekking().
+function onvolledigNotice(mKeys,dekking,wat,kleur){
+  var op=(mKeys||[]).filter(function(k){return !_dek(dekking,k).volledig;});
+  if(!op.length)return '';
+  var kl=kleur||'#46962b';
+  var lijst=op.map(function(k){var d=_dek(dekking,k);return mndLabel(mKeys,k)+' ('+d.dagen+' van '+d.dagenInMaand+' dagen)';}).join(', ');
+  return '<div class="lg" style="margin-bottom:4px">'+
+      '<span class="li"><span class="ld" style="background:'+kl+'"></span>Volledige maand</span>'+
+      '<span class="li"><span class="ld" style="background:repeating-linear-gradient(45deg,'+kl+' 0 2px,#fff 2px 4px);border:1px solid '+kl+'"></span>Onvolledige maand</span>'+
+    '</div>'+
+    '<div class="opt-warn">⚠ Onvolledige '+(op.length===1?'maand':'maanden')+': '+lijst+
+    '. '+(op.length===1?'Deze staaf is':'Deze staven zijn')+' gearceerd — de lagere waarde komt door ontbrekende meetdata, niet door lager '+(wat||'verbruik')+'.</div>';
+}
 
 // Renderen
 function renderAll(){renderProjSel();renderSidebar();renderHdrProj();renderOverzicht();try{renderScenarioSidebar();}catch(e){}try{renderEHP();}catch(e){}try{renderHome();}catch(e){}try{renderInd();}catch(e){}}
