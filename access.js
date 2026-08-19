@@ -47,7 +47,7 @@
           unlock();
           return;
         }
-        if(msg)msg.textContent='Wachtwoord klopt niet.';
+        if(msg)msg.textContent='Wachtwoord klopt niet. Neem contact op met energie@impulszeeland.nl voor toegang tot de applicatie.';
         input.value='';
         input.focus();
       }catch(err){
