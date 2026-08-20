@@ -113,10 +113,10 @@ Belangrijkste externe libraries via CDN:
 ├── db.js                   # IndexedDB-opslag
 ├── parsers.js              # CSV/JSON-prijs- en meetdataparsers
 ├── rekenkern.js            # Analyse- en rekenlogica (incl. maandDekking)
-├── energiemodel.js         # EnergieModel/EHP-rekenmodel
+├── energiemodel.js         # EHP-rekenmodel (referentie/regressiebasis)
+├── ehp/                    # EHP-modellaag: aannames, prijsmodel, dispatch, opslag, verdeling
 ├── ehp.js                  # EHP-interface en berekeningen
 ├── individueel.js          # Individuele analyse: rekenkern + UI
-├── financieel.js           # Financiele analyses
 ├── rapport.js              # GTO-rapportage
 ├── rapport_ehp.js          # EHP-rapportage
 ├── rapport_ind.js          # Individueel analyserapport

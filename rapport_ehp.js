@@ -6,7 +6,7 @@
 // ─── Modal: platform-selectie ───────────────────────────────────
 var _EHP_RAP_SECTION_IDS=[
   'platform','platformGel','financial','flow','weekEpex',
-  'mismatch','kansen','participants','memberPages'
+  'participants','memberPages'
 ];
 
 function _ehpRapSectionMap(ids){
@@ -90,8 +90,6 @@ async function buildEhpRapport(opts){
   var sec=_ehpRapSectionMap(opts&&opts.sections);
 
   var origActive=_ehpActiveId;
-  var origUrgGran=(typeof _ehpUrgGran!=='undefined')?_ehpUrgGran:null;
-  if(sec.mismatch&&typeof _ehpUrgGran!=='undefined')_ehpUrgGran='dag';
   var datum=new Date().toLocaleDateString('nl-NL',{day:'numeric',month:'long',year:'numeric'});
   var logoUrl='https://www.impulszeeland.nl/assets/img/logo.svg';
   var srcLbl={zon:'Zon',wind:'Wind',overig:'Overig',none:'Alleen afnemer',
@@ -139,15 +137,6 @@ async function buildEhpRapport(opts){
     if(sec.flow){try{flowSvg=_ehpFlowSvg(res);}catch(e){console.error('flowSvg:',e);}}
     var gelEpexImg=sec.weekEpex?await _rapCi('cEhpGelEpex',230):'';
 
-    // Kansen-tab: markt-mismatchanalyse (KPI's + urgentie-heatmaps) en top kansvensters
-    // (zelfde live DOM/berekening als de Kansen-tab in de app, als afbeelding vastgelegd).
-    var urgTekortImg='',urgOverschotImg='';
-    if(sec.mismatch){
-      urgTekortImg=await _ehpRapCaptureUrgHeat('ehpHmUrgTekort',1600);
-      urgOverschotImg=await _ehpRapCaptureUrgHeat('ehpHmUrgOverschot',1600);
-    }
-    var kans=sec.kansen?_ehpKansenCompute(res):{buckets:[]};
-
     // Bestaande UI-tabellen vastleggen (hergebruik van de app-logica en -styling):
     //  • platform- en per-deelnemer gelijktijdigheidstabellen
     //  • financieel overzicht (EPEX historisch + forward scenario)
@@ -158,7 +147,6 @@ async function buildEhpRapport(opts){
 
     var platformHtml=buildPlatformSection(res,{
       flowSvg:flowSvg,gelEpexImg:gelEpexImg,
-      urgTekortImg:urgTekortImg,urgOverschotImg:urgOverschotImg,kansenBuckets:kans.buckets,
       platGel:gelCap.platform,memberGel:gelCap.members,
       finBloks:finBloks,factuur:factuurMap
     },pi+1);
@@ -167,7 +155,6 @@ async function buildEhpRapport(opts){
 
   // ── Editor herstellen ──
   _ehpActiveId=origActive;
-  if(origUrgGran&&typeof _ehpUrgGran!=='undefined')_ehpUrgGran=origUrgGran;
   try{renderEHP();}catch(e){}
 
   if(!sections.length)throw new Error('Geen platform met meetdata om te rapporteren');
@@ -289,20 +276,10 @@ async function buildEhpRapport(opts){
         (totMatched>0?_ehpRapCard('Gem. inkoopprijs',_ehpRapCt(gemInkoop),'afnemer betaalt',' dark'):'')+
       '</div>';
 
-    var simHtml='<div class="rsub"><span class="rsub-num">Gelijktijdigheid</span>opwek &amp; afname</div>'+
-      '<div class="kg k6">'+
-        _ehpRapCard('Kwartieren overlap',_fmtI(res.nBoth),'opwek én verbruik',' dark')+
-        _ehpRapCard('Alleen opwek',_fmtI(res.nProdOnly),'→ naar net',' dark')+
-        _ehpRapCard('Alleen verbruik',_fmtI(res.nDemOnly),'→ van net',' dark')+
-        _ehpRapCard('Piek-overlap',_fmtI(res.maxMatchKw)+' kW','max. gelijktijdig',' dark')+
-        _ehpRapCard('Piek opwek',_fmtI(res.peakProdKw)+' kW','groep',' dark')+
-        _ehpRapCard('Piek verbruik',_fmtI(res.peakDemKw)+' kW','groep',' dark')+
-      '</div>';
-
     var pages=sec.platform?'<div class="page pb">'+pageHdr+shdr('Platformoverzicht')+
       '<p class="rintro">Het platform <strong>'+_ehpEsc(res.platName)+'</strong> telt '+res.parties.length+' deelnemer'+(res.parties.length!==1?'s':'')+
       '. Hieronder de belangrijkste volumes en gelijktijdigheid, gevolgd door de interne verrekenprijzen.</p>'+
-      kpiHtml+prijsHtml+simHtml+
+      kpiHtml+prijsHtml+
       '<div class="rib2">De interne verrekenprijzen zijn de binnen het collectief afgesproken tarieven waartegen opwek onderling wordt verrekend. De gemiddelde verkoop-/inkoopprijs is gewogen naar het intern verrekende volume per bron.</div>'+
       pageFooter()+'</div>':'';
 
@@ -340,38 +317,6 @@ async function buildEhpRapport(opts){
         '<p class="rintro">Gemiddeld vermogen per kwartier van de week. Groen = opwek gesaldeerd binnen de groep, grijs = overschot teruggeleverd aan het net. De oranje stippellijn is de gemiddelde EPEX-prijs per kwartier (rechter-as).</p>'+
         '<div class="rchart">'+cap.gelEpexImg+'</div>'+
         '<div class="rib2">Zo zie je wanneer de groep eigen opwek benut en tegen welke marktprijs het overschot naar het net weglekt.</div>'+
-        pageFooter()+'</div>';
-    }
-
-    // ── PAGINA('s): losse urgentie-heatmaps ──
-    if(sec.mismatch&&(cap.urgTekortImg||cap.urgOverschotImg)){
-      if(cap.urgTekortImg){
-        pages+='<div class="page pb ehp-heat-page">'+pageHdr+shdr('Urgentie dure inkoop')+
-          '<p class="rintro">Netinkoop tijdens relatief dure EPEX-uren. Elke cel is een uur van de dag × een dag van het jaar; donkerder betekent een hogere gecombineerde urgentiescore.</p>'+
-          '<div class="ehp-heat-frame">'+cap.urgTekortImg+'</div>'+
-          pageFooter()+'</div>';
-      }
-      if(cap.urgOverschotImg){
-        pages+='<div class="page pb ehp-heat-page">'+pageHdr+shdr('Urgentie goedkope teruglevering')+
-          '<p class="rintro">Teruglevering tijdens relatief goedkope, zeer lage of negatieve EPEX-uren. Donkere cellen wijzen op momenten waar betere lokale benutting, opslag of flexibiliteit mogelijk waarde kan toevoegen.</p>'+
-          '<div class="ehp-heat-frame">'+cap.urgOverschotImg+'</div>'+
-          pageFooter()+'</div>';
-      }
-    }
-
-    // ── PAGINA: Top kansvensters voor verbetering ──
-    if(sec.kansen&&cap.kansenBuckets&&cap.kansenBuckets.length){
-      var kansTypeLbl={tekort:'Tekort',tekort_gevoelig:'Tekort · prijsgevoelig',overschot:'Overschot',overschot_gevoelig:'Overschot · prijsgevoelig'};
-      var kansColg='<colgroup><col style="width:28%"><col style="width:20%"><col style="width:18%"><col style="width:34%"></colgroup>';
-      var kansRows=cap.kansenBuckets.map(function(b){
-        var epexTxt=b.avgEpex!=null?_ehpRapCt(b.avgEpex):'—';
-        return '<tr><td style="font-weight:700">'+_ehpEsc(b.label)+'</td><td>'+kansTypeLbl[b.type]+'</td>'+
-          '<td class="num">'+epexTxt+'</td><td style="font-size:8pt">'+_ehpEsc(b.suggestie)+'</td></tr>';
-      }).join('');
-      pages+='<div class="page pb">'+pageHdr+shdr('Top kansvensters voor verbetering')+
-        '<p class="rintro">Deze analyse vertaalt het samenspel van aanbod, vraag en prijsgevoelige momenten naar concrete kansvensters. Per venster wordt aangegeven of het vooral gaat om tekort of overschot, en of het moment prijsgevoelig is. De onderstaande vensters zijn indicatief en bedoeld als aanknopingspunt voor vervolgonderzoek — geen automatisch advies.</p>'+
-        '<table class="compact">'+kansColg+'<thead><tr><th>Periode</th><th>Type</th><th class="num">Gem. EPEX-prijs</th><th>Suggestie</th></tr></thead>'+
-        '<tbody>'+kansRows+'</tbody></table>'+
         pageFooter()+'</div>';
     }
 
@@ -571,41 +516,6 @@ async function _ehpRapCapturePieces(html,selector,width){
   }catch(e){console.error('_ehpRapCapturePieces:',e);}
   finally{try{document.body.removeChild(box);}catch(e){}}
   return out;
-}
-
-async function _ehpRapCaptureUrgHeat(gridId,width){
-  var grid=document.getElementById(gridId);
-  if(!grid)return'';
-  var block=grid.closest?grid.closest('.hm-block'):grid.parentElement;
-  if(!block)return'';
-  width=width||1600;
-  var touched=[];
-  function set(el,prop,val){
-    if(!el||!el.style)return;
-    touched.push({el:el,prop:prop,val:el.style[prop]});
-    el.style[prop]=val;
-  }
-  var title=block.querySelector('.hm-h');
-  var leg=block.querySelector('.hm-leg');
-  try{
-    set(block,'width',width+'px');
-    set(block,'background','#fff');
-    set(block,'padding','0');
-    set(grid,'gridAutoRows','28px');
-    set(grid,'gap','2px');
-    set(grid,'fontSize','14px');
-    set(grid,'overflowX','visible');
-    set(title,'fontSize','22px');
-    set(title,'lineHeight','1.15');
-    set(title,'marginBottom','12px');
-    set(leg,'fontSize','15px');
-    set(leg,'marginTop','12px');
-    var img=await _rapCihEl(block,width,'width:100%;max-width:100%;height:100%;object-fit:contain;display:block;margin:0 auto');
-    return img?img.replace('<img ','<img class="ehp-heat-img" '):'';
-  }catch(e){console.error('_ehpRapCaptureUrgHeat:',e);return'';}
-  finally{
-    for(var i=touched.length-1;i>=0;i--)touched[i].el.style[touched[i].prop]=touched[i].val;
-  }
 }
 
 // Gelijktijdigheidstabellen: platform (EPEX + forward) en per deelnemer (op naam).
