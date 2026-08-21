@@ -1094,6 +1094,58 @@
     };
   }
 
+  // ─── Herkomst van de laadstroom ─────────────────────────────────────────────
+
+  /**
+   * Splitst wat de accu heeft LADEN uit naar herkomst: per bedrijf (hun eigen residu-overschot
+   * dat kwartier, uit opwekAlloc) en een restpost "net" voor wat overbleef nadat alle lokale
+   * overschot al op was.
+   *
+   * Waarom dit klopt: opwekAlloc bevat per (Asset, kwartier) het overschot_kWh van dié ene
+   * opwekker, ná de gelijktijdigheidsmatching — dezelfde bron waaruit het model zijn
+   * groep-brede overschot_kWh optelt (zie _aggregateOpwekAlloc in energiemodel.js). Voor een
+   * accu op de GEDEELDE aansluiting is sig.overschot in bouwSignaal() daarom exact de som van
+   * opwekAlloc.overschot_kWh op dat kwartier — de verdeling hieronder telt dus letterlijk op
+   * tot d.inUitOverschot_kWh, geen schatting.
+   *
+   * Die gelijkheid geldt NIET voor een accu achter de meter van één deelnemer: daar bouwt
+   * bouwSignaal() sig.overschot uit die ene aansluiting zijn eigen rauwe meetreeks (gastheerProfiel),
+   * los van de community-brede opwekAlloc. Roep deze functie daar niet op — het antwoord zou een
+   * verdeling suggereren die het model niet heeft gemaakt.
+   */
+  function herkomstLaadstroom(d, opwekAlloc) {
+    var perTijd = {};
+    for (var i = 0; i < (opwekAlloc || []).length; i++) {
+      var r = opwekAlloc[i];
+      var os = +r.overschot_kWh || 0;
+      if (os <= 0) continue;
+      var e = perTijd[r.tijdKey];
+      if (!e) { e = {totaal: 0, per: {}}; perTijd[r.tijdKey] = e; }
+      e.totaal += os;
+      e.per[r.Asset] = (e.per[r.Asset] || 0) + os;
+    }
+
+    var perBedrijf = {}, vanNet = 0;
+    var ap = d.acProfiel || [], tk = d.tijdKey || [];
+    for (var t = 0; t < ap.length; t++) {
+      if (ap[t] >= 0) continue;                    // alleen laadkwartieren (acProfiel < 0)
+      var acIn = -ap[t];
+      var e = perTijd[tk[t]];
+      var uitOverschot = e ? Math.min(acIn, e.totaal) : 0;
+      if (e && e.totaal > 0) {
+        Object.keys(e.per).forEach(function (naam) {
+          perBedrijf[naam] = (perBedrijf[naam] || 0) + uitOverschot * (e.per[naam] / e.totaal);
+        });
+      }
+      vanNet += acIn - uitOverschot;
+    }
+
+    var lijst = Object.keys(perBedrijf)
+      .map(function (naam) { return {naam: naam, kWh: perBedrijf[naam]}; })
+      .sort(function (x, y) { return y.kWh - x.kWh; });
+    return {perBedrijf: lijst, vanNet_kWh: vanNet};
+  }
+
   // ─── Export ─────────────────────────────────────────────────────────────────
   global.EhpOpslag = {
     VELDEN:           VELDEN,
@@ -1109,7 +1161,8 @@
     marginaalEbTarief: marginaalEbTarief,
     verwerkInModel:   verwerkInModel,
     rekening:         rekening,
-    sweep:            sweep
+    sweep:            sweep,
+    herkomstLaadstroom: herkomstLaadstroom
   };
 
 })(window);

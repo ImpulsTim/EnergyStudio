@@ -461,8 +461,16 @@ async function calcEHP(){
           if(p.companies[ci].id===accuCfg.eigenaar){eigNaam=p.companies[ci].name;break;}
         }
       }
-      opslagRes.push({cfg:accuCfg,dispatch:(pk&&pk.beste)?pk.beste.dispatch:dsp,
-        dispatchZonderPiek:dsp,piek:pk,businesscase:bcs,eigenaarNaam:eigNaam});
+      var eindDispatch=(pk&&pk.beste)?pk.beste.dispatch:dsp;
+      // Herkomst van de laadstroom per bedrijf — alleen betrouwbaar op de gedeelde aansluiting:
+      // daar is sig.overschot exact de som van opwekAlloc.overschot_kWh per kwartier, dus de
+      // verdeling klopt letterlijk. Achter de meter van één deelnemer is dat niet zo (zie
+      // herkomstLaadstroom() in opslag.js) — dan blijft het bij de simpele eigen/net-splitsing.
+      var herkomst=accuCfg.eigenaar==='groep'
+        ?EhpOpslag.herkomstLaadstroom(eindDispatch,result.opwekAlloc)
+        :null;
+      opslagRes.push({cfg:accuCfg,dispatch:eindDispatch,
+        dispatchZonderPiek:dsp,piek:pk,businesscase:bcs,eigenaarNaam:eigNaam,herkomst:herkomst});
     }catch(err){console.error('opslagdispatch:',err);notify('Accu kon niet worden doorgerekend: '+(accuCfg.naam||''),false);}
   });
 
@@ -859,6 +867,7 @@ function renderEhpResults(res){
   _ehpBindInspector();
   if(res.opslag&&res.opslag.length){
     _ehpTekenSocKrommes(res);
+    if(typeof _ehpTekenKansenCharts==='function')_ehpTekenKansenCharts(res);
     var sweepBtn=document.getElementById('btnEhpSweep');
     if(sweepBtn)sweepBtn.addEventListener('click',ehpBerekenSweep);
     var gastBtn=document.getElementById('btnEhpGastheren');
@@ -892,8 +901,10 @@ function _ehpAttachTabs(){
     if(panel)panel.classList.add('on');
     // Charts in hidden panels hadden size 0 bij eerste render — resize na DOM-update
     setTimeout(function(){
-      ['ehpGelEpex','ehpSoc0','ehpSoc1','ehpSoc2'].forEach(function(k){
-        if(CH[k])try{CH[k].resize();}catch(_){}
+      // Alle EHP-grafieken, niet een handmatige lijst: een nieuw canvas werd anders vergeten
+      // en bleef op breedte 0 staan tot de eerstvolgende venstergrootte-wijziging.
+      Object.keys(CH).forEach(function(k){
+        if(k.indexOf('ehp')===0&&CH[k])try{CH[k].resize();}catch(_){}
       });
     },30);
   });
