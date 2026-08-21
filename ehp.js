@@ -461,8 +461,16 @@ async function calcEHP(){
           if(p.companies[ci].id===accuCfg.eigenaar){eigNaam=p.companies[ci].name;break;}
         }
       }
-      opslagRes.push({cfg:accuCfg,dispatch:(pk&&pk.beste)?pk.beste.dispatch:dsp,
-        dispatchZonderPiek:dsp,piek:pk,businesscase:bcs,eigenaarNaam:eigNaam});
+      var eindDispatch=(pk&&pk.beste)?pk.beste.dispatch:dsp;
+      // Herkomst van de laadstroom per bedrijf — alleen betrouwbaar op de gedeelde aansluiting:
+      // daar is sig.overschot exact de som van opwekAlloc.overschot_kWh per kwartier, dus de
+      // verdeling klopt letterlijk. Achter de meter van één deelnemer is dat niet zo (zie
+      // herkomstLaadstroom() in opslag.js) — dan blijft het bij de simpele eigen/net-splitsing.
+      var herkomst=accuCfg.eigenaar==='groep'
+        ?EhpOpslag.herkomstLaadstroom(eindDispatch,result.opwekAlloc)
+        :null;
+      opslagRes.push({cfg:accuCfg,dispatch:eindDispatch,
+        dispatchZonderPiek:dsp,piek:pk,businesscase:bcs,eigenaarNaam:eigNaam,herkomst:herkomst});
     }catch(err){console.error('opslagdispatch:',err);notify('Accu kon niet worden doorgerekend: '+(accuCfg.naam||''),false);}
   });
 

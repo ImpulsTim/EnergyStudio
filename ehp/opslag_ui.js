@@ -255,19 +255,53 @@ function _ehpOpslagHtml(res) {
         : '');
 
     // Waar komt de energie vandaan en waar gaat hij heen — dit maakt de "geleverde spread" zichtbaar.
+    // De toelichting bij "geladen van het net" verschilt per plek: alleen op de gedeelde
+    // aansluiting is opwekAlloc de bron van sig.overschot, dus alleen dáár is een claim over de
+    // herkomst (community-overschot vs. echte netimport) door het model te onderbouwen — zie de
+    // toelichting bij herkomstLaadstroom() in opslag.js.
+    var vanNetToelichting = a.eigenaar === 'platform'
+      ? 'eigen aansluiting zonder achterliggend verbruik of opwek — laden is hier altijd netafname'
+      : a.eigenaar === 'groep'
+      ? 'kwartieren waarin de groep al haar eigen overschot al kwijt was — zie de uitsplitsing per bedrijf hieronder'
+      : 'netafname op deze aansluiting; of daar op dat moment elders in de groep nog overschot was, is op dit ' +
+        'niveau niet vast te stellen — dat weet alleen een accu op de gedeelde aansluiting';
     var stromen =
       '<table class="verg-tbl"><thead><tr><th>Stroom</th><th>kWh</th><th>Toelichting</th></tr></thead><tbody>' +
       '<tr><td>Geladen uit eigen overschot</td><td>' + fmt(d.inUitOverschot_kWh) + '</td>' +
         '<td style="font-size:12px;color:#666">overschot van deze aansluiting — geen energiebelasting, geen transport</td></tr>' +
       '<tr><td>Geladen van het net</td><td>' + fmt(d.inVanNet_kWh) + '</td>' +
-        '<td style="font-size:12px;color:#666">inclusief zon van ándere deelnemers: die reist over het net en is levering' +
-        (a.ebVrijstellingOpslag ? ' (EB vrijgesteld)' : ', dus met energiebelasting') + '</td></tr>' +
+        '<td style="font-size:12px;color:#666">' + vanNetToelichting + ' — ' +
+        (a.opslagVrijstelling ? 'EB vrijgesteld, ook op deze kWh: de heffing verschuift naar het verbruik verderop'
+                              : 'dus met energiebelasting') + '</td></tr>' +
       '<tr><td>Ontladen in eigen verbruik</td><td>' + fmt(d.uitNaarTekort_kWh) + '</td>' +
         '<td style="font-size:12px;color:#666">vervangt netafname op deze aansluiting' +
         (a.eigenaar === 'platform' ? '' : ', inclusief vermeden energiebelasting') + '</td></tr>' +
       '<tr><td>Ontladen naar het net</td><td>' + fmt(d.uitNaarNet_kWh) + '</td>' +
         '<td style="font-size:12px;color:#666">tegen de terugleverprijs</td></tr>' +
       '</tbody></table>';
+
+    // Per bedrijf hoeveel van hun eigen overschot (en dus: hoeveel van hun teruglevering) de accu
+    // heeft opgeslagen. Alleen bij een accu op de gedeelde aansluiting is dit door het model te
+    // onderbouwen — zie herkomstLaadstroom() in opslag.js voor waarom.
+    var herkomstBlok = '';
+    if (o.herkomst && (o.herkomst.perBedrijf.length || o.herkomst.vanNet_kWh > 1e-6)) {
+      var totaalLading = o.herkomst.perBedrijf.reduce(function (t, x) { return t + x.kWh; }, 0) + o.herkomst.vanNet_kWh;
+      var hpct = function (kwh) { return totaalLading > 0 ? _e2(kwh / totaalLading * 100) + '%' : '—'; };
+      var hrijen = o.herkomst.perBedrijf.map(function (x) {
+        return '<tr><td>' + _ehpEsc(x.naam) + '</td><td>' + fmt(x.kWh) + '</td><td>' + hpct(x.kWh) + '</td></tr>';
+      }).join('');
+      herkomstBlok =
+        '<div style="margin-top:12px"><div class="st">Herkomst van de laadstroom — per bedrijf</div>' +
+        '<table class="verg-tbl"><thead><tr><th>Bedrijf</th><th>kWh in de accu</th><th>Aandeel</th></tr></thead><tbody>' +
+        hrijen +
+        '<tr><td>Net (geen lokaal overschot meer beschikbaar dat kwartier)</td><td>' +
+          fmt(o.herkomst.vanNet_kWh) + '</td><td>' + hpct(o.herkomst.vanNet_kWh) + '</td></tr>' +
+        '</tbody></table>' +
+        '<div class="ib2" style="margin-top:6px">Per kwartier verdeeld naar rato van ieders eigen resterende ' +
+        'overschot dat moment (uit de gelijktijdigheidsmatching) — geen schatting op jaarbasis, maar de ' +
+        'werkelijke bron per kwartier. Alleen echte netimport (onderste rij) is nooit iemands teruglevering: ' +
+        'die kwartieren was alle overschot van de groep al elders benut of op.</div></div>';
+    }
 
     // Waarom bleef beschikbaar overschot of tekort liggen? Dit is doorgaans de eerste vraag
     // bij een uitkomst die tegen de intuïtie ingaat, en het antwoord staat in de dispatch.
@@ -320,6 +354,7 @@ function _ehpOpslagHtml(res) {
         '<div><div class="st">Energiestromen</div>' + stromen + '</div>' +
         '<div><div class="st">Benutting — is er nog ruimte?</div>' + ruimte + '</div>' +
       '</div>' +
+      herkomstBlok +
       _ehpPiekHtml(o) +
       '<div class="cw" style="height:220px;margin-top:12px"><canvas id="cEhpSoc' + i + '" role="img"></canvas></div>' +
       '<div class="ib2">SoC-duurkromme: welk deel van de tijd de accu boven een bepaalde vullingsgraad zat. ' +
