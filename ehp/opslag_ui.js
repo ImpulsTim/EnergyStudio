@@ -351,7 +351,10 @@ function _ehpOpslagHtml(res) {
       '<div id="ehpSweepUit"></div>' +
     '</div>';
 
-  return blokken + gastheerBlok + sweepBlok;
+  // Het kansenpaneel staat bovenaan: eerst de vraag of deze instelling werkt, dan pas de
+  // uitkomstrapportage van de dispatch die eronder staat.
+  var kansenBlok = typeof _ehpKansenHtml === 'function' ? _ehpKansenHtml(res) : '';
+  return kansenBlok + blokken + gastheerBlok + sweepBlok;
 }
 
 /**

@@ -859,6 +859,7 @@ function renderEhpResults(res){
   _ehpBindInspector();
   if(res.opslag&&res.opslag.length){
     _ehpTekenSocKrommes(res);
+    if(typeof _ehpTekenKansenCharts==='function')_ehpTekenKansenCharts(res);
     var sweepBtn=document.getElementById('btnEhpSweep');
     if(sweepBtn)sweepBtn.addEventListener('click',ehpBerekenSweep);
     var gastBtn=document.getElementById('btnEhpGastheren');
@@ -892,8 +893,10 @@ function _ehpAttachTabs(){
     if(panel)panel.classList.add('on');
     // Charts in hidden panels hadden size 0 bij eerste render — resize na DOM-update
     setTimeout(function(){
-      ['ehpGelEpex','ehpSoc0','ehpSoc1','ehpSoc2'].forEach(function(k){
-        if(CH[k])try{CH[k].resize();}catch(_){}
+      // Alle EHP-grafieken, niet een handmatige lijst: een nieuw canvas werd anders vergeten
+      // en bleef op breedte 0 staan tot de eerstvolgende venstergrootte-wijziging.
+      Object.keys(CH).forEach(function(k){
+        if(k.indexOf('ehp')===0&&CH[k])try{CH[k].resize();}catch(_){}
       });
     },30);
   });
