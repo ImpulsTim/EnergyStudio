@@ -689,6 +689,8 @@
         <div class="st" style="margin-top:10px">Opslag<span class="tip-icon" data-tip="Accu’s in het platform. Elke accu heeft een eigenaar: het platform (eigen aansluiting) of een deelnemer (achter de meter). Dat verschil bepaalt of energiebelasting en transport meelopen — vaak groter dan de marktspread zelf.">ⓘ</span></div>
         <div id="ehpAccuLijst"></div>
         <button class="b" id="btnEhpAccuAdd" style="width:100%;margin-top:4px;font-size:11px">+ Accu toevoegen</button>
+        <div class="st" style="margin-top:10px">Matching en opslag<span class="tip-icon" data-tip="Kies of de accu pas aan bod komt nadat opwek en verbruik binnen de groep gekoppeld zijn (de bestaande werkwijze), of dat opslag en matching in samenhang worden gekozen op prijs en tijd. De tweede optie voegt afspraken toe over bescherming van afnemers en producenten en over de verdeling van de opslagwaarde.">ⓘ</span></div>
+        <div id="ehpMatching"></div>
         <div class="st" style="margin-top:10px">Doel en verdeling</div>
         <div class="fgr"><label>Doelfunctie<span class="tip-icon" data-tip="Bepaalt drie dingen tegelijk: of een bron nog intern verrekend wordt als hij boven het netalternatief van de afnemer ligt, of achteraf getoetst wordt dat niemand slechter af is, en welke verdeelsleutel als standaard geldt. Dit is geen vrije optimalisator — het is een keuze uit drie samenhangende instellingen.">ⓘ</span></label>
           <select id="ehpDoelfunctie">
@@ -973,6 +975,7 @@
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="financial" checked> Financieel overzicht</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="flow" checked> Energiestromen</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="weekEpex" checked> Weekpatroon &amp; EPEX-prijs</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="matching" checked> Matching, opslag en verdeling</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="participants" checked> Deelnemersoverzicht</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="memberPages" checked> Deelnemerpagina's</label>
       </div>
@@ -1196,10 +1199,15 @@
 <script src="ehp/dispatch.js"></script>
 <script src="ehp/opslag.js"></script>
 <script src="ehp/verdeling.js"></script>
+<script src="ehp/matching.js"></script>
+<script src="ehp/matching_run.js"></script>
+<script src="ehp/matching_verrekening.js"></script>
 <script src="ehp/herleidbaar.js"></script>
 <script src="ehp/opslag_kansen.js"></script>
 <script src="ehp/opslag_ui.js"></script>
+<script src="ehp/matching_ui.js"></script>
 <script src="ehp/opslag_kansen_ui.js"></script>
+<script src="ehp/tests.js"></script>
 <script src="ehp.js"></script>
 <script src="rapport_ehp.js"></script>
 <script src="individueel.js"></script>

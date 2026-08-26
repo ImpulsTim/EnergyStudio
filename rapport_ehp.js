@@ -6,7 +6,7 @@
 // ─── Modal: platform-selectie ───────────────────────────────────
 var _EHP_RAP_SECTION_IDS=[
   'platform','platformGel','financial','flow','weekEpex',
-  'participants','memberPages'
+  'matching','participants','memberPages'
 ];
 
 function _ehpRapSectionMap(ids){
@@ -54,6 +54,140 @@ async function generateEhpRapport(){
     notify('EHP-rapport klaar');
   }catch(e){notify('Rapport mislukt: '+e.message,false);console.error(e);}
   finally{btn.textContent='Rapport genereren →';btn.disabled=false;}
+}
+
+// ─── Matching, opslag en verdeling ──────────────────────────────
+// Verantwoordingspagina bij de samenhangende modus: welke werkwijze gold, waar het
+// model op stuurde, welke beschermingsregels golden, hoe de opslagwaarde is verdeeld
+// en waar elke kWh heen ging. Zonder deze pagina staan de uitkomsten in het rapport
+// zonder de afspraken waaronder ze tot stand kwamen.
+function _ehpRapMatchingPagina(res,pageHdr,shdr,pageFooter){
+  if(typeof EhpMatching==='undefined')return '';
+  var inst=res.matchInstellingen||EhpMatching.lees(res.cfg||{});
+  var plan=res.matchPlan, v=res.matchVerrekening;
+
+  // In de bestaande modus is er geen aparte verantwoording nodig, maar het is wél
+  // relevant dat er expliciet stáát welke werkwijze gebruikt is.
+  if(!res.samenhang||!plan){
+    return '<div class="page pb">'+pageHdr+shdr('Werkwijze matching en opslag')+
+      '<p class="rintro">Dit platform is doorgerekend met de werkwijze <strong>'+
+      _ehpEsc(EhpMatching.MODI.match_eerst_dan_opslag.label)+'</strong>. '+
+      _ehpEsc(EhpMatching.MODI.match_eerst_dan_opslag.uitleg)+'</p>'+
+      _ehpRapDisclaimer()+pageFooter()+'</div>';
+  }
+
+  var b=plan.balans;
+  var afspraken=[
+    ['Werkwijze',EhpMatching.MODI[inst.modus].label,EhpMatching.MODI[inst.modus].uitleg],
+    ['Waar het model op stuurt',inst.doelLabel,EhpMatching.DOELEN[inst.doel].uitleg],
+    ['Bescherming afnemer',EhpMatching.BESCHERMING[inst.afnemerBescherming].label,
+      'Een afnemer betaalt nooit meer dan zijn netalternatief: de marktprijs van dat kwartier plus '+
+      'de leveringsopslag van '+_e2(inst.retailOpslag*1000)+' €/MWh. '+
+      EhpMatching.BESCHERMING[inst.afnemerBescherming].uitleg],
+    ['Bescherming producent',EhpMatching.BESCHERMING[inst.producentBescherming].label,
+      'Een producent ontvangt nooit minder dan directe verkoop op de markt had opgeleverd. '+
+      EhpMatching.BESCHERMING[inst.producentBescherming].uitleg],
+    ['Laden uit het net',inst.ladenUitNet?'Toegestaan':'Niet toegestaan',
+      inst.ladenUitNet
+        ? 'Netinkoop om te laden wordt alleen gekozen wanneer het model kan aantonen dat dat beter '+
+          'uitpakt dan de alternatieven.'
+        : 'De accu verschuift uitsluitend lokale opwek en concurreert daarmee rechtstreeks met '+
+          'directe levering aan afnemers.'],
+    ['Ontladen naar EPEX',inst.ontladenNaarEpex?'Toegestaan':'Niet toegestaan',
+      inst.ontladenNaarEpex
+        ? 'Verkoop op de markt is alleen gekozen waar er geen interne vraag was of waar de afnemer '+
+          'er aantoonbaar niet slechter van werd.'
+        : 'De accu levert uitsluitend binnen de groep.'],
+    ['Verdeling opslagwaarde',inst.verdelingLabel,
+      EhpMatching.VERDELINGEN[inst.verdeling].uitleg+
+      (inst.verdeling==='verdeelsleutel'
+        ? ' Gehanteerde split: '+_e2(inst.splitPct.energie)+'% energie-eigenaar, '+
+          _e2(inst.splitPct.batterij)+'% accu-eigenaar, '+_e2(inst.splitPct.pool)+'% pool.'
+        : '')],
+    ['Opslagvergoeding',_e2(inst.opslagvergoedingMwh)+' €/MWh afgeleverd',
+      'Contractuele vergoeding voor de opslagdienst. Telt mee in de verrekening, niet in de keuze '+
+      'om te laden of te ontladen — die volgt uit rendementsverlies en slijtage.'],
+    ['Korting afnemer op opslag',_e2(inst.afnemersKortingMwh)+' €/MWh',
+      'Wat een afnemer op opgeslagen energie bespaart ten opzichte van het net. Dit deel van de '+
+      'opslagwaarde landt meteen bij de afnemer en wordt niet nogmaals verdeeld.']
+  ];
+  var afsprRijen=afspraken.map(function(r){
+    return '<tr><td style="font-weight:700;white-space:nowrap">'+_ehpEsc(r[0])+'</td>'+
+      '<td style="font-weight:700">'+_ehpEsc(r[1])+'</td>'+
+      '<td style="font-size:8pt;color:#555">'+_ehpEsc(r[2])+'</td></tr>';
+  }).join('');
+
+  var routes=[
+    ['Direct intern geleverd',b.directIntern_kWh],
+    ['Opwek naar de accu',b.naarAccu_kWh],
+    ['Uit de accu naar afnemers',b.uitAccuIntern_kWh],
+    ['Uit de accu naar EPEX',b.uitAccuEpex_kWh],
+    ['Direct naar EPEX',b.directExport_kWh],
+    ['Net naar de accu',b.netNaarAccu_kWh],
+    ['Net naar afnemers',b.netNaarAfnemer_kWh]
+  ].map(function(r){
+    return '<tr><td>'+r[0]+'</td><td class="num">'+_ehpRapMwh(r[1])+'</td></tr>';
+  }).join('');
+
+  var netNu=b.netImport_kWh+b.netExport_kWh;
+  var netVoor=plan.basisZonderAccu.netImport+plan.basisZonderAccu.netExport;
+  var kpi='<div class="kg k4">'+
+    _ehpRapCard('Lokaal benut',
+      b.verbruik_kWh>0?_e2((b.directIntern_kWh+b.uitAccuIntern_kWh)/b.verbruik_kWh*100)+'%':'—',
+      'van het verbruik','grn')+
+    _ehpRapCard('Netuitwisseling',_ehpRapMwh(netNu),
+      netVoor>0?_e2((1-netNu/netVoor)*100)+'% minder dan zonder accu':'',' dark')+
+    _ehpRapCard('Opslagwaarde',v?_ehpRapMoney(v.controle.opslagwaardeTotaal_EUR):'—',
+      'te verdelen',' dark')+
+    _ehpRapCard('Balans sluitend',b.sluitend?'ja':'nee',
+      'verschil '+_e2(b.energieVerschil)+' kWh',b.sluitend?'grn':'red')+
+  '</div>';
+
+  var verdeeld=v?'<div class="rsub"><span class="rsub-num">Verdeling van de opslagwaarde</span>'+
+      _ehpEsc(inst.verdelingLabel.toLowerCase())+'</div>'+
+    '<table><thead><tr><th>Bestemming</th><th class="num">Bedrag</th></tr></thead><tbody>'+
+    '<tr><td>Naar energie-eigenaren</td><td class="num">'+_ehpRapMoney(v.controle.naarEnergieEigenaren_EUR)+'</td></tr>'+
+    '<tr><td>Naar accu-eigenaren</td><td class="num">'+_ehpRapMoney(v.controle.naarAccuEigenaren_EUR)+'</td></tr>'+
+    '<tr><td>Naar de groepspool</td><td class="num">'+_ehpRapMoney(v.controle.naarPool_EUR)+'</td></tr>'+
+    '<tr style="font-weight:700"><td>Totaal verdeeld</td><td class="num">'+_ehpRapMoney(v.controle.verdeeld_EUR)+'</td></tr>'+
+    '<tr><td colspan="2" style="font-size:8pt;color:#555">Daarnaast landde '+
+      _ehpRapMoney(v.controle.afnemersvoordeelDirect_EUR)+' rechtstreeks bij de afnemers, doordat '+
+      'opgeslagen energie onder hun netalternatief is geprijsd. Dat bedrag zit al in hun rekening en '+
+      'wordt niet nogmaals verdeeld.</td></tr>'+
+    '</tbody></table>':'';
+
+  var waarschuwingen=(res.matchWaarschuwingen||[]).filter(function(w){return w.ernst!=='info';});
+  var wHtml=waarschuwingen.length
+    ? '<div class="rsub"><span class="rsub-num">Aandachtspunten</span>bij deze instellingen</div>'+
+      '<ul style="font-size:8.5pt;color:#444;margin:0 0 8px 16px">'+
+      waarschuwingen.map(function(w){return '<li>'+_ehpEsc(w.tekst)+'</li>';}).join('')+'</ul>'
+    : '';
+
+  return '<div class="page pb">'+pageHdr+shdr('Matching, opslag en verdeling')+
+    '<p class="rintro">Dit platform is doorgerekend met de werkwijze waarin matching en opslag in '+
+    'samenhang worden gekozen. Hieronder staan de afspraken waaronder dat gebeurde, waar elke kWh '+
+    'heen ging, en hoe de waarde die door opslag ontstond is verdeeld.</p>'+
+    kpi+
+    '<div class="rsub"><span class="rsub-num">Afspraken</span>zoals doorgerekend</div>'+
+    '<table><thead><tr><th>Onderwerp</th><th>Keuze</th><th>Wat dat betekent</th></tr></thead>'+
+    '<tbody>'+afsprRijen+'</tbody></table>'+
+    '<div class="rsub"><span class="rsub-num">Waar ging elke kWh heen</span>over de hele periode</div>'+
+    '<table><thead><tr><th>Route</th><th class="num">Volume</th></tr></thead>'+
+    '<tbody>'+routes+'</tbody></table>'+
+    verdeeld+wHtml+
+    _ehpRapDisclaimer()+
+    pageFooter()+'</div>';
+}
+
+function _ehpRapDisclaimer(){
+  return '<div class="rib2"><strong>Over deze cijfers.</strong> Dit is een modelmatige, '+
+    'administratieve toerekening van energie en waarde, geen meting en geen factuur. De accu is '+
+    'fysiek een mengvat: welke kWh van wie kwam is niet vast te stellen. Voor de verrekening is '+
+    'daarom proportioneel gemengd — bij ontladen wordt uit elke herkomst geput naar rato van haar '+
+    'aandeel in de voorraad op dat moment. De doorrekening gebruikt volledige vooruitblik op de '+
+    'marktprijzen en profielen van de doorgerekende periode en geeft daarmee de maximaal haalbare '+
+    'uitkomst; werkelijke sturing kent die vooruitblik niet. Toepassing vraagt om toetsing aan de '+
+    'geldende leverings-, meet- en belastingregels.</div>';
 }
 
 // ─── Opmaak-hulpjes ─────────────────────────────────────────────
@@ -291,6 +425,11 @@ async function buildEhpRapport(opts){
         '<div class="rib2">De <strong>pool</strong> is het intern verrekende volume ('+_ehpRapMwh(res.totMatchedKwh)+'). Wat niet intern gematcht kan worden, gaat naar het net (overschot) of wordt van het net betrokken (tekort).</div>'+
         pageFooter()+'</div>';
     }
+
+    // ── PAGINA: Matching, opslag en verdeling ──
+    // Alleen zinvol in de samenhangende modus; in de bestaande modus staat de werkwijze
+    // al beschreven bij de gelijktijdigheid en de opslag.
+    if(sec.matching)pages+=_ehpRapMatchingPagina(res,pageHdr,shdr,pageFooter);
 
     // ── PAGINA: Gelijktijdigheid platform (maandtabel) ──
     // De gelijktijdigheid is puur fysiek (opwek/afname-matching) en dus identiek voor
