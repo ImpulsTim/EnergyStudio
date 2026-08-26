@@ -72,7 +72,8 @@
     onbalans: 'Onbalansrisico',
     benchmark:'Benchmark',
     kostprijs:'Kostprijs en financiering',
-    fiscaal:  'Fiscaal'
+    fiscaal:  'Fiscaal',
+    matching: 'Matching, opslag en verdeling'
   };
 
   // ─── Toegang ────────────────────────────────────────────────────────────────
@@ -119,7 +120,45 @@
       bron:'Berekend uit capex, opex, levensduur, opbrengst, degradatie en disconto.'});
     rows.push({key:'_lcos_opslag', groep:'kostprijs', groepLabel:GROEP_LBL.kostprijs,
       label:'Kostprijs opslag (LCOS)', eenheid:'€/kWh afgeleverd', waarde:lcosUitCfg(cfg), status:'afgeleid',
-      bron:'Berekend uit capex, opex, levensduur, cycli, DoD, rendement en disconto. Exclusief de inkoopprijs van de geladen stroom.'});
+      bron:'Berekend uit capex, opex, levensduur, cycli, DoD, rendement en disconto. Exclusief de inkoopprijs ' +
+           'van de geladen stroom. TOETS, geen stuurprijs: de dispatch rekent met marginale kosten ' +
+           '(rendementsverlies en slijtage), niet met deze gemiddelde kostprijs.'});
+    // Matching- en opslagafspraken. Dit zijn geen technische parameters maar CONTRACTUELE
+    // keuzes; ze horen daarom in het aannameblad naast de getallen die ze sturen.
+    if (global.EhpMatching) {
+      var inst = global.EhpMatching.lees(cfg || {});
+      var M = global.EhpMatching;
+      function keuze(label, waarde, bron) {
+        rows.push({key:'_m_' + label, groep:'matching', groepLabel:GROEP_LBL.matching,
+          label:label, eenheid:'', waarde:waarde, status:'aanname', bron:bron});
+      }
+      keuze('Werkwijze matching en opslag', M.MODI[inst.modus].label, M.MODI[inst.modus].kort);
+      if (inst.modus === 'prijsgeoptimaliseerde_opslag_en_matching') {
+        keuze('Optimalisatiedoel', inst.doelLabel,
+          'Gewicht afnemersvoordeel ' + (inst.wAfnemer * 100).toFixed(0) + '%, straf netuitwisseling ' +
+          inst.wNetMwh + ' €/MWh.');
+        keuze('Bescherming afnemer', M.BESCHERMING[inst.afnemerBescherming].label,
+          'Netalternatief = EPEX + ' + (inst.retailOpslag * 1000).toFixed(2) + ' €/MWh.');
+        keuze('Bescherming producent', M.BESCHERMING[inst.producentBescherming].label,
+          'Alternatief = directe export tegen EPEX in hetzelfde kwartier.');
+        keuze('Laden uit het net', inst.ladenUitNet ? 'toegestaan' : 'niet toegestaan',
+          'Beleidskeuze, geen techniek.');
+        keuze('Ontladen naar EPEX', inst.ontladenNaarEpex ? 'toegestaan' : 'niet toegestaan',
+          'Beleidskeuze, geen techniek.');
+        keuze('Verdeling opslagwaarde', inst.verdelingLabel,
+          inst.verdeling === 'verdeelsleutel'
+            ? inst.splitPct.energie + '% / ' + inst.splitPct.batterij + '% / ' + inst.splitPct.pool +
+              '% (energie-eigenaar / accu-eigenaar / pool)'
+            : 'Contractuele afspraak.');
+        rows.push({key:'opslagvergoeding_mwh', groep:'matching', groepLabel:GROEP_LBL.matching,
+          label:'Opslagvergoeding', eenheid:'€/MWh afgeleverd', waarde:inst.opslagvergoedingMwh,
+          status:'aanname', bron:'Contractuele vergoeding voor de opslagdienst; telt in de verrekening, ' +
+          'niet in de dispatch.'});
+        rows.push({key:'accu_korting_mwh', groep:'matching', groepLabel:GROEP_LBL.matching,
+          label:'Korting afnemer op opslag', eenheid:'€/MWh', waarde:inst.afnemersKortingMwh,
+          status:'aanname', bron:'Bepaalt welk deel van de opslagwaarde meteen bij de afnemer landt.'});
+      }
+    }
     return rows;
   }
 

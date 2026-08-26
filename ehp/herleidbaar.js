@@ -76,6 +76,13 @@ function _ehpToonKwartier(tijdKey) {
       '. Kies een moment binnen de meetperiode waarop er productie was.</div>';
     return;
   }
+  // De samenhangende modus heeft een eigen verklaring: daar is de vraag niet alleen
+  // "welke bron werd gematcht" maar ook "welke alternatieven had de accu, en waarom
+  // won deze". Zie ehp/matching_ui.js.
+  if (res.samenhang && typeof _ehpMatchKwartierHtml === 'function') {
+    uit.innerHTML = _ehpMatchKwartierHtml(u);
+    return;
+  }
   var ct = function (x) { return _e2(x * 100) + ' ct'; };
   var rij = null;
   (res.model || []).forEach(function (r) { if (r.tijdKey === tijdKey) rij = r; });

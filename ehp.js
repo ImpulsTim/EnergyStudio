@@ -17,7 +17,7 @@ function _ehpReportKey(rawTs, source){
 }
 
 function _ehpDefaults(){
-  return {
+  var d={
     // Nieuwe tariefparameters (EUR/MWh — worden /1000 omgerekend naar EUR/kWh bij berekening)
     gel_zon_mwh:20,gel_wind_mwh:20,gel_ai_mwh:0,
     platform_mwh:0,gvo_bil_mwh:0,gvo_rest_mwh:0,
@@ -30,8 +30,13 @@ function _ehpDefaults(){
     // Prijsmodel per bron + merit order. Defaults reproduceren het overgenomen gedrag:
     // vaste tarieven, prioriteitsvolgorde, geen drempel.
     prijsmodel:(typeof EhpPrijs!=='undefined')?EhpPrijs.defaults():null,
-    merit_volgorde:'prioriteit',merit_drempel:'geen',
+    merit_volgorde:'prioriteit',merit_drempel:'geen'
     };
+  // Matching- en opslagmodus met de bijbehorende instellingen. De default is de
+  // BESTAANDE modus, zodat een nieuw platform zich net zo gedraagt als een oud en de
+  // regressietest blijft gelden. Zie ehp/matching.js voor wat de tweede modus doet.
+  if(typeof EhpMatching!=='undefined')Object.assign(d,EhpMatching.defaults());
+  return d;
 }
 
 function _ehpProj(){
@@ -64,6 +69,7 @@ function renderEHP(){
   var _sv2=function(id,v){var el=document.getElementById(id);if(el)el.value=v;};
   _ehpRenderPrijsmodel(c);
   renderEhpAccus(c);
+  if(typeof renderEhpMatching==='function')renderEhpMatching(c);
   var mvEl=document.getElementById('ehpMeritVolgorde');
   if(mvEl)mvEl.value=c.merit_volgorde==='prijs'?'prijs':'prioriteit';
   var dfEl=document.getElementById('ehpDoelfunctie');
@@ -195,6 +201,7 @@ function _ehpCommit(){
   var gWind=_ehpRepresentatiefTarief(prijsmodel.wind);
   var gAI=_ehpRepresentatiefTarief(prijsmodel.afname_invoeden);
   var gPlat=num('ehpPlatform',0);
+  var vorige=plat.cfg||{};
   plat.cfg={
     gel_zon_mwh:gZon,gel_wind_mwh:gWind,gel_ai_mwh:gAI,
     platform_mwh:gPlat,gvo_bil_mwh:num('ehpGvoBil',0),gvo_rest_mwh:num('ehpGvoRest',0),
@@ -219,7 +226,32 @@ function _ehpCommit(){
     merit_drempel:((EhpVerdeling.DOELFUNCTIES[val('ehpDoelfunctie')]||{}).drempel)==='afnemer'?'afnemer':'geen',
     opslag:_ehpLeesAccus((plat.cfg&&plat.cfg.opslag)||[])
   };
+  // Matching- en opslagmodus. Net als bij het prijsmodel geldt: is de zijbalk nog niet
+  // gerenderd, dan mogen lege velden een opgeslagen instelling niet overschrijven.
+  Object.assign(plat.cfg,_ehpLeesMatching(vorige));
   saveMeta();
+}
+
+/**
+ * Leest de matching- en opslaginstellingen uit de zijbalk. Zonder gerenderde zijbalk
+ * blijven de bestaande waarden staan; ontbreken die ook, dan gelden de defaults —
+ * en die zetten een platform op de BESTAANDE modus.
+ */
+function _ehpLeesMatching(vorige){
+  var uit={};
+  if(typeof EhpMatching==='undefined')return uit;
+  var basis=EhpMatching.defaults();
+  var gerenderd=!!document.getElementById('ehpM_matching_modus');
+  EhpMatching.VELDEN.forEach(function(v){
+    var el=gerenderd?document.getElementById('ehpM_'+v.key):null;
+    if(el){
+      uit[v.key]=(el.type==='checkbox')?(el.checked?1:0)
+                :(v.eenheid?(isNaN(parseFloat(el.value))?basis[v.key]:parseFloat(el.value)):el.value);
+    }else{
+      uit[v.key]=(vorige&&vorige[v.key]!=null)?vorige[v.key]:basis[v.key];
+    }
+  });
+  return uit;
 }
 
 function addEhp(){
@@ -386,13 +418,41 @@ async function calcEHP(){
   var meritVolgorde = cfg.merit_volgorde === 'prijs'    ? 'prijs'   : 'prioriteit';
   var meritDrempel  = cfg.merit_drempel  === 'afnemer'  ? 'afnemer' : 'geen';
   var alleVast      = EhpPrijs.BRONNEN.every(function(b){ return prijsModel.vormVan(b)==='vast'; });
-  var allocator = EhpDispatch.maakAllocator({
-    volgorde:      meritVolgorde,
-    drempel:       meritDrempel,
-    prijsModel:    prijsModel,
-    epexByTijd:    epexByTijd,
-    afnemerOpslag: (cfg.retail_opslag_mwh||0)/1000
+
+  // --- Matching- en opslagmodus ----------------------------------------------
+  // Twee rekenpaden die elkaar niet raken. Modus 1 is de bestaande keten (merit order,
+  // dan de accu op de restpositie) en blijft de regressiebasis. Modus 2 behandelt
+  // matching en opslag in samenhang; zie het kopcommentaar van ehp/matching.js voor
+  // waarom dat een ander antwoord kan geven en wanneer niet.
+  var matchInst = EhpMatching.lees(cfg);
+  var samenhang = matchInst.modus==='prijsgeoptimaliseerde_opslag_en_matching';
+
+  // Netprofiel per accu-gastheer, zodat de accu-afweging weet achter welke meter hij staat.
+  var gastheerByAccu={};
+  (cfg.opslag||[]).forEach(function(ac){
+    var eig=ac.eigenaar;
+    if(!eig||eig==='groep'||eig==='platform')return;
+    var rec=ledenNetto[eig];
+    if(rec)gastheerByAccu[ac.id]=rec.map;
   });
+
+  var allocator = samenhang
+    ? EhpMatching.maakAllocator({
+        instellingen:  matchInst,
+        prijsModel:    prijsModel,
+        epexByTijd:    epexByTijd,
+        meritVolgorde: meritVolgorde,
+        accus:         cfg.opslag||[],
+        gastheerByAccu:gastheerByAccu,
+        ebJaar:        parseInt(cfg.ebJaar,10)||2025
+      })
+    : EhpDispatch.maakAllocator({
+        volgorde:      meritVolgorde,
+        drempel:       meritDrempel,
+        prijsModel:    prijsModel,
+        epexByTijd:    epexByTijd,
+        afnemerOpslag: (cfg.retail_opslag_mwh||0)/1000
+      });
 
   // --- EnergieModel.buildModel aanroepen ---
   var result;
@@ -417,7 +477,10 @@ async function calcEHP(){
   // Bij een niet-vaste prijsvorm kloppen de gelijktijdigheidskolommen uit applyEconomicColumns
   // niet meer (die rekenen met één tarief per type). Alleen dan herrekenen, zodat het
   // referentiepad bit-voor-bit ongemoeid blijft.
-  if(!alleVast){
+  // In de samenhangende modus altijd herrekenen: daar kan de allocator een bron overslaan
+  // op grond van een beschermingsgrens, en dan klopt "volume × vast tarief" per definitie
+  // niet meer — ook al staan alle prijsvormen op vast.
+  if(!alleVast||samenhang){
     try{ EhpDispatch.pasPrijsmodelToe(result,{prijsModel:prijsModel,tarieven:tarieven}); }
     catch(e){ console.error('pasPrijsmodelToe:',e); notify('Fout bij toepassen prijsmodel',false); return; }
     sam=result.samenvatting;
@@ -434,11 +497,20 @@ async function calcEHP(){
   window._ehpLaatsteInvoer={verbruik:verbruikRows,opwek:opwekRows,epex:epexRows,
     tarieven:tarieven,scenario:{},forwardcurve:forwardRows};
   // --- Opslag ----------------------------------------------------------------
-  // Sequentieel: eerst de merit order zonder accu, dan de accu op de restpositie (overschot en
-  // tekort) van de groep. Simultaan optimaliseren zou prijsvorming en opslagbeslissing door
-  // elkaar halen; hoe de accuwaarde over de deelnemers verdeeld wordt is een aparte vraag.
+  // Twee paden, afhankelijk van de gekozen modus:
+  //
+  //   match_eerst_dan_opslag  Sequentieel: eerst de merit order zonder accu, dan de accu op
+  //     de restpositie (overschot en tekort) van de groep. Hoe de accuwaarde over de
+  //     deelnemers verdeeld wordt is daar een aparte vraag, ná de dispatch.
+  //
+  //   prijsgeoptimaliseerde_opslag_en_matching  De accu zit al in de allocator: matching en
+  //     opslag zijn daar één afweging. Er hoeft — en mag — hier dus geen tweede dispatch
+  //     overheen; het plan wordt verderop alleen nog in de modelrijen verwerkt. Een tweede
+  //     dispatch zou dezelfde kWh nogmaals opslaan en de balans breken.
   var opslagRes=[];
-  (cfg.opslag||[]).forEach(function(accuCfg){
+  var matchPlan=samenhang?allocator.plan:null;
+  var matchVerrekening=null;
+  (samenhang?[]:(cfg.opslag||[])).forEach(function(accuCfg){
     try{
       var gastheer=_ehpGastheerProfiel(result.model,ledenNetto,accuCfg.eigenaar);
       var dsp=EhpOpslag.dispatch(result.model,accuCfg,{gastheer:gastheer});
@@ -482,7 +554,36 @@ async function calcEHP(){
   // De accu doorvoeren in de modelrijen. Zonder deze stap blijft het overschot naar het net
   // even groot terwijl de accu het net heeft opgeslagen, en verandert er in de kengetallen,
   // het financieel overzicht en de deelnemersverrekening niets.
-  if(opslagRes.length){
+  if(samenhang&&matchPlan){
+    try{
+      EhpMatching.verwerkInModel(result,matchPlan,tarieven);
+      sam=result.samenvatting;
+      // De uitkomst per accu in de vorm die de bestaande opslagtab verwacht, plus de
+      // businesscase op dezelfde grondslag als in de bestaande modus.
+      opslagRes=matchPlan.accus.map(function(r,i){
+        var accuCfg=(cfg.opslag||[])[i]||r.cfg;
+        var dsp=EhpMatching.alsOpslagResultaat(r,matchInst);
+        var jf=r.periodeDagen>0?365/r.periodeDagen:0;
+        var piekJr=((r.kmBesparing_EUR||0)+(r.kcBesparing_EUR||0))*jf;
+        var bcs=EhpOpslag.businesscase(dsp,
+          {discontoPct:EHP_PARAMS.waarde(cfg,'disconto_pct'),piekWaardePerJaar_EUR:piekJr});
+        var eigNaam='';
+        if(accuCfg.eigenaar&&accuCfg.eigenaar!=='platform'&&accuCfg.eigenaar!=='groep'){
+          for(var ci=0;ci<p.companies.length;ci++){
+            if(p.companies[ci].id===accuCfg.eigenaar){eigNaam=p.companies[ci].name;break;}
+          }
+        }
+        return {cfg:accuCfg,dispatch:dsp,dispatchZonderPiek:dsp,piek:r.piek,
+                businesscase:bcs,eigenaarNaam:eigNaam,
+                // In deze modus is de herkomst per bedrijf uit het grootboek te halen, ook
+                // achter de meter van één deelnemer: elke geladen kWh is bij het laden aan
+                // een bron toegewezen in plaats van achteraf naar rato geschat.
+                herkomst:EhpMatching.herkomstUitBoek(r),
+                matching:r};
+      });
+    }catch(e){console.error('matching verwerkInModel:',e);
+      notify('Samenhangende doorrekening kon niet worden verwerkt',false);}
+  }else if(opslagRes.length){
     try{
       EhpOpslag.verwerkInModel(result,opslagRes,tarieven);
       sam=result.samenvatting;
@@ -495,13 +596,54 @@ async function calcEHP(){
     ? (platformPositieVoor-_ehpPlatformPositie(result))
     : 0;
 
+  // Volledige verrekening van de samenhangende modus: per route, per deelnemer, per accu,
+  // met de controle dat niets dubbel wordt verdeeld. Zie ehp/matching_verrekening.js.
+  var matchWaarschuwingen=[];
+  if(samenhang&&matchPlan){
+    try{
+      matchVerrekening=EhpMatching.verreken(matchPlan,{
+        perGebruiker:result.per_gebruiker, perOpwekker:result.per_opwekker,
+        verbruik:result.verbruik, model:result.model,
+        businesscases:opslagRes.map(function(x){
+          var f=(x.dispatch.periodeDagen||0)>0?(x.dispatch.periodeDagen/365):1;
+          var b=x.businesscase||{};
+          return {opex_EUR:(b.opexPerJaar_EUR||0)*f,
+                  kapitaallast_EUR:(b.kapitaallastPerJaar_EUR||0)*f,
+                  eigenAansluiting_EUR:(b.eigenAansluitingPerJaar_EUR||0)*f};
+        })
+      });
+      matchWaarschuwingen=EhpMatching.waarschuwingen(matchPlan,matchVerrekening);
+    }catch(e){console.error('matching verrekening:',e);}
+  }
+
   // Rekening per accu. Het energievoordeel wordt naar rato van de afgeleverde kWh toebedeeld
   // wanneer er meerdere accu's zijn.
   var accuPeriodeDagen=(opslagRes[0]&&opslagRes[0].dispatch&&opslagRes[0].dispatch.periodeDagen)||365;
   var totaalAfgeleverd=opslagRes.reduce(function(t,x){return t+(x.dispatch.doorzetUit_kWh||0);},0);
-  opslagRes.forEach(function(x){
+  opslagRes.forEach(function(x,i){
     var aandeel=totaalAfgeleverd>0?(x.dispatch.doorzetUit_kWh||0)/totaalAfgeleverd:1/opslagRes.length;
-    x.rekening=EhpOpslag.rekening(x,accuPeriodeDagen,accuEnergievoordeel*aandeel);
+    if(samenhang&&matchVerrekening&&matchVerrekening.perAccu[i]){
+      // In de samenhangende modus is de rekening niet af te leiden uit een verschil in
+      // platformpositie: de accu zit al in de matching. Ze komt rechtstreeks uit de
+      // verrekening, waar elke post één keer voorkomt.
+      var v=matchVerrekening.perAccu[i];
+      x.rekening={
+        naam:v.naam, kostenDrager:v.kostenDrager, eigenaar:v.eigenaar,
+        periodeDagen:accuPeriodeDagen,
+        // Wat de afnemers al kregen doordat opgeslagen energie onder hun netalternatief
+        // geprijsd is. Ter verantwoording — het wordt hieronder NIET nogmaals verdeeld.
+        energievoordeel_EUR:(matchVerrekening.afnemersvoordeelDirect_EUR||0)*aandeel,
+        opslagwaarde_EUR:v.arbitrageMarge_EUR,
+        aandeelOpslagwaarde_EUR:v.aandeelOpslagwaarde_EUR,
+        piekwaarde_EUR:v.piekwaarde_EUR,
+        opex_EUR:v.opex_EUR, kapitaallast_EUR:v.kapitaallast_EUR,
+        eigenAansluiting_EUR:v.eigenAansluiting_EUR,
+        teVerdelen_EUR:v.resultaatAccuEigenaar_EUR,
+        totaalResultaat_EUR:v.resultaatAccuEigenaar_EUR
+      };
+    }else{
+      x.rekening=EhpOpslag.rekening(x,accuPeriodeDagen,accuEnergievoordeel*aandeel);
+    }
     // Leesbare naam van de kostendrager erbij, zodat de rekening zichzelf verklaart.
     if(x.rekening.kostenDrager&&x.rekening.kostenDrager!=='platform'){
       for(var ki=0;ki<p.companies.length;ki++){
@@ -590,14 +732,24 @@ async function calcEHP(){
     var gebrByNaam={},opwByNaam={};
     result.per_gebruiker.forEach(function(u){gebrByNaam[u.Locatie]=u;});
     result.per_opwekker.forEach(function(o){opwByNaam[o.Asset]=o;});
+    // In de samenhangende modus komt er per deelnemer een route bij die de bestaande
+    // kolommen niet kennen: inkoop uit de accu (kosten) en het aandeel in de opslagwaarde
+    // (opbrengst). Zonder die twee lijkt opgeslagen energie gratis bij de afnemer te
+    // landen en zou de producent zijn deel niet zien.
+    var accuKostenByNaam={},opslagwaardeByNaam={};
+    if(matchVerrekening){
+      matchVerrekening.perAfnemer.forEach(function(x){accuKostenByNaam[x.Locatie]=x.kostenUitAccu_EUR||0;});
+      matchVerrekening.perAsset.forEach(function(x){opslagwaardeByNaam[x.Asset]=x.opslagwaarde_EUR||0;});
+    }
     var platPer=withData.map(function(wd){
       var u=gebrByNaam[wd.comp.name],o=opwByNaam[wd.comp.name];
       var kosten=u?((u.kosten_gelijktijdigheid_EUR||0)+(u.kosten_epex_tekort_EUR||0)+
                     (u.kosten_onbalans_verbruik_EUR||0)+(u.kosten_platform_EUR||0)+
                     (u.kosten_gvo_bilateraal_EUR||0)+(u.kosten_gvo_rest_EUR||0)):0;
+      kosten+=accuKostenByNaam[wd.comp.name]||0;
       return {id:wd.comp.id,
         kosten_EUR:kosten,
-        opbrengst_EUR:o?(o.netto_opbrengst_EUR||0):0,
+        opbrengst_EUR:(o?(o.netto_opbrengst_EUR||0):0)+(opslagwaardeByNaam[wd.comp.name]||0),
         verbruikKwh:u?(u.totaal_verbruik_kWh||0):0,
         opwekKwh:o?(o.totaal_opwek_kWh||0):0};
     });
@@ -623,6 +775,10 @@ async function calcEHP(){
         accuExtra+=r.teVerdelen_EUR;
       }
     });
+    // De pool van de samenhangende modus: opslagwaarde die aan niemand is toegewezen, plus
+    // de beschermingscorrecties. Het eigen resultaat van elke accu is hierboven al bij de
+    // kostendrager of bij `accuExtra` geboekt en zit hier dus bewust NIET in.
+    if(matchVerrekening)accuExtra+=matchVerrekening.pool.teVerdelen_EUR;
     verdeling=EhpVerdeling.verdeel(voordelen,{
       sleutel:verdeelSleutel,borg:!!doelDef.borg,extra_EUR:accuExtra
     });
@@ -653,6 +809,10 @@ async function calcEHP(){
     prijsmodel:prijsmodelCfg, prijsWaarde:waarde, opslag:opslagRes, ledenNetto:ledenNetto,
     verdeling:verdeling, doelfunctie:cfg.doelfunctie||'groep_borg', verdeelSleutel:verdeelSleutel,
     meritVolgorde:meritVolgorde, meritDrempel:meritDrempel,
+    // Samenhangende modus (leeg in de bestaande modus)
+    matchInstellingen:matchInst, samenhang:samenhang,
+    matchPlan:matchPlan, matchVerrekening:matchVerrekening,
+    matchWaarschuwingen:matchWaarschuwingen,
     allocator:allocator, epexByTijd:epexByTijd,
     capaciteitsvergoeding_totaal_EUR:result.capaciteitsvergoeding_totaal_EUR||0,
     periodeDagen:result.periodeDagen||0,
@@ -846,14 +1006,19 @@ function renderEhpResults(res){
       '<button class="tab" data-ehp-tab="tEhpDeel">Deelnemers</button>'+
       '<button class="tab" data-ehp-tab="tEhpGel">Gelijktijdigheid</button>'+
       ((res.opslag&&res.opslag.length)?'<button class="tab" data-ehp-tab="tEhpOps">Opslag</button>':'')+
+      (res.samenhang?'<button class="tab" data-ehp-tab="tEhpRoutes">Routes</button>':'')+
       (res.verdeling?'<button class="tab" data-ehp-tab="tEhpVerd">Verdeling</button>':'')+
       '<button class="tab" data-ehp-tab="tEhpHerl">Herleidbaarheid</button>'+
     '</div>'+
-    '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+_ehpPrijsmodelHtml(res)+_ehpOverzichtHtml(res)+'</div>'+
+    '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+
+      (res.samenhang&&typeof _ehpMatchWaarschuwingenHtml==='function'?_ehpMatchWaarschuwingenHtml(res):'')+
+      _ehpPrijsmodelHtml(res)+_ehpOverzichtHtml(res)+'</div>'+
     '<div id="tEhpAn" class="pn">'+flowHtml+gelEpexHtml+'</div>'+
     '<div id="tEhpDeel" class="pn">'+skipNote+summaryHtml+_ehpFactuurHtml(res)+partyCards+'</div>'+
     '<div id="tEhpGel" class="pn">'+_ehpGelijktijdheidHtml(res)+'</div>'+
     ((res.opslag&&res.opslag.length)?'<div id="tEhpOps" class="pn">'+_ehpOpslagHtml(res)+'</div>':'')+
+    (res.samenhang?'<div id="tEhpRoutes" class="pn">'+
+      _ehpRoutesHtml(res)+_ehpMatchVerrekeningHtml(res)+_ehpMatchHerkomstHtml(res)+'</div>':'')+
     (res.verdeling?'<div id="tEhpVerd" class="pn">'+_ehpVerdelingHtml(res)+'</div>':'')+
     '<div id="tEhpHerl" class="pn">'+_ehpHerleidbaarheidHtml(res)+'</div>';
 
@@ -2012,6 +2177,14 @@ function _ehpAccuRekeningHtml(v){
       '<table class="verg-tbl"><thead><tr><th>Post</th><th>Bedrag</th><th>Toelichting</th></tr></thead><tbody>'+
       post('Energievoordeel voor de groep',r.energievoordeel_EUR,
         'al verwerkt in de kosten per deelnemer, naar rato van verbruik — telt hieronder niet nogmaals mee')+
+      // Alleen in de samenhangende modus: daar is de opslagmarge een aparte grootheid die
+      // via de gekozen verdeling wordt toebedeeld. Zonder deze regel telt de kolom niet op.
+      (r.opslagwaarde_EUR!=null
+        ? post('Opslagmarge',r.opslagwaarde_EUR,
+            'opbrengst van afgeleverde energie minus inkoop en slijtage')+
+          post('waarvan aandeel accu-eigenaar',r.aandeelOpslagwaarde_EUR||0,
+            'de rest gaat naar de energie-eigenaren of de pool, volgens de gekozen verdeling')
+        : '')+
       post('Besparing transporttarief',r.piekwaarde_EUR,'lagere maandpiek en gecontracteerd vermogen')+
       post('Opex',-r.opex_EUR,'onderhoud en beheer')+
       post('Kapitaallast',-r.kapitaallast_EUR,'annuïteit over de investering')+
