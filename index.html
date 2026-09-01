@@ -678,37 +678,10 @@
         <div class="scen-con-list" id="ehpMembers"></div>
       </div>
       <div style="margin-bottom:12px">
-        <div class="st">Prijs van de bronnen</div>
-        <div class="ib2" style="margin-bottom:6px;font-size:11px">De prijs per bron is een formule, geen vast getal. Kies per bron een vorm; de velden eronder passen zich aan.</div>
-        <div id="ehpPrijsmodel"></div>
-        <div class="fgr"><label>Volgorde<span class="tip-icon" data-tip="Prioriteitsvolgorde = het overgenomen gedrag: bronnen komen aan bod op hun prioriteitsnummer. Prijsvolgorde = de goedkoopste bron wordt eerst intern verrekend; het prioriteitsnummer geldt dan nog als tiebreak bij gelijke prijs.">ⓘ</span></label>
-          <select id="ehpMeritVolgorde">
-            <option value="prioriteit">Prioriteit (referentie)</option>
-            <option value="prijs">Prijs — goedkoopste eerst</option>
-          </select></div>
-        <div class="st" style="margin-top:10px">Opslag<span class="tip-icon" data-tip="Accu’s in het platform. Elke accu heeft een eigenaar: het platform (eigen aansluiting) of een deelnemer (achter de meter). Dat verschil bepaalt of energiebelasting en transport meelopen — vaak groter dan de marktspread zelf.">ⓘ</span></div>
-        <div id="ehpAccuLijst"></div>
-        <button class="b" id="btnEhpAccuAdd" style="width:100%;margin-top:4px;font-size:11px">+ Accu toevoegen</button>
-        <div class="st" style="margin-top:10px">Matching en opslag<span class="tip-icon" data-tip="Kies of de accu pas aan bod komt nadat opwek en verbruik binnen de groep gekoppeld zijn (de bestaande werkwijze), of dat opslag en matching in samenhang worden gekozen op prijs en tijd. De tweede optie voegt afspraken toe over bescherming van afnemers en producenten en over de verdeling van de opslagwaarde.">ⓘ</span></div>
-        <div id="ehpMatching"></div>
-        <div class="st" style="margin-top:10px">Doel en verdeling</div>
-        <div class="fgr"><label>Doelfunctie<span class="tip-icon" data-tip="Bepaalt drie dingen tegelijk: of een bron nog intern verrekend wordt als hij boven het netalternatief van de afnemer ligt, of achteraf getoetst wordt dat niemand slechter af is, en welke verdeelsleutel als standaard geldt. Dit is geen vrije optimalisator — het is een keuze uit drie samenhangende instellingen.">ⓘ</span></label>
-          <select id="ehpDoelfunctie">
-            <option value="groep_borg">Groepswaarde, niemand slechter af</option>
-            <option value="groep">Puur groepswaarde</option>
-            <option value="afnemers">Laagste kosten voor afnemers</option>
-          </select></div>
-        <div class="fgr"><label>Verdeelsleutel<span class="tip-icon" data-tip="Hoe het resultaat over de deelnemers wordt toegekend. “Ieder zijn eigen resultaat” verdeelt niet; de overige sleutels poolen alles en delen het via de sleutel uit — dan geeft een deelnemer zijn eigen resultaat dus op.">ⓘ</span></label>
-          <select id="ehpVerdeelSleutel">
-            <option value="">Volgt de doelfunctie</option>
-            <option value="geen">Ieder zijn eigen resultaat</option>
-            <option value="gelijk">Gelijk per deelnemer</option>
-            <option value="volume">Naar afname</option>
-            <option value="inbreng">Naar inbreng</option>
-            <option value="afnemers">Naar de afnemers</option>
-          </select></div>
-        <div class="ib2" style="font-size:10px;margin-bottom:6px" id="ehpDoelUitleg"></div>
-        <div class="st" style="margin-top:10px">Platform en GVO (€/MWh)</div>
+        <div class="st">Gelijktijdigheidsvergoeding (€/MWh)</div>
+        <div class="fgr"><label>Zon<span class="tip-icon" data-tip="Vergoeding voor gelijktijdig geleverde zonnestroom (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelZon" step="0.01" value="20"></div>
+        <div class="fgr"><label>Wind<span class="tip-icon" data-tip="Vergoeding voor gelijktijdig geleverde windstroom (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelWind" step="0.01" value="20"></div>
+        <div class="fgr"><label>Afname-invoeden<span class="tip-icon" data-tip="Vergoeding voor afname-invoeden (netto teruglevering via hoofdmeter) als gelijktijdige bron (€/MWh).">ⓘ</span></label><input type="number" id="ehpGelAI" step="0.01" value="0"></div>
         <div class="fgr"><label>Platformtarief<span class="tip-icon" data-tip="Platformkosten per gelijktijdig verrekende kWh (€/MWh).">ⓘ</span></label><input type="number" id="ehpPlatform" step="0.01" value="0"></div>
         <div class="fgr"><label>GVO bilateraal<span class="tip-icon" data-tip="GVO-kosten voor bilateraal intern verrekende kWh (€/MWh).">ⓘ</span></label><input type="number" id="ehpGvoBil" step="0.01" value="0"></div>
         <div class="fgr"><label>GVO rest (tekort)<span class="tip-icon" data-tip="GVO-kosten voor het tekort (van net betrokken kWh) (€/MWh).">ⓘ</span></label><input type="number" id="ehpGvoRest" step="0.01" value="0"></div>
@@ -975,7 +948,8 @@
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="financial" checked> Financieel overzicht</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="flow" checked> Energiestromen</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="weekEpex" checked> Weekpatroon &amp; EPEX-prijs</label>
-        <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="matching" checked> Matching, opslag en verdeling</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="mismatch" checked> Urgentie-heatmaps</label>
+        <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="kansen" checked> Top kansvensters</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="participants" checked> Deelnemersoverzicht</label>
         <label class="rap-opt-lbl"><input type="checkbox" class="ehprap-sec" data-section="memberPages" checked> Deelnemerpagina's</label>
       </div>
@@ -1194,24 +1168,11 @@
 <script src="crypto.js"></script>
 <script src="rapport.js"></script>
 <script src="energiemodel.js"></script>
-<script src="ehp/aannames.js"></script>
-<script src="ehp/prijsmodel.js"></script>
-<script src="ehp/dispatch.js"></script>
-<script src="ehp/opslag.js"></script>
-<script src="ehp/verdeling.js"></script>
-<script src="ehp/matching.js"></script>
-<script src="ehp/matching_run.js"></script>
-<script src="ehp/matching_verrekening.js"></script>
-<script src="ehp/herleidbaar.js"></script>
-<script src="ehp/opslag_kansen.js"></script>
-<script src="ehp/opslag_ui.js"></script>
-<script src="ehp/matching_ui.js"></script>
-<script src="ehp/opslag_kansen_ui.js"></script>
-<script src="ehp/tests.js"></script>
 <script src="ehp.js"></script>
 <script src="rapport_ehp.js"></script>
 <script src="individueel.js"></script>
 <script src="rapport_ind.js"></script>
+<script src="financieel.js"></script>
 <script src="access.js"></script>
 <script src="app.js"></script>
 

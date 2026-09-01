@@ -17,26 +17,17 @@ function _ehpReportKey(rawTs, source){
 }
 
 function _ehpDefaults(){
-  var d={
+  return {
     // Nieuwe tariefparameters (EUR/MWh — worden /1000 omgerekend naar EUR/kWh bij berekening)
     gel_zon_mwh:20,gel_wind_mwh:20,gel_ai_mwh:0,
     platform_mwh:0,gvo_bil_mwh:0,gvo_rest_mwh:0,
     onb_zon_pct:0.20,onb_wind_pct:0.20,onb_vb_pct:0.08,
     onb_zon_risico_mwh:90,onb_wind_risico_mwh:60,onb_vb_risico_mwh:25,
     retail_opslag_mwh:20,
-    // Backward compat (EUR/kWh) — afgeleid bij _ehpCommit; gebruikt door rapport_ehp.js
+    // Backward compat (EUR/kWh) — afgeleid bij _ehpCommit; gebruikt door financieel.js / rapport_ehp.js
     pZon:0.020,pWind:0.020,pOverig:0,fee:0,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
     ebOn:false,ebJaar:'2025',ebGrondslag:'bruto',heffingskorting:0,btwOn:false,btwPct:21,
-    // Prijsmodel per bron + merit order. Defaults reproduceren het overgenomen gedrag:
-    // vaste tarieven, prioriteitsvolgorde, geen drempel.
-    prijsmodel:(typeof EhpPrijs!=='undefined')?EhpPrijs.defaults():null,
-    merit_volgorde:'prioriteit',merit_drempel:'geen'
     };
-  // Matching- en opslagmodus met de bijbehorende instellingen. De default is de
-  // BESTAANDE modus, zodat een nieuw platform zich net zo gedraagt als een oud en de
-  // regressietest blijft gelden. Zie ehp/matching.js voor wat de tweede modus doet.
-  if(typeof EhpMatching!=='undefined')Object.assign(d,EhpMatching.defaults());
-  return d;
 }
 
 function _ehpProj(){
@@ -67,16 +58,9 @@ function renderEHP(){
   document.getElementById('ehpName').value=plat.name||'';
   var c=plat.cfg||_ehpDefaults();
   var _sv2=function(id,v){var el=document.getElementById(id);if(el)el.value=v;};
-  _ehpRenderPrijsmodel(c);
-  renderEhpAccus(c);
-  if(typeof renderEhpMatching==='function')renderEhpMatching(c);
-  var mvEl=document.getElementById('ehpMeritVolgorde');
-  if(mvEl)mvEl.value=c.merit_volgorde==='prijs'?'prijs':'prioriteit';
-  var dfEl=document.getElementById('ehpDoelfunctie');
-  if(dfEl)dfEl.value=c.doelfunctie||'groep_borg';
-  var vsEl=document.getElementById('ehpVerdeelSleutel');
-  if(vsEl)vsEl.value=c.verdeelSleutel||'';
-  _ehpDoelUitleg();
+  _sv2('ehpGelZon',  c.gel_zon_mwh!=null?c.gel_zon_mwh:20);
+  _sv2('ehpGelWind', c.gel_wind_mwh!=null?c.gel_wind_mwh:20);
+  _sv2('ehpGelAI',   c.gel_ai_mwh!=null?c.gel_ai_mwh:0);
   _sv2('ehpPlatform',c.platform_mwh!=null?c.platform_mwh:0);
   _sv2('ehpGvoBil',  c.gvo_bil_mwh!=null?c.gvo_bil_mwh:0);
   _sv2('ehpGvoRest', c.gvo_rest_mwh!=null?c.gvo_rest_mwh:0);
@@ -188,20 +172,8 @@ function _ehpCommit(){
   var num=function(id,d){var el=document.getElementById(id);if(!el)return d;var v=parseFloat(el.value);return isNaN(v)?d:v;};
   var val=function(id){var el=document.getElementById(id);return el?el.value:'';};
   var chk=function(id){var el=document.getElementById(id);return el?el.checked:false;};
-  // De drie bronprijzen komen nu uit het prijsmodel. gel_*_mwh blijft bestaan als
-  // representatief tarief voor de bestaande consumenten van cfg (rapport, tarieven_cfg):
-  // bij 'vast' is dat het tarief zelf, bij 'collar' de vloer, bij de overige vormen 0 —
-  // daar komen de werkelijke bedragen uit EhpDispatch.pasPrijsmodelToe().
-  // Vangnet: is de zijbalk nog niet gerenderd, dan levert _ehpLeesPrijsmodel() nulwaarden op.
-  // Dat mag een opgeslagen prijsmodel niet overschrijven.
-  var prijsmodel=document.querySelector('#ehpPrijsmodel [data-pm-vorm]')
-    ? _ehpLeesPrijsmodel()
-    : ((plat.cfg&&plat.cfg.prijsmodel)||EhpPrijs.migreer(plat.cfg||{}));
-  var gZon=_ehpRepresentatiefTarief(prijsmodel.zon);
-  var gWind=_ehpRepresentatiefTarief(prijsmodel.wind);
-  var gAI=_ehpRepresentatiefTarief(prijsmodel.afname_invoeden);
+  var gZon=num('ehpGelZon',20),gWind=num('ehpGelWind',20),gAI=num('ehpGelAI',0);
   var gPlat=num('ehpPlatform',0);
-  var vorige=plat.cfg||{};
   plat.cfg={
     gel_zon_mwh:gZon,gel_wind_mwh:gWind,gel_ai_mwh:gAI,
     platform_mwh:gPlat,gvo_bil_mwh:num('ehpGvoBil',0),gvo_rest_mwh:num('ehpGvoRest',0),
@@ -212,46 +184,13 @@ function _ehpCommit(){
     onb_wind_risico_mwh:num('ehpOnbWindRisico',0),
     onb_vb_risico_mwh:num('ehpOnbVbRisico',0),
     retail_opslag_mwh:num('ehpRetailOpslagMwh',20),
-    // Backward compat (EUR/kWh) — voor rekenkern.js / rapport_ehp.js
+    // Backward compat (EUR/kWh) — voor financieel.js / rekenkern.js / rapport_ehp.js
     pZon:gZon/1000,pWind:gWind/1000,pOverig:gAI/1000,
     fee:gPlat/1000,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
     ebOn:chk('ehpEbOn'),ebJaar:val('ehpEbJaar'),ebGrondslag:val('ehpEbGrondslag'),
-    heffingskorting:num('ehpHeffing',0),btwOn:chk('ehpBtwOn'),btwPct:num('ehpBtwPct',21),
-    prijsmodel:prijsmodel,
-    merit_volgorde:val('ehpMeritVolgorde')==='prijs'?'prijs':'prioriteit',
-    // De doelfunctie zet de merit-drempel: alleen bij 'laagste kosten voor afnemers' wordt een
-    // bron overgeslagen zodra hij boven het netalternatief van de afnemer ligt.
-    doelfunctie:val('ehpDoelfunctie')||'groep_borg',
-    verdeelSleutel:val('ehpVerdeelSleutel')||'',
-    merit_drempel:((EhpVerdeling.DOELFUNCTIES[val('ehpDoelfunctie')]||{}).drempel)==='afnemer'?'afnemer':'geen',
-    opslag:_ehpLeesAccus((plat.cfg&&plat.cfg.opslag)||[])
+    heffingskorting:num('ehpHeffing',0),btwOn:chk('ehpBtwOn'),btwPct:num('ehpBtwPct',21)
   };
-  // Matching- en opslagmodus. Net als bij het prijsmodel geldt: is de zijbalk nog niet
-  // gerenderd, dan mogen lege velden een opgeslagen instelling niet overschrijven.
-  Object.assign(plat.cfg,_ehpLeesMatching(vorige));
   saveMeta();
-}
-
-/**
- * Leest de matching- en opslaginstellingen uit de zijbalk. Zonder gerenderde zijbalk
- * blijven de bestaande waarden staan; ontbreken die ook, dan gelden de defaults —
- * en die zetten een platform op de BESTAANDE modus.
- */
-function _ehpLeesMatching(vorige){
-  var uit={};
-  if(typeof EhpMatching==='undefined')return uit;
-  var basis=EhpMatching.defaults();
-  var gerenderd=!!document.getElementById('ehpM_matching_modus');
-  EhpMatching.VELDEN.forEach(function(v){
-    var el=gerenderd?document.getElementById('ehpM_'+v.key):null;
-    if(el){
-      uit[v.key]=(el.type==='checkbox')?(el.checked?1:0)
-                :(v.eenheid?(isNaN(parseFloat(el.value))?basis[v.key]:parseFloat(el.value)):el.value);
-    }else{
-      uit[v.key]=(vorige&&vorige[v.key]!=null)?vorige[v.key]:basis[v.key];
-    }
-  });
-  return uit;
 }
 
 function addEhp(){
@@ -350,19 +289,6 @@ async function calcEHP(){
       }
     });
   });
-  // Netpositie per aansluiting (kWh per kwartier, positief = afname). Nodig voor een accu die
-  // achter de meter van één deelnemer staat: daar bepaalt díe aansluiting wat EB-vrij is en
-  // welke piek verlaagd wordt — niet de groep als geheel.
-  var ledenNetto={};
-  withData.forEach(function(wd){
-    var m={};
-    wd.data.forEach(function(rec){
-      var tk=_ehpReportKey(rec.ts,wd.source);
-      m[tk]=(m[tk]||0)+rec.kw*0.25;
-    });
-    ledenNetto[wd.comp.id]={naam:wd.comp.name,map:m};
-  });
-
   // Additioneel handmatig geladen opwek samenvoegen (optioneel)
   if(plat.opwekRows&&plat.opwekRows.length){opwekRows=opwekRows.concat(plat.opwekRows);}
 
@@ -408,52 +334,6 @@ async function calcEHP(){
     retail_opslag:                    (cfg.retail_opslag_mwh||0)/1000
   };
 
-  // --- Prijsmodel en merit order ---------------------------------------------
-  // De prijs van een bron is een functie van het kwartier, niet een constante. Zonder
-  // cfg.prijsmodel valt EhpPrijs.migreer() terug op de oude vaste tarieven, zodat bestaande
-  // platforms exact dezelfde getallen blijven geven.
-  var prijsmodelCfg = EhpPrijs.migreer(cfg);
-  var prijsModel    = EhpPrijs.maak(prijsmodelCfg);
-  var epexByTijd    = EhpDispatch.epexIndex(epexRows);
-  var meritVolgorde = cfg.merit_volgorde === 'prijs'    ? 'prijs'   : 'prioriteit';
-  var meritDrempel  = cfg.merit_drempel  === 'afnemer'  ? 'afnemer' : 'geen';
-  var alleVast      = EhpPrijs.BRONNEN.every(function(b){ return prijsModel.vormVan(b)==='vast'; });
-
-  // --- Matching- en opslagmodus ----------------------------------------------
-  // Twee rekenpaden die elkaar niet raken. Modus 1 is de bestaande keten (merit order,
-  // dan de accu op de restpositie) en blijft de regressiebasis. Modus 2 behandelt
-  // matching en opslag in samenhang; zie het kopcommentaar van ehp/matching.js voor
-  // waarom dat een ander antwoord kan geven en wanneer niet.
-  var matchInst = EhpMatching.lees(cfg);
-  var samenhang = matchInst.modus==='prijsgeoptimaliseerde_opslag_en_matching';
-
-  // Netprofiel per accu-gastheer, zodat de accu-afweging weet achter welke meter hij staat.
-  var gastheerByAccu={};
-  (cfg.opslag||[]).forEach(function(ac){
-    var eig=ac.eigenaar;
-    if(!eig||eig==='groep'||eig==='platform')return;
-    var rec=ledenNetto[eig];
-    if(rec)gastheerByAccu[ac.id]=rec.map;
-  });
-
-  var allocator = samenhang
-    ? EhpMatching.maakAllocator({
-        instellingen:  matchInst,
-        prijsModel:    prijsModel,
-        epexByTijd:    epexByTijd,
-        meritVolgorde: meritVolgorde,
-        accus:         cfg.opslag||[],
-        gastheerByAccu:gastheerByAccu,
-        ebJaar:        parseInt(cfg.ebJaar,10)||2025
-      })
-    : EhpDispatch.maakAllocator({
-        volgorde:      meritVolgorde,
-        drempel:       meritDrempel,
-        prijsModel:    prijsModel,
-        epexByTijd:    epexByTijd,
-        afnemerOpslag: (cfg.retail_opslag_mwh||0)/1000
-      });
-
   // --- EnergieModel.buildModel aanroepen ---
   var result;
   try{
@@ -463,8 +343,7 @@ async function calcEHP(){
       epex:         epexRows,
       tarieven:     tarieven,
       scenario:     {},
-      forwardcurve: forwardRows,
-      allocator:    allocator
+      forwardcurve: forwardRows
     });
   }catch(e){
     notify('Rekenfout: '+e.message,false);
@@ -473,185 +352,6 @@ async function calcEHP(){
   }
 
   var sam=result.samenvatting;
-
-  // Bij een niet-vaste prijsvorm kloppen de gelijktijdigheidskolommen uit applyEconomicColumns
-  // niet meer (die rekenen met één tarief per type). Alleen dan herrekenen, zodat het
-  // referentiepad bit-voor-bit ongemoeid blijft.
-  // In de samenhangende modus altijd herrekenen: daar kan de allocator een bron overslaan
-  // op grond van een beschermingsgrens, en dan klopt "volume × vast tarief" per definitie
-  // niet meer — ook al staan alle prijsvormen op vast.
-  if(!alleVast||samenhang){
-    try{ EhpDispatch.pasPrijsmodelToe(result,{prijsModel:prijsModel,tarieven:tarieven}); }
-    catch(e){ console.error('pasPrijsmodelToe:',e); notify('Fout bij toepassen prijsmodel',false); return; }
-    sam=result.samenvatting;
-  }
-
-  // Waarde van het prijsmodel over het hele gematchte volume: per kwartier is de vergelijking
-  // met de markt soms positief en soms negatief — wat telt is de som over de periode.
-  var waarde = EhpPrijs.waardeVergelijking((result.opwekAlloc||[]).map(function(r){
-    return {gelijktijdig_kWh:r.gelijktijdig_kWh, epex_eur_per_kWh:epexByTijd[r.tijdKey]||0,
-            prijs_eur_per_kWh:r.prijs_eur_per_kWh};
-  }), (cfg.retail_opslag_mwh||0)/1000);
-
-  // Invoer bewaren zodat ehpRegressie() het overgenomen model op dezelfde data kan naspelen.
-  window._ehpLaatsteInvoer={verbruik:verbruikRows,opwek:opwekRows,epex:epexRows,
-    tarieven:tarieven,scenario:{},forwardcurve:forwardRows};
-  // --- Opslag ----------------------------------------------------------------
-  // Twee paden, afhankelijk van de gekozen modus:
-  //
-  //   match_eerst_dan_opslag  Sequentieel: eerst de merit order zonder accu, dan de accu op
-  //     de restpositie (overschot en tekort) van de groep. Hoe de accuwaarde over de
-  //     deelnemers verdeeld wordt is daar een aparte vraag, ná de dispatch.
-  //
-  //   prijsgeoptimaliseerde_opslag_en_matching  De accu zit al in de allocator: matching en
-  //     opslag zijn daar één afweging. Er hoeft — en mag — hier dus geen tweede dispatch
-  //     overheen; het plan wordt verderop alleen nog in de modelrijen verwerkt. Een tweede
-  //     dispatch zou dezelfde kWh nogmaals opslaan en de balans breken.
-  var opslagRes=[];
-  var matchPlan=samenhang?allocator.plan:null;
-  var matchVerrekening=null;
-  (samenhang?[]:(cfg.opslag||[])).forEach(function(accuCfg){
-    try{
-      var gastheer=_ehpGastheerProfiel(result.model,ledenNetto,accuCfg.eigenaar);
-      var dsp=EhpOpslag.dispatch(result.model,accuCfg,{gastheer:gastheer});
-      // Piekreductie is de tweede waardestroom. Bij Nederlandse transporttarieven is die vaak
-      // van dezelfde orde als de arbitragemarge, dus hij hoort in de businesscase en niet in
-      // een losse hoek van het scherm.
-      var pk=null;
-      try{ pk=EhpOpslag.piekAnalyse(result.model,accuCfg,{gastheer:gastheer}); }
-      catch(pe){ console.error('piekAnalyse:',pe); }
-      var piekJr=0;
-      if(pk&&pk.beste){
-        var jf=dsp.periodeDagen>0?365/dsp.periodeDagen:0;
-        piekJr=(pk.beste.kmBesparing_EUR+pk.beste.kcBesparing_EUR)*jf;
-      }
-      var bcs=EhpOpslag.businesscase(pk&&pk.beste?pk.beste.dispatch:dsp,
-        {discontoPct:EHP_PARAMS.waarde(cfg,'disconto_pct'),piekWaardePerJaar_EUR:piekJr});
-      var eigNaam='';
-      if(accuCfg.eigenaar&&accuCfg.eigenaar!=='platform'&&accuCfg.eigenaar!=='groep'){
-        for(var ci=0;ci<p.companies.length;ci++){
-          if(p.companies[ci].id===accuCfg.eigenaar){eigNaam=p.companies[ci].name;break;}
-        }
-      }
-      var eindDispatch=(pk&&pk.beste)?pk.beste.dispatch:dsp;
-      // Herkomst van de laadstroom per bedrijf — alleen betrouwbaar op de gedeelde aansluiting:
-      // daar is sig.overschot exact de som van opwekAlloc.overschot_kWh per kwartier, dus de
-      // verdeling klopt letterlijk. Achter de meter van één deelnemer is dat niet zo (zie
-      // herkomstLaadstroom() in opslag.js) — dan blijft het bij de simpele eigen/net-splitsing.
-      var herkomst=accuCfg.eigenaar==='groep'
-        ?EhpOpslag.herkomstLaadstroom(eindDispatch,result.opwekAlloc)
-        :null;
-      opslagRes.push({cfg:accuCfg,dispatch:eindDispatch,
-        dispatchZonderPiek:dsp,piek:pk,businesscase:bcs,eigenaarNaam:eigNaam,herkomst:herkomst});
-    }catch(err){console.error('opslagdispatch:',err);notify('Accu kon niet worden doorgerekend: '+(accuCfg.naam||''),false);}
-  });
-
-  // Platformpositie van de groep vóór de accu, zodat het energievoordeel meetbaar is als
-  // verschil. Dat voordeel landt via verwerkInModel() vanzelf bij de deelnemers; het moet
-  // zichtbaar zijn maar niet nogmaals verdeeld worden.
-  var platformPositieVoor=_ehpPlatformPositie(result);
-
-  // De accu doorvoeren in de modelrijen. Zonder deze stap blijft het overschot naar het net
-  // even groot terwijl de accu het net heeft opgeslagen, en verandert er in de kengetallen,
-  // het financieel overzicht en de deelnemersverrekening niets.
-  if(samenhang&&matchPlan){
-    try{
-      EhpMatching.verwerkInModel(result,matchPlan,tarieven);
-      sam=result.samenvatting;
-      // De uitkomst per accu in de vorm die de bestaande opslagtab verwacht, plus de
-      // businesscase op dezelfde grondslag als in de bestaande modus.
-      opslagRes=matchPlan.accus.map(function(r,i){
-        var accuCfg=(cfg.opslag||[])[i]||r.cfg;
-        var dsp=EhpMatching.alsOpslagResultaat(r,matchInst);
-        var jf=r.periodeDagen>0?365/r.periodeDagen:0;
-        var piekJr=((r.kmBesparing_EUR||0)+(r.kcBesparing_EUR||0))*jf;
-        var bcs=EhpOpslag.businesscase(dsp,
-          {discontoPct:EHP_PARAMS.waarde(cfg,'disconto_pct'),piekWaardePerJaar_EUR:piekJr});
-        var eigNaam='';
-        if(accuCfg.eigenaar&&accuCfg.eigenaar!=='platform'&&accuCfg.eigenaar!=='groep'){
-          for(var ci=0;ci<p.companies.length;ci++){
-            if(p.companies[ci].id===accuCfg.eigenaar){eigNaam=p.companies[ci].name;break;}
-          }
-        }
-        return {cfg:accuCfg,dispatch:dsp,dispatchZonderPiek:dsp,piek:r.piek,
-                businesscase:bcs,eigenaarNaam:eigNaam,
-                // In deze modus is de herkomst per bedrijf uit het grootboek te halen, ook
-                // achter de meter van één deelnemer: elke geladen kWh is bij het laden aan
-                // een bron toegewezen in plaats van achteraf naar rato geschat.
-                herkomst:EhpMatching.herkomstUitBoek(r),
-                matching:r};
-      });
-    }catch(e){console.error('matching verwerkInModel:',e);
-      notify('Samenhangende doorrekening kon niet worden verwerkt',false);}
-  }else if(opslagRes.length){
-    try{
-      EhpOpslag.verwerkInModel(result,opslagRes,tarieven);
-      sam=result.samenvatting;
-    }catch(e){console.error('verwerkInModel:',e);notify('Accu kon niet in het model worden verwerkt',false);}
-  }
-
-  // Energievoordeel van de accu: hoeveel goedkoper de groep uitkomt doordat de accu een deel
-  // van het tekort dekt en een deel van het overschot opvangt.
-  var accuEnergievoordeel=opslagRes.length
-    ? (platformPositieVoor-_ehpPlatformPositie(result))
-    : 0;
-
-  // Volledige verrekening van de samenhangende modus: per route, per deelnemer, per accu,
-  // met de controle dat niets dubbel wordt verdeeld. Zie ehp/matching_verrekening.js.
-  var matchWaarschuwingen=[];
-  if(samenhang&&matchPlan){
-    try{
-      matchVerrekening=EhpMatching.verreken(matchPlan,{
-        perGebruiker:result.per_gebruiker, perOpwekker:result.per_opwekker,
-        verbruik:result.verbruik, model:result.model,
-        businesscases:opslagRes.map(function(x){
-          var f=(x.dispatch.periodeDagen||0)>0?(x.dispatch.periodeDagen/365):1;
-          var b=x.businesscase||{};
-          return {opex_EUR:(b.opexPerJaar_EUR||0)*f,
-                  kapitaallast_EUR:(b.kapitaallastPerJaar_EUR||0)*f,
-                  eigenAansluiting_EUR:(b.eigenAansluitingPerJaar_EUR||0)*f};
-        })
-      });
-      matchWaarschuwingen=EhpMatching.waarschuwingen(matchPlan,matchVerrekening);
-    }catch(e){console.error('matching verrekening:',e);}
-  }
-
-  // Rekening per accu. Het energievoordeel wordt naar rato van de afgeleverde kWh toebedeeld
-  // wanneer er meerdere accu's zijn.
-  var accuPeriodeDagen=(opslagRes[0]&&opslagRes[0].dispatch&&opslagRes[0].dispatch.periodeDagen)||365;
-  var totaalAfgeleverd=opslagRes.reduce(function(t,x){return t+(x.dispatch.doorzetUit_kWh||0);},0);
-  opslagRes.forEach(function(x,i){
-    var aandeel=totaalAfgeleverd>0?(x.dispatch.doorzetUit_kWh||0)/totaalAfgeleverd:1/opslagRes.length;
-    if(samenhang&&matchVerrekening&&matchVerrekening.perAccu[i]){
-      // In de samenhangende modus is de rekening niet af te leiden uit een verschil in
-      // platformpositie: de accu zit al in de matching. Ze komt rechtstreeks uit de
-      // verrekening, waar elke post één keer voorkomt.
-      var v=matchVerrekening.perAccu[i];
-      x.rekening={
-        naam:v.naam, kostenDrager:v.kostenDrager, eigenaar:v.eigenaar,
-        periodeDagen:accuPeriodeDagen,
-        // Wat de afnemers al kregen doordat opgeslagen energie onder hun netalternatief
-        // geprijsd is. Ter verantwoording — het wordt hieronder NIET nogmaals verdeeld.
-        energievoordeel_EUR:(matchVerrekening.afnemersvoordeelDirect_EUR||0)*aandeel,
-        opslagwaarde_EUR:v.arbitrageMarge_EUR,
-        aandeelOpslagwaarde_EUR:v.aandeelOpslagwaarde_EUR,
-        piekwaarde_EUR:v.piekwaarde_EUR,
-        opex_EUR:v.opex_EUR, kapitaallast_EUR:v.kapitaallast_EUR,
-        eigenAansluiting_EUR:v.eigenAansluiting_EUR,
-        teVerdelen_EUR:v.resultaatAccuEigenaar_EUR,
-        totaalResultaat_EUR:v.resultaatAccuEigenaar_EUR
-      };
-    }else{
-      x.rekening=EhpOpslag.rekening(x,accuPeriodeDagen,accuEnergievoordeel*aandeel);
-    }
-    // Leesbare naam van de kostendrager erbij, zodat de rekening zichzelf verklaart.
-    if(x.rekening.kostenDrager&&x.rekening.kostenDrager!=='platform'){
-      for(var ki=0;ki<p.companies.length;ki++){
-        if(p.companies[ki].id===x.rekening.kostenDrager){x.rekening.kostenDragerNaam=p.companies[ki].name;break;}
-      }
-    }
-  });
-
   var model=result.model;
 
   // --- Tijdreeks voor bestaande chart-functies ---
@@ -660,9 +360,26 @@ async function calcEHP(){
   // Netto kW per kwartier (positief = tekort/inkoop van net, negatief = overschot/teruglevering)
   var ehpNetKw=model.map(function(r){return (r.tekort_kWh-r.overschot_kWh)/0.25;});
 
-  // Pieken groep (kW) — maatgevend voor de vermogenskeuze bij opslag.
-  var maxMatchKw=0,peakProdKw=0,peakDemKw=0;
+  // Week/maand aggregaties
+  var ehpWeekAvgSum=new Array(672).fill(0),ehpWeekAvgCnt=new Array(672).fill(0);
+  var ehpMonthImp={},ehpMonthExp={};
+  model.forEach(function(r,i){
+    var ts=r['Tijd (UTC)'];
+    var dow=(ts.getDay()+6)%7;
+    var sl=dow*96+Math.floor((ts.getHours()*60+ts.getMinutes())/15);
+    ehpWeekAvgSum[sl]+=ehpNetKw[i];ehpWeekAvgCnt[sl]++;
+    var mn=r.tijdKey.slice(0,7);
+    if(r.tekort_kWh>0)ehpMonthImp[mn]=(ehpMonthImp[mn]||0)+r.tekort_kWh;
+    if(r.overschot_kWh>0)ehpMonthExp[mn]=(ehpMonthExp[mn]||0)+r.overschot_kWh;
+  });
+  var ehpWeekAvg=ehpWeekAvgSum.map(function(s,i){return ehpWeekAvgCnt[i]>0?s/ehpWeekAvgCnt[i]:0;});
+  var ehpWeekNet=ehpWeekAvg.map(function(v){return Math.max(0,v);});
+
+  // Gelijktijdigheidsstatistieken (count van kwartieren)
+  var nBoth=0,nProdOnly=0,nDemOnly=0,nNone=0,maxMatchKw=0,peakProdKw=0,peakDemKw=0;
   model.forEach(function(r){
+    var hasP=r.totaal_opwek_kWh>0,hasD=r.totaal_verbruik_kWh>0;
+    if(hasP&&hasD)nBoth++;else if(hasP)nProdOnly++;else if(hasD)nDemOnly++;else nNone++;
     var gKw=r.gelijktijdig_kWh/0.25;
     if(gKw>maxMatchKw)maxMatchKw=gKw;
     if(r.totaal_opwek_kWh/0.25>peakProdKw)peakProdKw=r.totaal_opwek_kWh/0.25;
@@ -716,78 +433,40 @@ async function calcEHP(){
   var prodBySrc={zon:(sam.opwek_zon_kWh||0)+(sam.opwek_afname_invoeden_kWh||0),wind:sam.opwek_wind_kWh||0,overig:0};
   var matchedBySrc={zon:(sam.gelijktijdig_zon_kWh||0)+(sam.gelijktijdig_afname_invoeden_kWh||0),wind:sam.gelijktijdig_wind_kWh||0,overig:0};
 
-  // --- Verdeling: wie is beter af? -------------------------------------------
-  // Vergelijkingsbasis is de ENERGIE-inkoop aan beide kanten, zonder energiebelasting en btw.
-  // Die twee lopen bij een platform via een eigen route (grondslagkeuze, opslagvrijstelling) en
-  // door elkaar mengen zou een verschil tonen dat niet uit de verrekening komt.
-  var doelDef=EhpVerdeling.DOELFUNCTIES[cfg.doelfunctie]||EhpVerdeling.DOELFUNCTIES.groep_borg;
-  var verdeelSleutel=cfg.verdeelSleutel||doelDef.sleutel;
-  var verdeling=null;
-  try{
-    var prijsreeks=epexRows.map(function(r){return {ts:r.tijdKey,price:r.epex_eur_per_kWh};});
-    var refLijst=EhpVerdeling.referentie(withData.map(function(wd){
-      return {id:wd.comp.id,naam:wd.comp.name,company:wd.comp,data:wd.data};
-    }),prijsreeks,{metEb:false,metNetkosten:false});
-
-    var gebrByNaam={},opwByNaam={};
-    result.per_gebruiker.forEach(function(u){gebrByNaam[u.Locatie]=u;});
-    result.per_opwekker.forEach(function(o){opwByNaam[o.Asset]=o;});
-    // In de samenhangende modus komt er per deelnemer een route bij die de bestaande
-    // kolommen niet kennen: inkoop uit de accu (kosten) en het aandeel in de opslagwaarde
-    // (opbrengst). Zonder die twee lijkt opgeslagen energie gratis bij de afnemer te
-    // landen en zou de producent zijn deel niet zien.
-    var accuKostenByNaam={},opslagwaardeByNaam={};
-    if(matchVerrekening){
-      matchVerrekening.perAfnemer.forEach(function(x){accuKostenByNaam[x.Locatie]=x.kostenUitAccu_EUR||0;});
-      matchVerrekening.perAsset.forEach(function(x){opslagwaardeByNaam[x.Asset]=x.opslagwaarde_EUR||0;});
+  // --- Niet-leden: aansluitingen niet in dit platform ---
+  var memberSet={};members.forEach(function(mem){memberSet[mem.cid]=1;});
+  var ehpImportCount=ehpNetKw.filter(function(v){return v>0;}).length;
+  var ehpNetKwByTs={};allTs.forEach(function(tk,i){ehpNetKwByTs[tk]=ehpNetKw[i];});
+  var nonMembers=[];
+  for(var ni=0;ni<p.companies.length;ni++){
+    var nc=p.companies[ni];
+    if(memberSet[nc.id])continue;
+    var nd=await dbGet('ts',nc.id)||[];
+    if(!nd.length)continue;
+    var ndMap={};nd.forEach(function(rec){ndMap[rec.ts.slice(0,16)]=rec.kw;});
+    var nmProd=0,nmCons=0,nmPeak=0,nmSim=0;
+    var nmWeekSum=new Array(672).fill(0),nmWeekCnt=new Array(672).fill(0),nmMonthProd={};
+    nd.forEach(function(rec){
+      if(rec.kw<0){
+        var prod2=-rec.kw;
+        nmProd+=prod2*0.25;if(prod2>nmPeak)nmPeak=prod2;
+        var d2=new Date(rec.ts);
+        var dow2=(d2.getDay()+6)%7;
+        var sl2=dow2*96+Math.floor((d2.getHours()*60+d2.getMinutes())/15);
+        nmWeekSum[sl2]+=prod2;nmWeekCnt[sl2]++;
+        var mn2=rec.ts.slice(0,7);nmMonthProd[mn2]=(nmMonthProd[mn2]||0)+prod2*0.25;
+      }else if(rec.kw>0){nmCons+=rec.kw*0.25;}
+    });
+    var nmWeekProd=nmWeekSum.map(function(sv2,i2){return nmWeekCnt[i2]>0?sv2/nmWeekCnt[i2]:0;});
+    if(ehpImportCount>0){
+      Object.keys(ndMap).forEach(function(tk2){
+        if(ehpNetKwByTs[tk2]>0&&ndMap[tk2]<0)nmSim++;
+      });
     }
-    var platPer=withData.map(function(wd){
-      var u=gebrByNaam[wd.comp.name],o=opwByNaam[wd.comp.name];
-      var kosten=u?((u.kosten_gelijktijdigheid_EUR||0)+(u.kosten_epex_tekort_EUR||0)+
-                    (u.kosten_onbalans_verbruik_EUR||0)+(u.kosten_platform_EUR||0)+
-                    (u.kosten_gvo_bilateraal_EUR||0)+(u.kosten_gvo_rest_EUR||0)):0;
-      kosten+=accuKostenByNaam[wd.comp.name]||0;
-      return {id:wd.comp.id,
-        kosten_EUR:kosten,
-        opbrengst_EUR:(o?(o.netto_opbrengst_EUR||0):0)+(opslagwaardeByNaam[wd.comp.name]||0),
-        verbruikKwh:u?(u.totaal_verbruik_kWh||0):0,
-        opwekKwh:o?(o.totaal_opwek_kWh||0):0};
-    });
-
-    var voordelen=EhpVerdeling.voordelen(refLijst,platPer);
-
-    // Het ENERGIEvoordeel van de accu zit al in de kosten per deelnemer (via verwerkInModel) en
-    // mag hier niet nogmaals meetellen. Wat er buiten dat pad valt is de accurekening zelf:
-    // besparing op transport minus opex, kapitaallast en eventuele eigen aansluitkosten.
-    // Draagt het platform die rekening, dan gaat ze de pool in en bepaalt de sleutel wie wat
-    // krijgt of bijlegt. Draagt één deelnemer haar, dan komt ze volledig bij die deelnemer —
-    // en dan is zichtbaar dat hij alleen investeert terwijl de groep meeprofiteert.
-    var accuExtra=0;
-    var voordeelById={};
-    voordelen.forEach(function(v){voordeelById[v.id]=v;});
-    opslagRes.forEach(function(x){
-      var r=x.rekening;
-      if(!r)return;
-      if(r.kostenDrager&&r.kostenDrager!=='platform'&&voordeelById[r.kostenDrager]){
-        voordeelById[r.kostenDrager].eigenVoordeel_EUR+=r.teVerdelen_EUR;
-        voordeelById[r.kostenDrager].platform_EUR-=r.teVerdelen_EUR;
-      }else{
-        accuExtra+=r.teVerdelen_EUR;
-      }
-    });
-    // De pool van de samenhangende modus: opslagwaarde die aan niemand is toegewezen, plus
-    // de beschermingscorrecties. Het eigen resultaat van elke accu is hierboven al bij de
-    // kostendrager of bij `accuExtra` geboekt en zit hier dus bewust NIET in.
-    if(matchVerrekening)accuExtra+=matchVerrekening.pool.teVerdelen_EUR;
-    verdeling=EhpVerdeling.verdeel(voordelen,{
-      sleutel:verdeelSleutel,borg:!!doelDef.borg,extra_EUR:accuExtra
-    });
-    verdeling.referentie=refLijst;
-    verdeling.doelfunctie=cfg.doelfunctie||'groep_borg';
-    verdeling.accuExtra_EUR=accuExtra;
-    verdeling.accuRekeningen=opslagRes.map(function(x){return x.rekening;}).filter(Boolean);
-    verdeling.accuEnergievoordeel_EUR=accuEnergievoordeel;
-  }catch(verdErr){console.error('verdeling:',verdErr);}
+    nonMembers.push({id:nc.id,name:nc.name,prodKwh:nmProd,consKwh:nmCons,peakProd:nmPeak,
+      simScore:ehpImportCount>0?nmSim/ehpImportCount*100:0,
+      weekProd:nmWeekProd,monthProd:nmMonthProd});
+  }
 
   var bcCfg=Object.assign({},cfg);
 
@@ -803,21 +482,11 @@ async function calcEHP(){
     selfSuff:sam.gelijktijdigheid_pct_van_verbruik||0,
     prodBySrc:prodBySrc,matchedBySrc:matchedBySrc,
     platformFee:0,totNet:0,totBaseEur:0,totSavings:0,
+    nBoth:nBoth,nProdOnly:nProdOnly,nDemOnly:nDemOnly,nNone:nNone,
     maxMatchKw:maxMatchKw,peakProdKw:peakProdKw,peakDemKw:peakDemKw,
-    skipped:skipped,
-    // Prijsmodel en merit order (fase 2)
-    prijsmodel:prijsmodelCfg, prijsWaarde:waarde, opslag:opslagRes, ledenNetto:ledenNetto,
-    verdeling:verdeling, doelfunctie:cfg.doelfunctie||'groep_borg', verdeelSleutel:verdeelSleutel,
-    meritVolgorde:meritVolgorde, meritDrempel:meritDrempel,
-    // Samenhangende modus (leeg in de bestaande modus)
-    matchInstellingen:matchInst, samenhang:samenhang,
-    matchPlan:matchPlan, matchVerrekening:matchVerrekening,
-    matchWaarschuwingen:matchWaarschuwingen,
-    allocator:allocator, epexByTijd:epexByTijd,
-    capaciteitsvergoeding_totaal_EUR:result.capaciteitsvergoeding_totaal_EUR||0,
-    periodeDagen:result.periodeDagen||0,
-    // Netto positie per kwartier (kW; positief = van net). Basis voor de dispatch in fase 2/3.
-    ehpNetKw:ehpNetKw,
+    skipped:skipped,nonMembers:nonMembers,
+    ehpNetKw:ehpNetKw,ehpWeekAvg:ehpWeekAvg,ehpWeekNet:ehpWeekNet,
+    ehpMonthImp:ehpMonthImp,ehpMonthExp:ehpMonthExp,
     // Nieuwe velden
     samenvatting:sam,per_gebruiker:result.per_gebruiker,
     per_opwekker:result.per_opwekker,model:model,
@@ -834,6 +503,7 @@ async function calcEHP(){
     }
   };
 
+  _ehpPlatWeekSeiz=null;
   renderEhpResults(_ehpLast);
   document.getElementById('btnDlEhp').disabled=false;
   var nQ=allTs.length;
@@ -931,6 +601,7 @@ function renderEhpResults(res){
   // KPI-blok volumes & gelijktijdigheid
   var kpis=[
     ['Deelnemers',res.parties.length,''],
+    ['Periode',d0,'t/m '+d1],
     ['Totaal opwek',fmt(res.totProdKwh/1000)+' MWh',''],
     ['Totaal verbruik',fmt(res.totConsKwh/1000)+' MWh',''],
     ['Intern verrekend',fmt(res.totMatchedKwh/1000)+' MWh',''],
@@ -942,6 +613,23 @@ function renderEhpResults(res){
   var kpiHtml='<div class="kg">'+kpis.map(function(k){
     return '<div class="kb"><div class="kl">'+k[0]+'</div><div class="kv" style="font-size:15px">'+k[1]+'</div><div class="ku">'+k[2]+'</div></div>';
   }).join('')+'</div>';
+
+  // Gelijktijdigheid
+  var simHtml='<div class="cd"><div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Gelijktijdigheid opwek &amp; afname</div>'+
+    '<div class="kg">'+
+      '<div class="kb"><div class="kl">Kwartieren met overlap</div><div class="kv" style="font-size:18px">'+res.nBoth+'</div><div class="ku">opwek én verbruik</div></div>'+
+      '<div class="kb"><div class="kl">Alleen opwek</div><div class="kv" style="font-size:18px">'+res.nProdOnly+'</div><div class="ku">→ geheel naar net</div></div>'+
+      '<div class="kb"><div class="kl">Alleen verbruik</div><div class="kv" style="font-size:18px">'+res.nDemOnly+'</div><div class="ku">→ geheel van net</div></div>'+
+      '<div class="kb"><div class="kl">Piek-overlap</div><div class="kv" style="font-size:18px">'+fmt(res.maxMatchKw)+' kW</div><div class="ku">max. gelijktijdig</div></div>'+
+      '<div class="kb"><div class="kl">Piek opwek</div><div class="kv" style="font-size:18px">'+fmt(res.peakProdKw)+' kW</div><div class="ku">groep</div></div>'+
+      '<div class="kb"><div class="kl">Piek verbruik</div><div class="kv" style="font-size:18px">'+fmt(res.peakDemKw)+' kW</div><div class="ku">groep</div></div>'+
+    '</div></div>';
+
+  // Flow-diagram
+  var flowHtml='<div class="ehp-flow"><div class="ct2"><div class="ac" style="background:#5fb3df"></div>Energiestromen — '+_ehpEsc(res.platName)+'</div>'+
+    _ehpFlowSvg(res)+
+    '<div class="ib2" style="margin-top:6px">Lijndikte ∝ kWh over de hele periode. Pool = intern verrekend. Sleep de blokken om de grafiek overzichtelijker te maken.</div></div>';
+
   // Samenvattingstabel volumes (geen financiële kolommen — zie Jaarrekening-tab)
   var srcLbl={zon:'Zon',wind:'Wind',afname_invoeden:'Afname-invoeden',overig:'Overig',none:'Alleen afnemer',alleen_afname:'Alleen afnemer',geen:'Geen'};
   var rows=res.parties.map(function(x){
@@ -968,11 +656,10 @@ function renderEhpResults(res){
   var partyCards='<div class="cd"><div class="ct2"><div class="ac" style="background:#46962b"></div>Energiestromen per deelnemer</div>'+
     '<div class="ehp-party-grid">'+res.parties.map(function(x){return _ehpPartyCard(x,res);}).join('')+'</div></div>';
 
-  // Energiestromen — sleepbaar, zodat je de blokken kunt schikken tot het beeld klopt
-  var flowHtml='<div class="cd ehp-flow"><div class="ct2"><div class="ac" style="background:#5fb3df"></div>Energiestromen — '+_ehpEsc(res.platName)+'</div>'+
-    _ehpFlowSvg(res)+
-    '<div class="ib2" style="margin-top:6px">Lijndikte evenredig met kWh over de hele periode. Pool = intern verrekend. '+
-    'Sleep de blokken om de grafiek overzichtelijker te maken.</div></div>';
+  // Niet-leden: aansluitingen in het project buiten dit platform
+  var nm=res.nonMembers||[];
+  var nonMemHtml=_ehpNonMembersHtml(nm);
+  var hasNm=nm.some(function(m){return m.prodKwh>0||m.consKwh>0;});
 
   // Analyse-tab: gelijktijdigheid binnen de groep + EPEX-prijs (per maand of heel het jaar)
   var gelEpexMonths={};
@@ -999,45 +686,63 @@ function renderEhpResults(res){
       '<div class="cw" style="height:280px"><canvas id="cEhpGelEpex" role="img"></canvas></div>'+
     '</div>';
 
+  // Analyse-tab: platform week/maand patronen
+  var platAnalyseHtml=
+    gelEpexHtml+
+    '<div class="cd">'+
+      '<div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#2c7fb8"></div>'+
+      'Weekpatroon inkoop &amp; teruglevering — '+_ehpEsc(res.platName)+
+      '<div id="ehpPlatWeekSeizFilter" style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">'+
+        '<button data-sf="all" onclick="setEhpPlatWeekSeiz(\'all\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Heel het jaar</button>'+
+        '<button data-sf="win" onclick="setEhpPlatWeekSeiz(\'win\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Winter</button>'+
+        '<button data-sf="spr" onclick="setEhpPlatWeekSeiz(\'spr\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Lente</button>'+
+        '<button data-sf="sum" onclick="setEhpPlatWeekSeiz(\'sum\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Zomer</button>'+
+        '<button data-sf="aut" onclick="setEhpPlatWeekSeiz(\'aut\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Herfst</button>'+
+      '</div>'+
+      '</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Gemiddeld nettovermogen per kwartier van de week. '+
+      'Blauw = inkoop van net (vraag &gt; aanbod). Groen = teruglevering aan net (aanbod &gt; vraag).</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpPlatWeek" role="img"></canvas></div>'+
+    '</div>'+
+    '<div class="cd">'+
+      '<div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Maandpatroon inkoop &amp; teruglevering</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Totale kWh inkoop van het net en teruglevering aan het net per maand.</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpPlatMonth" role="img"></canvas></div>'+
+    '</div>';
+
   document.getElementById('ehpResults').innerHTML=
     '<div class="tabs">'+
       '<button class="tab on" data-ehp-tab="tEhpOv">Overzicht</button>'+
       '<button class="tab" data-ehp-tab="tEhpAn">Analyse</button>'+
       '<button class="tab" data-ehp-tab="tEhpDeel">Deelnemers</button>'+
       '<button class="tab" data-ehp-tab="tEhpGel">Gelijktijdigheid</button>'+
-      ((res.opslag&&res.opslag.length)?'<button class="tab" data-ehp-tab="tEhpOps">Opslag</button>':'')+
-      (res.samenhang?'<button class="tab" data-ehp-tab="tEhpRoutes">Routes</button>':'')+
-      (res.verdeling?'<button class="tab" data-ehp-tab="tEhpVerd">Verdeling</button>':'')+
-      '<button class="tab" data-ehp-tab="tEhpHerl">Herleidbaarheid</button>'+
+      '<button class="tab" data-ehp-tab="tEhpKans">Kansen</button>'+
+      (hasNm?'<button class="tab" data-ehp-tab="tEhpNm">Niet-leden</button>':'')+
     '</div>'+
-    '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+
-      (res.samenhang&&typeof _ehpMatchWaarschuwingenHtml==='function'?_ehpMatchWaarschuwingenHtml(res):'')+
-      _ehpPrijsmodelHtml(res)+_ehpOverzichtHtml(res)+'</div>'+
-    '<div id="tEhpAn" class="pn">'+flowHtml+gelEpexHtml+'</div>'+
+    '<div id="tEhpOv" class="pn on">'+headline+kpiHtml+_ehpOverzichtHtml(res)+simHtml+'</div>'+
+    '<div id="tEhpAn" class="pn">'+flowHtml+platAnalyseHtml+'</div>'+
     '<div id="tEhpDeel" class="pn">'+skipNote+summaryHtml+_ehpFactuurHtml(res)+partyCards+'</div>'+
     '<div id="tEhpGel" class="pn">'+_ehpGelijktijdheidHtml(res)+'</div>'+
-    ((res.opslag&&res.opslag.length)?'<div id="tEhpOps" class="pn">'+_ehpOpslagHtml(res)+'</div>':'')+
-    (res.samenhang?'<div id="tEhpRoutes" class="pn">'+
-      _ehpRoutesHtml(res)+_ehpMatchVerrekeningHtml(res)+_ehpMatchHerkomstHtml(res)+'</div>':'')+
-    (res.verdeling?'<div id="tEhpVerd" class="pn">'+_ehpVerdelingHtml(res)+'</div>':'')+
-    '<div id="tEhpHerl" class="pn">'+_ehpHerleidbaarheidHtml(res)+'</div>';
+    '<div id="tEhpKans" class="pn">'+_ehpKansenHtml(res)+'</div>'+
+    (hasNm?'<div id="tEhpNm" class="pn">'+nonMemHtml+'</div>':'');
 
   _ehpAttachFlowDrag();
   _ehpAttachTabs();
 
-  // Analyse-tab rendert in een verborgen panel — resize gebeurt bij tab-switch.
+  // Platform grafieken (Analyse-tab — panel hidden, resize bij tab-switch)
   _ehpGelEpexMonth='all';
   _ehpRenderGelEpexChart();
+  _ehpRenderPlatWeekChart();
+  _ehpDrawPlatMonthChart(res.ehpMonthImp||{},res.ehpMonthExp||{});
 
-  _ehpBindInspector();
-  if(res.opslag&&res.opslag.length){
-    _ehpTekenSocKrommes(res);
-    if(typeof _ehpTekenKansenCharts==='function')_ehpTekenKansenCharts(res);
-    var sweepBtn=document.getElementById('btnEhpSweep');
-    if(sweepBtn)sweepBtn.addEventListener('click',ehpBerekenSweep);
-    var gastBtn=document.getElementById('btnEhpGastheren');
-    if(gastBtn)gastBtn.addEventListener('click',ehpVergelijkGastheren);
-  }
+  // Kansen-tab: markt-mismatchanalyse (DOM-heatmaps, geen canvas — geen resize nodig)
+  _ehpRenderUrgentie();
+  _ehpRenderKansenTabel();
+
+  // Niet-leden grafieken
+  if(hasNm)_ehpDrawNonMemberChart(nm);
+  var nmProd=nm.filter(function(m){return m.prodKwh>0;});
+  if(nmProd.length){_ehpDrawWeekChart(nmProd,res.ehpWeekNet||[]);_ehpDrawMonthChart(nmProd);}
 }
 
 // --- Tab-navigatie EHP -------------------------------------------------------
@@ -1066,10 +771,8 @@ function _ehpAttachTabs(){
     if(panel)panel.classList.add('on');
     // Charts in hidden panels hadden size 0 bij eerste render — resize na DOM-update
     setTimeout(function(){
-      // Alle EHP-grafieken, niet een handmatige lijst: een nieuw canvas werd anders vergeten
-      // en bleef op breedte 0 staan tot de eerstvolgende venstergrootte-wijziging.
-      Object.keys(CH).forEach(function(k){
-        if(k.indexOf('ehp')===0&&CH[k])try{CH[k].resize();}catch(_){}
+      ['ehpGelEpex','ehpPlatWeek','ehpPlatMonth','ehpNonMem','ehpWeek','ehpMonth'].forEach(function(k){
+        if(CH[k])try{CH[k].resize();}catch(_){}
       });
     },30);
   });
@@ -1152,6 +855,580 @@ function _ehpDrawGelEpexChart(matchAvg,totAvg,epexAvg,hasEpex){
       scales:scales}});
 }
 
+// --- Kansen-tab: markt-mismatchanalyse (urgentie dure inkoop / goedkope teruglevering) --
+
+// Prijstertielen (33e/67e percentiel EPEX) over de hele periode — gedeelde referentie voor
+// zowel de urgentie-heatmaps als de top-kansvensters-tabel, zodat "hoge/lage prijs" overal
+// hetzelfde betekent.
+function _ehpPriceTerciles(res){
+  var vals=[];
+  (res.model||[]).forEach(function(r){
+    if(typeof r.epex_eur_per_kWh==='number')vals.push(r.epex_eur_per_kWh);
+  });
+  if(vals.length<10)return null;
+  vals.sort(function(a,b){return a-b;});
+  return{p33:vals[Math.floor(vals.length*0.33)],p67:vals[Math.floor(vals.length*0.67)]};
+}
+
+// Percentielrang (0-1) van v binnen de gesorteerde array sortedVals (fractie ≤ v), via
+// binary search. Robuuster tegen uitschieters dan een lineaire min-max-normalisatie —
+// belangrijk bij EPEX-prijspieken.
+function _ehpRankFn(sortedVals){
+  return function(v){
+    if(!sortedVals.length)return 0;
+    var lo=0,hi=sortedVals.length;
+    while(lo<hi){var mid=(lo+hi)>>1;if(sortedVals[mid]<=v)lo=mid+1;else hi=mid;}
+    return lo/sortedVals.length;
+  };
+}
+
+// Eenvoudige weekindex (0-52) o.b.v. dag-van-het-jaar/7 — bewust geen strikte ISO 8601-
+// weeknummering (die kent lastige jaarovergangen), dit is een verkennende heatmap-as.
+function _ehpWeekIdx(d){
+  var start=new Date(d.getFullYear(),0,1); // lokale middernacht 1 januari — zelfde tijdzone-referentie als d.getFullYear()
+  var diffDays=Math.floor((d-start)/86400000);
+  return Math.max(0,Math.min(52,Math.floor(diffDays/7)));
+}
+
+// Dag-van-het-jaar (0-365) — zelfde tijdzone-referentie als _ehpWeekIdx.
+function _ehpDayIdx(d){
+  var start=new Date(d.getFullYear(),0,1);
+  var diffDays=Math.floor((d-start)/86400000);
+  return Math.max(0,Math.min(365,diffDays));
+}
+
+function _ehpUrgLabel(score,th){
+  if(!th||score<th.p50)return'Laag';
+  if(score<th.p80)return'Middel';
+  if(score<th.p95)return'Hoog';
+  return'Zeer hoog';
+}
+
+// Combineert prijs- en volume-urgentie (elk een percentielrang 0-1) tot één continue
+// 0-1-urgentiescore per kwartier (score = prijsurgentie × volume-urgentie — een "AND"-
+// combinatie: alleen als beide écht extreem zijn wordt de score hoog). Aggregeert daarna
+// naar een 24×nCols-matrix (uur × week of uur × dag, afhankelijk van idxFn/nCols) en bepaalt
+// de P50/P80/P95 van de eigen scoreverdeling als zelf-kalibrerende grens voor "hoge urgentie"
+// (KPI's) resp. de labels (tooltip).
+function _ehpUrgentieSide(res,field,priceUrgencyFn,volSortedVals,idxFn,nCols){
+  var volRank=_ehpRankFn(volSortedVals);
+  var rows=[];
+  (res.model||[]).forEach(function(r){
+    var d=r['Tijd (UTC)'];if(!d)return;
+    var v=r[field]||0;if(v<=0)return;
+    var p=r.epex_eur_per_kWh;if(typeof p!=='number')return;
+    rows.push({h:d.getHours(),wi:idxFn(d),v:v,p:p,s:priceUrgencyFn(p)*volRank(v)});
+  });
+  if(!rows.length)return null;
+  var sortedScores=rows.map(function(x){return x.s;}).sort(function(a,b){return a-b;});
+  function pct(q){return sortedScores[Math.min(sortedScores.length-1,Math.floor(sortedScores.length*q))];}
+  var th={p50:pct(0.50),p80:pct(0.80),p95:pct(0.95)};
+
+  var score=[],kwh=[],epexSum=[],epexCnt=[],cnt=[];
+  for(var h=0;h<24;h++){
+    score.push(new Array(nCols).fill(0));kwh.push(new Array(nCols).fill(0));
+    epexSum.push(new Array(nCols).fill(0));epexCnt.push(new Array(nCols).fill(0));cnt.push(new Array(nCols).fill(0));
+  }
+  var kwhTot=0,kwhHoog=0,nHoog=0,sSumAll=0;
+  rows.forEach(function(x){
+    score[x.h][x.wi]+=x.s;kwh[x.h][x.wi]+=x.v;epexSum[x.h][x.wi]+=x.p;epexCnt[x.h][x.wi]++;cnt[x.h][x.wi]++;
+    kwhTot+=x.v;sSumAll+=x.s;
+    if(x.s>=th.p80){nHoog++;kwhHoog+=x.v;}
+  });
+  for(h=0;h<24;h++)for(var wk=0;wk<nCols;wk++)if(cnt[h][wk]>0)score[h][wk]=score[h][wk]/cnt[h][wk];
+  return{
+    scoreMatrix:score,kwhMatrix:kwh,epexSumMatrix:epexSum,epexCntMatrix:epexCnt,thresholds:th,
+    avgScoreAll:sSumAll/rows.length,
+    aandeelHoog:kwhTot>0?kwhHoog/kwhTot*100:0,
+    urenHoog:nHoog/4
+  };
+}
+
+// Hoofdberekening voor de Kansen-tab: bouwt de urgentiematrices voor beide zijden en een
+// voorzichtig geformuleerde interpretatie (zie notitie §11), o.b.v. het aandeel volume dat
+// in de hoogste urgentieklassen valt. granularity: 'week' (default, 53 kolommen) of 'dag'
+// (366 kolommen) — bepaalt alleen de kolomindeling van de heatmap-matrices.
+function _ehpUrgentieCompute(res,granularity){
+  res=res||_ehpLast;
+  if(!res||!res.model||!res.model.length)return null;
+  var idxFn=granularity==='dag'?_ehpDayIdx:_ehpWeekIdx;
+  var nCols=granularity==='dag'?366:53;
+  var prices=[];
+  res.model.forEach(function(r){if(typeof r.epex_eur_per_kWh==='number')prices.push(r.epex_eur_per_kWh);});
+  if(prices.length<10)return null;
+  prices.sort(function(a,b){return a-b;});
+  var priceRank=_ehpRankFn(prices); // 0-1, 1 = duurste prijs van de periode
+
+  var tekortVals=[],overschotVals=[];
+  res.model.forEach(function(r){
+    if((r.tekort_kWh||0)>0)tekortVals.push(r.tekort_kWh);
+    if((r.overschot_kWh||0)>0)overschotVals.push(r.overschot_kWh);
+  });
+  tekortVals.sort(function(a,b){return a-b;});
+  overschotVals.sort(function(a,b){return a-b;});
+  if(!tekortVals.length||!overschotVals.length)return null;
+
+  var tekort=_ehpUrgentieSide(res,'tekort_kWh',priceRank,tekortVals,idxFn,nCols);
+  var overschot=_ehpUrgentieSide(res,'overschot_kWh',function(p){return 1-priceRank(p);},overschotVals,idxFn,nCols);
+  if(!tekort||!overschot)return null;
+
+  // 20% aandeel hoge/zeer hoge urgentie in volume als grens tussen "veel" en "weinig" —
+  // een expliciete, uitlegbare drempel (geen verzonnen precisie), zie notitie §11.
+  var veelTekort=tekort.aandeelHoog>=20,veelOverschot=overschot.aandeelHoog>=20;
+  var interpretatie;
+  if(veelTekort&&!veelOverschot)
+    interpretatie='De groep lijkt vooral tekort te hebben op dure momenten. Extra lokale opwek, flexibiliteit of batterijontlading kan hier een mogelijke verbeterkans zijn.';
+  else if(!veelTekort&&veelOverschot)
+    interpretatie='De groep lijkt vooral benuttingsverlies van bestaande opwek te hebben. Extra lokale afname, opslag of vraagverschuiving kan hier een mogelijke verbeterkans zijn.';
+  else if(veelTekort&&veelOverschot)
+    interpretatie='Er lijkt een timingmismatch te zijn tussen opwek en verbruik. Opslag, flexibiliteit of aanvulling met andere deelnemersprofielen kan hier relevant zijn.';
+  else
+    interpretatie='De groep lijkt vanuit marktperspectief relatief goed gematcht. Verdere optimalisatie kan nog mogelijk zijn, maar de urgentie lijkt beperkt.';
+
+  return{tekort:tekort,overschot:overschot,interpretatie:interpretatie};
+}
+
+// Referentielabel voor een dag-van-het-jaar-index (0-365) — gebruikt een vaste niet-
+// schrikkeljaar-referentie, uitsluitend voor weergave (niet voor de berekening zelf).
+function _ehpDayLabel(dayIdx){
+  var ref=new Date(2001,0,1+dayIdx);
+  return ref.getDate()+' '+MND[ref.getMonth()];
+}
+
+var _ehpUrgGran='week'; // 'week' (53 kolommen) of 'dag' (366 kolommen)
+
+function setEhpUrgGran(val){
+  _ehpUrgGran=val;
+  _ehpUpdateUrgGranBtns();
+  _ehpRenderUrgentie();
+}
+
+function _ehpUpdateUrgGranBtns(){
+  document.querySelectorAll('#ehpUrgGranFilter button').forEach(function(btn){
+    var act=btn.getAttribute('data-gran')===_ehpUrgGran;
+    btn.style.background=act?'#46962b':'#eef2ec';
+    btn.style.color=act?'#fff':'#555';
+    btn.style.fontWeight=act?'700':'400';
+  });
+}
+
+// Vult de KPI-kaarten, de twee urgentie-heatmaps en de interpretatietekst van de Kansen-tab.
+function _ehpRenderUrgentie(){
+  var res=_ehpLast;if(!res)return;
+  var gran=_ehpUrgGran;
+  var urg=_ehpUrgentieCompute(res,gran);
+  var kpiEl=document.getElementById('ehpUrgentieKpis');
+  var wrapEl=document.getElementById('ehpUrgentieWrap');
+  var interpEl=document.getElementById('ehpUrgentieInterpretatie');
+  if(!urg){
+    if(kpiEl)kpiEl.innerHTML='';
+    if(wrapEl)wrapEl.style.display='none';
+    if(interpEl)interpEl.innerHTML='<div class="ib2">Onvoldoende EPEX-prijsdata voor een markt-mismatchanalyse.</div>';
+    return;
+  }
+  if(wrapEl)wrapEl.style.display='';
+  if(kpiEl)kpiEl.innerHTML=[
+    ['Netinkoop · hoge urgentie',urg.tekort.aandeelHoog.toFixed(1)+'%','van het inkoopvolume'],
+    ['Teruglevering · hoge urgentie',urg.overschot.aandeelHoog.toFixed(1)+'%','van het terugleveringsvolume'],
+    ['Hoge-urgentie-uren inkoop',Math.round(urg.tekort.urenHoog).toLocaleString('nl-NL'),'uur in de periode'],
+    ['Hoge-urgentie-uren teruglevering',Math.round(urg.overschot.urenHoog).toLocaleString('nl-NL'),'uur in de periode']
+  ].map(function(k){
+    return '<div class="kb"><div class="kl">'+k[0]+'</div><div class="kv" style="font-size:15px">'+k[1]+'</div><div class="ku">'+k[2]+'</div></div>';
+  }).join('');
+
+  var nCols,colLabels,colLbl,idxToLabel;
+  if(gran==='dag'){
+    nCols=366;colLabels=new Array(366).fill('');
+    for(var mo=0;mo<12;mo++)colLabels[Math.floor((new Date(2001,mo,1)-new Date(2001,0,1))/86400000)]=MND[mo];
+    idxToLabel=_ehpDayLabel;
+  }else{
+    nCols=53;colLabels=[];
+    // Weeknummers spaarzaam labelen (elke 4e kolom) om het kopje leesbaar te houden bij 53 kolommen.
+    for(var wk=0;wk<53;wk++)colLabels.push(wk%4===0?String(wk+1):'');
+    idxToLabel=function(wi){return'Week '+(wi+1);};
+  }
+
+  [
+    {gridId:'ehpHmUrgTekort',legId:'ehpHmUrgTekortLeg',side:urg.tekort,rgb:'44,127,184'},
+    {gridId:'ehpHmUrgOverschot',legId:'ehpHmUrgOverschotLeg',side:urg.overschot,rgb:'70,150,43'}
+  ].forEach(function(h){
+    var side=h.side;
+    renderHeatmap(h.gridId,h.legId,side.scoreMatrix,side.avgScoreAll,h.rgb,'Urgentie',{
+      cols:nCols,colLabels:colLabels,
+      cellFmt:function(c,wi,hLbl){
+        var hr=parseInt(hLbl,10);
+        var kwhVal=side.kwhMatrix[hr][wi],eCnt=side.epexCntMatrix[hr][wi];
+        var priceTxt=eCnt>0?_e2(side.epexSumMatrix[hr][wi]/eCnt*100)+' ct/kWh':'—';
+        return idxToLabel(wi)+' '+hLbl+' — urgentie '+_ehpUrgLabel(c,side.thresholds).toLowerCase()+
+          ' (score '+Math.round(c*100)+'/100): '+Math.round(kwhVal).toLocaleString('nl-NL')+' kWh, gem. '+priceTxt;
+      },
+      legSuffix:'max. gem. score/cel (×100)',
+      valueFmt:function(v){return Math.round(v*100);}
+    });
+  });
+
+  if(interpEl)interpEl.innerHTML='<div class="ib2">Mogelijke interpretatie: '+urg.interpretatie+'</div>';
+  _ehpUpdateUrgGranBtns();
+}
+
+// Top kansvensters: buckets op seizoen × dagtype × dagdeel, gerangschikt op financiële/
+// volume-relevantie. Eén gedeelde compute-functie voor zowel de live tab als het rapport.
+var _EHP_KANS_TXT={
+  tekort:'Structureel tekortmoment: de groep koopt hier relatief veel in van het net. Extra lokale opwek, batterijontlading of vraagverschuiving kan hier interessant zijn.',
+  tekort_gevoelig:'Prijsgevoelig tekortmoment: netinkoop valt hier vaak samen met EPEX-prijzen in het duurste derde deel van de periode. Extra lokale opwek of flexibiliteit op dit moment kan extra waardevol zijn.',
+  overschot:'Structureel overschotmoment: lokale opwek wordt hier vaak niet intern benut. Extra afname, opslag of slim laden kan een mogelijk aandachtspunt zijn.',
+  overschot_gevoelig:'Prijsgevoelig overschotmoment: teruglevering valt hier vaak samen met EPEX-prijzen in het goedkoopste derde deel van de periode. Beter benutten van dit overschot kan een mogelijke verbeterkans zijn.'
+};
+
+function _ehpKansenCompute(res){
+  res=res||_ehpLast;
+  if(!res||!res.model||!res.model.length)return{buckets:[]};
+  var DAGDEEL=['Nacht (00-06u)','Ochtend (06-12u)','Middag (12-18u)','Avond (18-24u)'];
+  var SEIZ_LBL={win:'Winter',spr:'Lente',sum:'Zomer',aut:'Herfst'};
+  var buckets={};
+  var priceTerc=_ehpPriceTerciles(res);
+
+  res.model.forEach(function(r){
+    var d=r['Tijd (UTC)'];if(!d)return;
+    var seiz=_ehpSeizoen(d.getMonth());
+    var dagtype=((d.getDay()+6)%7)>=5?'weekend':'werkdag';
+    var dd=Math.floor(d.getHours()/6);
+    var key=seiz+'|'+dagtype+'|'+dd;
+    if(!buckets[key])buckets[key]={
+      seiz:seiz,dagtype:dagtype,dagdeel:dd,
+      tekortKwh:0,overschotKwh:0,kostenTekort:0,opbrengstOverschot:0,
+      epexTekortSum:0,epexTekortCnt:0,epexOverschotSum:0,epexOverschotCnt:0
+    };
+    var b=buckets[key],tk=r.tekort_kWh||0,ov=r.overschot_kWh||0;
+    b.tekortKwh+=tk;b.overschotKwh+=ov;
+    b.kostenTekort+=r.kosten_epex_tekort_EUR||0;
+    b.opbrengstOverschot+=r.opbrengst_epex_overschot_EUR||0;
+    if(tk>0&&typeof r.epex_eur_per_kWh==='number'){b.epexTekortSum+=r.epex_eur_per_kWh;b.epexTekortCnt++;}
+    if(ov>0&&typeof r.epex_eur_per_kWh==='number'){b.epexOverschotSum+=r.epex_eur_per_kWh;b.epexOverschotCnt++;}
+  });
+
+  var list=Object.keys(buckets).map(function(key){
+    var b=buckets[key];
+    var dominant=b.tekortKwh>=b.overschotKwh?'tekort':'overschot';
+    var gevoelig=false;
+    if(priceTerc){
+      if(dominant==='tekort'&&b.epexTekortCnt>0)gevoelig=(b.epexTekortSum/b.epexTekortCnt)>priceTerc.p67;
+      if(dominant==='overschot'&&b.epexOverschotCnt>0)gevoelig=(b.epexOverschotSum/b.epexOverschotCnt)<priceTerc.p33;
+    }
+    var type=dominant+(gevoelig?'_gevoelig':'');
+    // Gem. EPEX-prijs tijdens de dominante (tekort- resp. overschot-)kwartieren van dit venster
+    var avgEpex=null;
+    if(dominant==='tekort'&&b.epexTekortCnt>0)avgEpex=b.epexTekortSum/b.epexTekortCnt;
+    if(dominant==='overschot'&&b.epexOverschotCnt>0)avgEpex=b.epexOverschotSum/b.epexOverschotCnt;
+    return{
+      label:SEIZ_LBL[b.seiz]+' · '+(b.dagtype==='weekend'?'Weekend':'Werkdag')+' · '+DAGDEEL[b.dagdeel],
+      type:type,dominant:dominant,gevoelig:gevoelig,
+      tekortKwh:b.tekortKwh,overschotKwh:b.overschotKwh,
+      kostenTekort:b.kostenTekort,opbrengstOverschot:b.opbrengstOverschot,
+      avgEpex:avgEpex,
+      rank:dominant==='tekort'?b.kostenTekort:b.overschotKwh,
+      suggestie:_EHP_KANS_TXT[type]
+    };
+  });
+
+  // Bewust géén gecombineerde tekort/overschot-score: rangschik elke groep op zijn eigen,
+  // al bestaande grootheid en neem top 4 + top 4 (voorkomt een verzonnen kruismetriek).
+  var tekortTop=list.filter(function(x){return x.dominant==='tekort'&&x.rank>0;})
+    .sort(function(a,b){return b.rank-a.rank;}).slice(0,4);
+  var overschotTop=list.filter(function(x){return x.dominant==='overschot'&&x.rank>0;})
+    .sort(function(a,b){return b.rank-a.rank;}).slice(0,4);
+
+  return{buckets:tekortTop.concat(overschotTop)};
+}
+
+function _ehpRenderKansenTabel(){
+  var res=_ehpLast;if(!res)return;
+  var kans=_ehpKansenCompute(res);
+  _ehpKansenTableHtml(kans.buckets);
+}
+
+function _ehpKansenTableHtml(buckets){
+  var el=document.getElementById('ehpKansenTbl');
+  if(!el)return;
+  if(!buckets||!buckets.length){el.innerHTML='<div class="ib2">Onvoldoende data voor een kansvensters-analyse.</div>';return;}
+  var TYPE_LBL={tekort:'Tekort',tekort_gevoelig:'Tekort · prijsgevoelig',overschot:'Overschot',overschot_gevoelig:'Overschot · prijsgevoelig'};
+  var rows=buckets.map(function(b){
+    var epexTxt=b.avgEpex!=null?_e2(b.avgEpex*100)+' ct/kWh':'—';
+    return '<tr><td style="font-weight:700">'+b.label+'</td><td>'+TYPE_LBL[b.type]+'</td>'+
+      '<td>'+epexTxt+'</td><td style="font-size:12px;color:#666">'+b.suggestie+'</td></tr>';
+  }).join('');
+  el.innerHTML='<div style="overflow-x:auto;margin-top:10px"><table class="verg-tbl"><thead><tr>'+
+    '<th>Periode</th><th>Type</th><th>Gem. EPEX-prijs</th><th>Suggestie</th>'+
+    '</tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+
+function _ehpKansenHtml(res){
+  var urgHtml=
+    '<div class="kg" id="ehpUrgentieKpis"></div>'+
+    '<div class="cd">'+
+      '<div class="ct2" style="flex-wrap:wrap;gap:6px"><div class="ac" style="background:#2c7fb8"></div>Markt-mismatchanalyse — '+_ehpEsc(res.platName)+
+      '<div id="ehpUrgGranFilter" style="margin-left:auto;display:flex;gap:3px">'+
+        '<button data-gran="week" onclick="setEhpUrgGran(\'week\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Per week</button>'+
+        '<button data-gran="dag" onclick="setEhpUrgGran(\'dag\')" style="font-size:12px;padding:5px 9px;border:none;border-radius:12px;cursor:pointer;font-family:Barlow,sans-serif">Per dag</button>'+
+      '</div>'+
+      '</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Deze analyse laat zien waar prijsongunstige markturen samenvallen met relevante energievolumes. '+
+      'Donkere vlakken geven kansvensters aan waar extra opwek, flexibiliteit, opslag of betere lokale benutting mogelijk waarde kan toevoegen.</div>'+
+      '<div class="hm-wrap" id="ehpUrgentieWrap" style="grid-template-columns:1fr">'+
+        '<div class="hm-block">'+
+          '<div class="hm-h">Urgentie dure inkoop</div>'+
+          '<div class="hm" id="ehpHmUrgTekort"></div>'+
+          '<div class="hm-leg" id="ehpHmUrgTekortLeg"></div>'+
+        '</div>'+
+        '<div class="hm-block">'+
+          '<div class="hm-h">Urgentie goedkope teruglevering</div>'+
+          '<div class="hm" id="ehpHmUrgOverschot"></div>'+
+          '<div class="hm-leg" id="ehpHmUrgOverschotLeg"></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="ib2" style="margin-top:8px">Elke cel = een uur van de dag (rij) × een week of dag van het jaar (kolom, kies hierboven). Kleurintensiteit = '+
+      'urgentie: een gecombineerde, indicatieve maat voor prijsongunstigheid én volume (laag · middel · hoog · zeer hoog). Boven: netinkoop tijdens relatief '+
+      'dure EPEX-uren. Onder: teruglevering tijdens relatief goedkope, zeer lage of negatieve EPEX-uren. Beweeg over een cel voor de periode, het '+
+      'onderliggende volume en de gemiddelde EPEX-prijs. De indicator wijst mogelijke kansvensters aan en vervangt geen gedetailleerde '+
+      'businesscaseberekening.</div>'+
+      '<div id="ehpUrgentieInterpretatie"></div>'+
+    '</div>';
+
+  var kansenHtml=
+    '<div class="cd">'+
+      '<div class="ct2"><div class="ac" style="background:#46962b"></div>Top kansvensters voor verbetering</div>'+
+      '<div class="ib2" style="margin-bottom:8px">De tijdvensters met de grootste tekort- of overschotvolumes, met een indicatie of het moment '+
+      'ook prijsgevoelig is (EPEX-prijs in het duurste resp. goedkoopste derde deel van de periode). Dit zijn indicatieve aandachtspunten, geen automatisch advies.</div>'+
+      '<div id="ehpKansenTbl"></div>'+
+    '</div>';
+
+  return urgHtml+kansenHtml;
+}
+
+// --- Platform week/maand grafieken -------------------------------------------
+
+var _ehpPlatWeekSeiz=null;
+
+function _ehpSeizoen(mo){
+  if(mo===11||mo<=1)return'win';
+  if(mo<=4)return'spr';
+  if(mo<=7)return'sum';
+  return'aut';
+}
+
+function _ehpRenderPlatWeekChart(){
+  var res=_ehpLast;if(!res)return;
+  var allTs=res.ts,netKw=res.ehpNetKw,sf=_ehpPlatWeekSeiz;
+  var sum=new Array(672).fill(0),cnt=new Array(672).fill(0);
+  allTs.forEach(function(ts,i){
+    var d=new Date(ts);
+    if(sf!==null&&_ehpSeizoen(d.getMonth())!==sf)return;
+    var dow=(d.getDay()+6)%7;
+    var sl=dow*96+Math.floor((d.getHours()*60+d.getMinutes())/15);
+    sum[sl]+=netKw[i];cnt[sl]++;
+  });
+  var avg=sum.map(function(s,i){return cnt[i]>0?s/cnt[i]:0;});
+  _ehpDrawPlatWeekChart(avg);
+  _ehpUpdatePlatWeekBtns();
+}
+
+function _ehpUpdatePlatWeekBtns(){
+  var SCOLS={win:'#3498db',spr:'#2ecc71',sum:'#e67e22',aut:'#9b59b6'};
+  document.querySelectorAll('#ehpPlatWeekSeizFilter button').forEach(function(btn){
+    var val=btn.getAttribute('data-sf');
+    var act=val==='all'?_ehpPlatWeekSeiz===null:val===_ehpPlatWeekSeiz;
+    btn.style.background=act?(val==='all'?'#46962b':SCOLS[val]):'#eef2ec';
+    btn.style.color=act?'#fff':'#555';
+    btn.style.fontWeight=act?'700':'400';
+  });
+}
+
+function setEhpPlatWeekSeiz(val){
+  _ehpPlatWeekSeiz=val==='all'?null:val;
+  _ehpRenderPlatWeekChart();
+}
+
+function _ehpDrawPlatWeekChart(ehpWeekAvg){
+  if(CH['ehpPlatWeek']){CH['ehpPlatWeek'].destroy();delete CH['ehpPlatWeek'];}
+  var canvas=document.getElementById('cEhpPlatWeek');
+  if(!canvas||!ehpWeekAvg.length)return;
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  var labels=[];
+  for(var i=0;i<672;i++){
+    var sl=i%96,h=Math.floor(sl/4),mm=(sl%4)*15;
+    if(sl===0)labels.push(DN[Math.floor(i/96)]);
+    else if(h%6===0&&mm===0)labels.push(h+':00');
+    else labels.push('');
+  }
+  CH['ehpPlatWeek']=new Chart(canvas,{type:'line',
+    data:{labels:labels,datasets:[
+      {label:'Inkoop van net (gem. kW)',
+       data:ehpWeekAvg.map(function(v){return+(Math.max(0,v)).toFixed(2);}),
+       borderColor:'#2c7fb8',backgroundColor:'rgba(44,127,184,.15)',
+       fill:true,tension:0.3,pointRadius:0,borderWidth:1.5},
+      {label:'Teruglevering aan net (gem. kW)',
+       data:ehpWeekAvg.map(function(v){return+(Math.max(0,-v)).toFixed(2);}),
+       borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.15)',
+       fill:true,tension:0.3,pointRadius:0,borderWidth:1.5}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},autoSkip:false,maxRotation:0},grid:{color:'#f3f7f4'}},y:Object.assign(ax('kW'),{min:0})}}});
+}
+
+function _ehpDrawPlatMonthChart(ehpMonthImp,ehpMonthExp){
+  if(CH['ehpPlatMonth']){CH['ehpPlatMonth'].destroy();delete CH['ehpPlatMonth'];}
+  var canvas=document.getElementById('cEhpPlatMonth');
+  if(!canvas)return;
+  var mnSet={};
+  Object.keys(ehpMonthImp).forEach(function(m){mnSet[m]=1;});
+  Object.keys(ehpMonthExp).forEach(function(m){mnSet[m]=1;});
+  var mnds=Object.keys(mnSet).sort();
+  if(!mnds.length)return;
+  var lbl=function(mn){var p=mn.split('-');return MND[parseInt(p[1])-1]+" '"+p[0].slice(2);};
+  CH['ehpPlatMonth']=new Chart(canvas,{type:'bar',
+    data:{labels:mnds.map(lbl),datasets:[
+      {label:'Inkoop van net (kWh)',
+       data:mnds.map(function(mn){return+((ehpMonthImp[mn]||0)).toFixed(0);}),
+       backgroundColor:'rgba(44,127,184,.65)',borderRadius:3},
+      {label:'Teruglevering aan net (kWh)',
+       data:mnds.map(function(mn){return+((ehpMonthExp[mn]||0)).toFixed(0);}),
+       backgroundColor:'rgba(70,150,43,.65)',borderRadius:3}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:Object.assign(ax(),{grid:{display:false}}),y:Object.assign(ax('kWh'))}}});
+}
+
+// --- Niet-leden visualisatie -------------------------------------------------
+
+function _ehpNonMembersHtml(nonMembers){
+  var withData=nonMembers.filter(function(m){return m.prodKwh>0||m.consKwh>0;});
+  var header='<div class="cd ehp-grp"><div class="ct2"><div class="ac" style="background:#e67e22"></div>Aansluitingen buiten dit platform</div>';
+  if(!nonMembers.length){
+    return header+'<div class="ku" style="padding:8px 0">Alle aansluitingen in dit project zijn lid van dit platform.</div></div>';
+  }
+  if(!withData.length){
+    return header+'<div class="ku" style="padding:8px 0">Geen niet-leden met meetdata gevonden.</div></div>';
+  }
+  var sorted=withData.slice().sort(function(a,b){return b.prodKwh-a.prodKwh;});
+  var h=Math.max(180,sorted.length*36+70);
+  var typeLbl=function(m){
+    if(m.prodKwh>0&&m.consKwh>0)return '<span class="bdg bg">Beide</span>';
+    if(m.prodKwh>0)return '<span class="bdg" style="background:#d4edda;color:#1d6030">Producent</span>';
+    return '<span class="bdg bg" style="background:#dce6f0;color:#1a3d5c">Verbruiker</span>';
+  };
+  var tblRows=sorted.map(function(m){
+    var sim=m.prodKwh>0?'<span title="Percentage van kwartieren dat dit niet-lid opwek heeft terwijl het platform netto importeert">'+m.simScore.toFixed(0)+'%</span>':'—';
+    return '<tr><td style="font-weight:700">'+_ehpEsc(m.name)+'</td>'+
+      '<td>'+(m.prodKwh>0?fmt(m.prodKwh/1000)+' MWh':'—')+'</td>'+
+      '<td>'+(m.consKwh>0?fmt(m.consKwh/1000)+' MWh':'—')+'</td>'+
+      '<td>'+sim+'</td>'+
+      '<td>'+typeLbl(m)+'</td></tr>';
+  }).join('');
+  return header+
+    '<div class="ib2" style="margin-bottom:10px">'+sorted.length+' aansluiting'+(sorted.length!==1?'en':'')+
+    ' in dit project '+(sorted.length!==1?'zijn':'is')+' geen lid van dit platform. Gesorteerd op opwek naar net (hoog = beste kandidaat). '+
+    'De <strong>gelijktijdigheidscore</strong> geeft aan in hoeveel procent van de kwartieren dat het platform tekort heeft dit niet-lid opwek produceert — hoe hoger, hoe beter de match.</div>'+
+    '<div class="cw" style="height:'+h+'px;margin-bottom:16px"><canvas id="cEhpNonMem" role="img"></canvas></div>'+
+    '<div style="overflow-x:auto"><table class="verg-tbl"><thead><tr>'+
+    '<th>Aansluiting</th><th>Opwek → net</th><th>Afname ← net</th><th title="% van platformtekort-kwartieren met gelijktijdige opwek">Gelijktijdigheid ↑</th><th>Type</th>'+
+    '</tr></thead><tbody>'+tblRows+'</tbody></table></div>'+
+    (sorted.some(function(m){return m.prodKwh>0;})?
+      '<div class="ct2" style="margin-top:18px"><div class="ac" style="background:#46962b"></div>Weekpatroon beschikbare opwek</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Gemiddeld vermogen per kwartier van de week (opwek). Stippellijn = gemiddelde netto-import van het platform op dat kwartier — overlap = matchingkans.</div>'+
+      '<div class="cw" style="height:260px;margin-bottom:18px"><canvas id="cEhpWeekProd" role="img"></canvas></div>'+
+      '<div class="ct2"><div class="ac" style="background:#46962b"></div>Maandelijks opwekpatroon (kWh)</div>'+
+      '<div class="ib2" style="margin-bottom:8px">Totale opwek naar het net per maand per niet-lid-aansluiting.</div>'+
+      '<div class="cw" style="height:260px"><canvas id="cEhpMonthProd" role="img"></canvas></div>'
+    :'')+
+    '</div>';
+}
+
+function _ehpDrawNonMemberChart(nonMembers){
+  if(CH['ehpNonMem']){CH['ehpNonMem'].destroy();delete CH['ehpNonMem'];}
+  var canvas=document.getElementById('cEhpNonMem');
+  if(!canvas)return;
+  var sorted=nonMembers.filter(function(m){return m.prodKwh>0||m.consKwh>0;})
+    .slice().sort(function(a,b){return b.prodKwh-a.prodKwh;});
+  CH['ehpNonMem']=new Chart(canvas,{
+    type:'bar',
+    data:{
+      labels:sorted.map(function(m){return m.name;}),
+      datasets:[
+        {label:'Opwek → net (kWh)',
+         data:sorted.map(function(m){return+m.prodKwh.toFixed(0);}),
+         backgroundColor:'rgba(70,150,43,.65)',borderRadius:4},
+        {label:'Afname ← net (kWh)',
+         data:sorted.map(function(m){return+m.consKwh.toFixed(0);}),
+         backgroundColor:'rgba(44,127,184,.35)',borderRadius:4}
+      ]
+    },
+    options:{
+      indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{
+        legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}},
+        tooltip:{callbacks:{afterLabel:function(ctx){
+          var m=sorted[ctx.dataIndex];
+          return m.prodKwh>0?'Gelijktijdigheid: '+m.simScore.toFixed(0)+'%':'';
+        }}}
+      },
+      scales:{
+        x:Object.assign(ax(),{title:{display:true,text:'kWh',color:'#aaa',font:{family:'Barlow',size:10}}}),
+        y:Object.assign(ax(),{grid:{display:false}})
+      }
+    }
+  });
+}
+
+function _ehpDrawWeekChart(nonMembers,ehpWeekNet){
+  if(CH['ehpWeek']){CH['ehpWeek'].destroy();delete CH['ehpWeek'];}
+  var canvas=document.getElementById('cEhpWeekProd');
+  if(!canvas)return;
+  var DN=['Ma','Di','Wo','Do','Vr','Za','Zo'];
+  var labels=[];
+  for(var i=0;i<672;i++){
+    var dow=Math.floor(i/96),sl=i%96,h=Math.floor(sl/4),mm=(sl%4)*15;
+    if(sl===0)labels.push(DN[dow]);
+    else if(h%6===0&&mm===0)labels.push(h+':00');
+    else labels.push('');
+  }
+  var datasets=nonMembers.map(function(m,idx){
+    return {label:m.name,data:m.weekProd,
+      borderColor:PAL[idx%PAL.length],backgroundColor:PAL[idx%PAL.length]+'22',
+      fill:true,tension:0.3,pointRadius:0,borderWidth:1.5};
+  });
+  if(ehpWeekNet&&ehpWeekNet.length){
+    datasets.push({label:'Platform netto-import (gem. kW)',data:ehpWeekNet,
+      borderColor:'#2c7fb8',borderDash:[4,3],backgroundColor:'transparent',
+      fill:false,tension:0.3,pointRadius:0,borderWidth:1.5});
+  }
+  CH['ehpWeek']=new Chart(canvas,{type:'line',data:{labels:labels,datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:{ticks:{color:'#999',font:{family:'Barlow',size:11},autoSkip:false,maxRotation:0},grid:{color:'#f3f7f4'}},y:Object.assign(ax('kW'),{min:0})}}});
+}
+
+function _ehpDrawMonthChart(nonMembers){
+  if(CH['ehpMonth']){CH['ehpMonth'].destroy();delete CH['ehpMonth'];}
+  var canvas=document.getElementById('cEhpMonthProd');
+  if(!canvas)return;
+  var mnSet={};
+  nonMembers.forEach(function(m){Object.keys(m.monthProd||{}).forEach(function(mn){mnSet[mn]=1;});});
+  var mnds=Object.keys(mnSet).sort();
+  if(!mnds.length)return;
+  var datasets=nonMembers.map(function(m,idx){
+    return {label:m.name,
+      data:mnds.map(function(mn){return+(((m.monthProd||{})[mn])||0).toFixed(0);}),
+      backgroundColor:PAL[idx%PAL.length]+'bb',borderRadius:3,stack:'s'};
+  });
+  CH['ehpMonth']=new Chart(canvas,{type:'bar',
+    data:{labels:mnds.map(function(mn){var p=mn.split('-');return MND[parseInt(p[1])-1]+" '"+p[0].slice(2);}),datasets:datasets},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:'#888',font:{family:'Barlow',size:11},boxWidth:10}}},
+      scales:{x:Object.assign(ax(),{stacked:true,grid:{display:false}}),y:Object.assign(ax('kWh'),{stacked:true})}}});
+}
+
 // --- Flow-diagram (hand-rolled SVG, sleepbaar) -------------------------------
 
 var _ehpFlowState=null;
@@ -1169,33 +1446,9 @@ function _ehpFlowSvg(res){
       pool:   {x:340,y:120, w:130,h:70, lbl:'Pool · intern',kwh:res.totMatchedKwh,    col:'#5fb3df'},
       netOut: {x:680,y:30,  w:120,h:48, lbl:'Teruglever net',kwh:res.totGridExpKwh,   col:'#999'},
       cons:   {x:680,y:140, w:120,h:90, lbl:'Deelnemers',   kwh:res.totConsKwh,       col:'#46962b'}
-    },
-    accu: _ehpAccuStromen(res)
+    }
   };
-  // De accu krijgt alleen een blok als hij daadwerkelijk energie verzet.
-  if(_ehpFlowState.accu){
-    _ehpFlowState.nodes.accu={x:340,y:225,w:130,h:60,lbl:'Opslag',
-      kwh:_ehpFlowState.accu.in,col:'#c0793c'};
-  }
   return '<svg id="ehpFlowSvg" viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="xMidYMid meet">'+_ehpFlowContent()+'</svg>';
-}
-
-// Wat de accu in totaal verzet, uitgesplitst naar herkomst en bestemming. Null als er geen
-// accu is, zodat het diagram er dan uitziet als voorheen.
-function _ehpAccuStromen(res){
-  var lijst=res.opslag||[];
-  if(!lijst.length)return null;
-  var t={uitOverschot:0,vanNet:0,naarTekort:0,naarNet:0};
-  lijst.forEach(function(o){
-    var d=o.dispatch;if(!d)return;
-    t.uitOverschot+=d.inUitOverschot_kWh||0;
-    t.vanNet      +=d.inVanNet_kWh||0;
-    t.naarTekort  +=d.uitNaarTekort_kWh||0;
-    t.naarNet     +=d.uitNaarNet_kWh||0;
-  });
-  t.in=t.uitOverschot+t.vanNet;
-  t.uit=t.naarTekort+t.naarNet;
-  return t.in>0||t.uit>0?t:null;
 }
 
 function _ehpFlowContent(){
@@ -1220,37 +1473,15 @@ function _ehpFlowContent(){
       '<text x="'+lx+'" y="'+ly+'" text-anchor="middle" font-family="Barlow" font-size="10" font-weight="600" fill="#222" paint-order="stroke" stroke="rgba(255,255,255,.92)" stroke-width="3" stroke-linejoin="round" pointer-events="none">'+lbl+'</text>';
   }
   var srcs=['zon','wind','overig'],edges='';
-  var acc=s.accu;
-  // Het overschot per bron gaat deels de accu in en deels naar het net. Naar rato verdelen:
-  // welke elektron waarheen ging is niet bekend, de verhouding wel.
-  var bronOverschot=srcs.reduce(function(t,k){
-    return t+Math.max(0,(res.prodBySrc[k]||0)-(res.matchedBySrc[k]||0));
-  },0);
-  var naarAccuFractie=(acc&&bronOverschot>0)?Math.min(1,acc.uitOverschot/bronOverschot):0;
-
   srcs.forEach(function(k){
-    var p=res.prodBySrc[k]||0,m=res.matchedBySrc[k]||0,sp=Math.max(0,p-m);
+    var p=res.prodBySrc[k],m=res.matchedBySrc[k],sp=Math.max(0,p-m);
     edges+=edge(nodes[k],nodes.pool,m,nodes[k].col);
-    if(acc&&nodes.accu){
-      edges+=edge(nodes[k],nodes.accu,sp*naarAccuFractie,nodes[k].col);
-      edges+=edge(nodes[k],nodes.netOut,sp*(1-naarAccuFractie),nodes[k].col);
-    }else{
-      edges+=edge(nodes[k],nodes.netOut,sp,nodes[k].col);
-    }
+    edges+=edge(nodes[k],nodes.netOut,sp,nodes[k].col);
   });
   edges+=edge(nodes.pool,nodes.cons,res.totMatchedKwh,'#5fb3df');
-  if(acc&&nodes.accu){
-    // Netinkoop splitsen: een deel laadt de accu, de rest gaat naar de deelnemers.
-    edges+=edge(nodes.netIn,nodes.accu,acc.vanNet,'#999');
-    edges+=edge(nodes.netIn,nodes.cons,Math.max(0,res.totGridImpKwh-acc.vanNet),'#999');
-    edges+=edge(nodes.accu,nodes.cons,acc.naarTekort,'#c0793c');
-    edges+=edge(nodes.accu,nodes.netOut,acc.naarNet,'#c0793c');
-  }else{
-    edges+=edge(nodes.netIn,nodes.cons,res.totGridImpKwh,'#999');
-  }
+  edges+=edge(nodes.netIn,nodes.cons,res.totGridImpKwh,'#999');
   return edges+rect('zon',nodes.zon)+rect('wind',nodes.wind)+rect('overig',nodes.overig)+
-    rect('netIn',nodes.netIn)+rect('pool',nodes.pool)+rect('cons',nodes.cons)+rect('netOut',nodes.netOut)+
-    (nodes.accu?rect('accu',nodes.accu):'');
+    rect('netIn',nodes.netIn)+rect('pool',nodes.pool)+rect('cons',nodes.cons)+rect('netOut',nodes.netOut);
 }
 
 function _ehpRedrawFlow(){
@@ -1881,17 +2112,6 @@ document.addEventListener('DOMContentLoaded',function(){
     });
   });
   document.getElementById('btnAddEhp').addEventListener('click',addEhp);
-  ['ehpDoelfunctie','ehpVerdeelSleutel'].forEach(function(id){
-    var el=document.getElementById(id);
-    if(el)el.addEventListener('change',_ehpDoelUitleg);
-  });
-  var accuAdd=document.getElementById('btnEhpAccuAdd');
-  if(accuAdd)accuAdd.addEventListener('click',ehpAccuToevoegen);
-  var accuLijst=document.getElementById('ehpAccuLijst');
-  if(accuLijst)accuLijst.addEventListener('click',function(ev){
-    var del=ev.target.closest('[data-acc-del]');
-    if(del)ehpAccuVerwijderen(parseInt(del.getAttribute('data-acc-del'),10));
-  });
   document.getElementById('btnDelEhp').addEventListener('click',delEhp);
   document.getElementById('btnCalcEhp').addEventListener('click',function(){calcEHP().catch(function(e){console.error('calcEHP:',e);notify('Fout bij berekening',false);});});
   document.getElementById('btnDlEhp').addEventListener('click',downloadEhpCsv);
@@ -1904,301 +2124,3 @@ document.addEventListener('DOMContentLoaded',function(){
   var ehpFf=document.getElementById('ehpFwdFile');
   if(ehpFf)ehpFf.addEventListener('change',function(){if(this.files[0])_ehpHandleForwardFile(this.files[0]);this.value='';});
 });
-
-
-// --- Regressiecheck tegen het overgenomen model ------------------------------
-// Draai in de console: ehpRegressie()
-// Met prijsvorm 'vast', merit order op prioriteit en geen drempel moet het nieuwe pad
-// kolom voor kolom identiek zijn aan EnergieModel zonder allocator. Elk verschil is een bug.
-function ehpRegressie(){
-  if(!window._ehpLaatsteInvoer){console.warn('Reken eerst een handelsplatform door.');return null;}
-  var r=EhpDispatch.vergelijkMetReferentie(window._ehpLaatsteInvoer,
-          EhpDispatch.maakAllocator({volgorde:'prioriteit',drempel:'geen'}));
-  console.group('EHP regressie — nieuwe dispatch vs. overgenomen model');
-  console.log(r.gelijk?'✓ identiek — geen kolomverschillen':'✗ '+r.aantalVerschillen+' verschil(len)');
-  console.table(Object.keys(r.totalen).map(function(k){
-    return {kolom:k,referentie:r.totalen[k].referentie,nieuw:r.totalen[k].nieuw,delta:r.totalen[k].delta};
-  }));
-  if(!r.gelijk)console.table(r.verschillen);
-  console.groupEnd();
-  return r;
-}
-
-// --- Prijsmodel-UI (zijbalk) -------------------------------------------------
-// De velden per bron volgen uit EhpPrijs.VORMEN, zodat een nieuwe prijsvorm alleen daar
-// hoeft te worden toegevoegd en hier vanzelf verschijnt.
-
-var EHP_PM_BRONNEN=[['zon','Zon'],['wind','Wind'],['afname_invoeden','Afname-invoeden']];
-
-function _ehpRepresentatiefTarief(c){
-  if(!c)return 0;
-  if(c.vorm==='vast')return +c.tarief_mwh||0;
-  if(c.vorm==='collar')return +c.vloer_mwh||0;
-  return 0;
-}
-
-function _ehpRenderPrijsmodel(cfg){
-  var el=document.getElementById('ehpPrijsmodel');
-  if(!el||typeof EhpPrijs==='undefined')return;
-  var pm=EhpPrijs.migreer(cfg||{});
-  el.innerHTML=EHP_PM_BRONNEN.map(function(b){
-    var key=b[0],lbl=b[1],c=pm[key]||{vorm:'vast'};
-    var vorm=EhpPrijs.VORMEN[c.vorm]?c.vorm:'vast';
-    var def=EhpPrijs.VORMEN[vorm];
-    var opts=Object.keys(EhpPrijs.VORMEN).map(function(v){
-      return '<option value="'+v+'"'+(vorm===v?' selected':'')+'>'+EhpPrijs.VORMEN[v].label+'</option>';
-    }).join('');
-    var velden=def.velden.map(function(fd){
-      var w=c[fd.key]!=null?c[fd.key]:fd.def;
-      return '<div class="fgr"><label style="padding-left:8px;font-size:11px">'+fd.label+' ('+fd.eenheid+')</label>'+
-        '<input type="number" step="0.01" data-pm-bron="'+key+'" data-pm-veld="'+fd.key+'" value="'+w+'"></div>';
-    }).join('');
-    return '<div style="margin-bottom:9px;padding-bottom:7px;border-bottom:1px solid #eee">'+
-      '<div class="fgr"><label style="font-weight:700">'+lbl+'</label>'+
-      '<select data-pm-vorm="'+key+'" onchange="_ehpPrijsVormGewijzigd(this)">'+opts+'</select></div>'+
-      velden+
-      '<div class="ib2" style="font-size:10px;margin-left:8px">'+def.uitleg+'</div></div>';
-  }).join('');
-}
-
-/** Leest de zijbalk terug naar een prijsmodel-configuratie. */
-function _ehpLeesPrijsmodel(){
-  var pm={};
-  document.querySelectorAll('#ehpPrijsmodel [data-pm-vorm]').forEach(function(sel){
-    pm[sel.getAttribute('data-pm-vorm')]={vorm:sel.value};
-  });
-  document.querySelectorAll('#ehpPrijsmodel [data-pm-veld]').forEach(function(inp){
-    var b=inp.getAttribute('data-pm-bron'),k=inp.getAttribute('data-pm-veld');
-    if(!pm[b])pm[b]={vorm:'vast'};
-    var v=parseFloat(inp.value);
-    pm[b][k]=isNaN(v)?0:v;
-  });
-  if(!pm.zon)pm.zon={vorm:'vast',tarief_mwh:0};
-  if(!pm.wind)pm.wind={vorm:'vast',tarief_mwh:0};
-  if(!pm.afname_invoeden)pm.afname_invoeden={vorm:'vast',tarief_mwh:0};
-  pm.opslag={vorm:'vast',tarief_mwh:0};
-  return pm;
-}
-
-/** Vorm gewijzigd: huidige waarden bewaren, nieuwe vorm op zijn defaults zetten, hertekenen. */
-function _ehpPrijsVormGewijzigd(sel){
-  var plat=_ehpActive();
-  if(!plat)return;
-  var bron=sel.getAttribute('data-pm-vorm');
-  var pm=_ehpLeesPrijsmodel();
-  var nieuw={vorm:sel.value};
-  (EhpPrijs.VORMEN[sel.value]||EhpPrijs.VORMEN.vast).velden.forEach(function(fd){nieuw[fd.key]=fd.def;});
-  pm[bron]=nieuw;
-  plat.cfg=plat.cfg||{};
-  plat.cfg.prijsmodel=pm;
-  _ehpRenderPrijsmodel(plat.cfg);
-}
-
-// --- Prijsmodel-uitkomst (Overzicht-tab) -------------------------------------
-// Beantwoordt de kernvraag: betalen de afnemers met dit prijsmodel netto meer of minder dan
-// hun marktalternatief? Per kwartier wisselt dat; wat telt is de som over de periode.
-function _ehpPrijsmodelHtml(res){
-  var w=res.prijsWaarde;
-  if(!w||!w.kWh)return '';
-  var pm=res.prijsmodel||{};
-  var ct=function(x){return _e2(x*100)+' ct';};
-
-  var bronRegels=EHP_PM_BRONNEN.map(function(b){
-    var c=pm[b[0]]; if(!c)return '';
-    var def=(typeof EhpPrijs!=='undefined'&&EhpPrijs.VORMEN[c.vorm])||null;
-    if(!def)return '';
-    var params=def.velden.map(function(fd){
-      var v=c[fd.key]!=null?c[fd.key]:fd.def;
-      return fd.label+' '+v+' '+fd.eenheid;
-    }).join(' · ');
-    return '<tr><td style="font-weight:700">'+b[1]+'</td><td>'+_ehpEsc(def.label)+'</td>'+
-      '<td style="font-size:12px;color:#666">'+_ehpEsc(params)+'</td></tr>';
-  }).filter(Boolean).join('');
-
-  var volgLbl=res.meritVolgorde==='prijs'?'prijs — goedkoopste eerst':'prioriteitsvolgorde (referentie)';
-  var dremLbl=res.meritDrempel==='afnemer'
-    ?'aan — bronnen boven het netalternatief van de afnemer worden niet intern verrekend'
-    :'uit — alle beschikbare opwek wordt intern verrekend';
-
-  // Positief nettoVsMarkt = afnemers betalen samen meer dan de kale spotprijs.
-  var duurderDanMarkt=w.nettoVsMarkt>0;
-  var beterDanRetail=w.nettoVsRetail>0;
-  var cap=res.capaciteitsvergoeding_totaal_EUR||0;
-
-  var tegels=
-    '<div class="kb"><div class="kl">Gem. platformprijs</div><div class="kv" style="font-size:16px">'+ct(w.gemPlatformPerKwh)+'</div><div class="ku">over '+fmt(w.kWh/1000)+' MWh gematcht</div></div>'+
-    '<div class="kb"><div class="kl">Gem. marktprijs</div><div class="kv" style="font-size:16px">'+ct(w.gemMarktPerKwh)+'</div><div class="ku">EPEX in dezelfde kwartieren</div></div>'+
-    '<div class="kb'+(duurderDanMarkt?' red':'')+'"><div class="kl">Netto t.o.v. markt</div><div class="kv" style="font-size:16px">'+_eMoney(-w.nettoVsMarkt)+'</div><div class="ku">'+(duurderDanMarkt?'afnemers betalen meer dan spot':'afnemers betalen minder dan spot')+'</div></div>'+
-    '<div class="kb'+(beterDanRetail?'':' red')+'"><div class="kl">Netto t.o.v. retail</div><div class="kv" style="font-size:16px">'+_eMoney(w.nettoVsRetail)+'</div><div class="ku">t.o.v. EPEX + retailopslag</div></div>'+
-    '<div class="kb"><div class="kl">Kwartieren boven markt</div><div class="kv" style="font-size:16px">'+w.kwartierenBoveMarkt+'</div><div class="ku">max. +'+ct(w.maxBovenMarktPerKwh)+'/kWh</div></div>'+
-    '<div class="kb"><div class="kl">Kwartieren onder markt</div><div class="kv" style="font-size:16px">'+w.kwartierenOnderMarkt+'</div><div class="ku">max. −'+ct(w.maxOnderMarktPerKwh)+'/kWh</div></div>'+
-    (cap>0?'<div class="kb"><div class="kl">Capaciteitsvergoeding</div><div class="kv" style="font-size:16px">€ '+_e2(cap)+'</div><div class="ku">buiten de kWh-prijs om, '+Math.round(res.periodeDagen||0)+' dagen</div></div>':'');
-
-  return '<div class="cd">'+
-    '<div class="ct2"><div class="ac" style="background:#8e44ad"></div>Prijsmodel — '+_ehpEsc(res.platName)+'</div>'+
-    '<div style="overflow-x:auto;margin-bottom:10px"><table class="verg-tbl"><thead><tr>'+
-    '<th>Bron</th><th>Vorm</th><th>Parameters</th></tr></thead><tbody>'+bronRegels+'</tbody></table></div>'+
-    '<div class="ib2" style="margin-bottom:8px">Merit order: '+volgLbl+'. Drempel: '+dremLbl+'.</div>'+
-    '<div class="kg">'+tegels+'</div>'+
-    '<div class="ib2" style="margin-top:8px">Per kwartier is de vergelijking met de markt soms positief en soms negatief — '+
-    'een tarief boven de spotprijs op een zonnige middag hoort bij het model, niet bij een fout. Wat telt is de som over de '+
-    'periode: <strong>netto t.o.v. markt</strong> is wat de afnemers samen meer of minder betalen dan de kale spotprijs, '+
-    '<strong>netto t.o.v. retail</strong> hetzelfde tegenover hun werkelijke alternatief bij een leverancier. Die tweede is '+
-    'de eerlijke vergelijking, want zonder platform kopen ze niet op de spotmarkt in.</div>'+
-  '</div>';
-}
-
-// --- Netprofiel van één aansluiting, uitgelijnd op de modeltijdlijn -----------
-// Retourneert null voor de gedeelde aansluiting en voor een accu met een eigen aansluiting:
-// in die gevallen bepaalt niet één deelnemer de fiscale en vermogenspositie.
-function _ehpGastheerProfiel(model,ledenNetto,eigenaar){
-  if(!eigenaar||eigenaar==='groep'||eigenaar==='platform')return null;
-  var rec=ledenNetto&&ledenNetto[eigenaar];
-  if(!rec)return null;
-  var a=new Float64Array(model.length);
-  for(var i=0;i<model.length;i++)a[i]=rec.map[model[i].tijdKey]||0;
-  return a;
-}
-
-// --- Toelichting bij de gekozen doelfunctie ----------------------------------
-function _ehpDoelUitleg(){
-  var el=document.getElementById('ehpDoelUitleg');
-  if(!el||typeof EhpVerdeling==='undefined')return;
-  var df=document.getElementById('ehpDoelfunctie');
-  var vs=document.getElementById('ehpVerdeelSleutel');
-  var d=EhpVerdeling.DOELFUNCTIES[df?df.value:'groep_borg']||EhpVerdeling.DOELFUNCTIES.groep_borg;
-  var sleutel=(vs&&vs.value)||d.sleutel;
-  var sd=EhpVerdeling.SLEUTELS[sleutel]||{};
-  el.innerHTML=_ehpEsc(d.uitleg)+' <strong>Sleutel:</strong> '+_ehpEsc(sd.label||sleutel)+' — '+_ehpEsc(sd.uitleg||'');
-}
-
-// --- Verdeling van het resultaat (Verdeling-tab) -----------------------------
-// De vraag waar een verrekenmethodiek op staat of valt: is iedereen beter af? Een positief
-// groepstotaal zegt daar niets over — het kan een optelsom zijn van grote winnaars en kleine
-// verliezers, en dan valt er geen platform te bouwen.
-function _ehpVerdelingHtml(res){
-  var v=res.verdeling;
-  if(!v)return '';
-  var eur=function(x){return '€ '+_e2(x);};
-  var dd=EhpVerdeling.DOELFUNCTIES[v.doelfunctie]||{};
-  var poolt=v.sleutel!=='geen';
-
-  var rijen=v.rijen.map(function(r){
-    var slechter=r.resultaat_EUR<-1e-6;
-    return '<tr'+(slechter?' style="background:#fdecea"':'')+'>'+
-      '<td style="font-weight:700">'+_ehpEsc(r.naam)+'</td>'+
-      '<td>'+eur(r.referentie_EUR)+'</td>'+
-      '<td>'+eur(r.platform_EUR)+'</td>'+
-      '<td'+(r.eigenVoordeel_EUR<0?' style="color:#c0392b"':'')+'>'+_eMoney(r.eigenVoordeel_EUR)+'</td>'+
-      '<td>'+(poolt?eur(r.toekenning_EUR):'—')+'</td>'+
-      '<td>'+((r.aanvulling_EUR||r.bijdrage_EUR)?_eMoney(r.aanvulling_EUR+r.bijdrage_EUR):'—')+'</td>'+
-      '<td'+(slechter?' style="color:#c0392b;font-weight:700"':' style="font-weight:700"')+'>'+
-        _eMoney(r.resultaat_EUR)+'</td></tr>';
-  }).join('');
-
-  var oordeel = !v.borgHaalbaar
-    ? '<div class="opt-warn">De randvoorwaarde “niemand slechter af” is niet haalbaar: er is '+
-      eur(v.borgTekort_EUR)+' te weinig waarde om alle tekorten aan te vullen. Het platform levert in '+
-      'deze opzet per saldo te weinig op om iedereen mee te krijgen.</div>'
-    : v.iedereenBeterAf
-    ? '<div class="ib2" style="background:#eef7ea;padding:7px;border-radius:6px">Iedere deelnemer komt '+
-      'na verdeling op of boven zijn eigen referentie uit.</div>'
-    : '<div class="opt-warn">'+v.slechterAf.length+' deelnemer'+(v.slechterAf.length!==1?'s':'')+
-      ' komt na verdeling onder de eigen referentie uit: '+
-      v.slechterAf.map(function(x){return _ehpEsc(x.naam)+' ('+eur(x.bedrag_EUR)+')';}).join(', ')+
-      '. Kies de doelfunctie met borg, of een andere sleutel.</div>';
-
-  var kpis=
-    '<div class="kb'+(v.totaalSurplus_EUR<0?' red':'')+'"><div class="kl">Totaal resultaat</div>'+
-      '<div class="kv" style="font-size:16px">'+_eMoney(v.totaalSurplus_EUR)+'</div>'+
-      '<div class="ku">alle deelnemers samen t.o.v. hun eigen contract</div></div>'+
-    '<div class="kb"><div class="kl">Verdeelsleutel</div><div class="kv" style="font-size:15px">'+
-      _ehpEsc(v.sleutelLabel)+'</div><div class="ku">'+(v.borg?'met borg':'zonder borg')+'</div></div>'+
-    (v.accuExtra_EUR?'<div class="kb"><div class="kl">Waarvan uit opslag</div>'+
-      '<div class="kv" style="font-size:16px">'+_eMoney(v.accuExtra_EUR)+'</div>'+
-      '<div class="ku">niet aan één deelnemer toe te rekenen</div></div>':'')+
-    '<div class="kb'+(v.sluitend?'':' red')+'"><div class="kl">Sluitend</div>'+
-      '<div class="kv" style="font-size:16px">'+(v.sluitend?'ja':'nee')+'</div>'+
-      '<div class="ku">verdeeld '+eur(v.verdeeld_EUR)+'</div></div>';
-
-  return _ehpAccuRekeningHtml(v)+
-    '<div class="cd">'+
-    '<div class="ct2"><div class="ac" style="background:#46962b"></div>Verdeling — '+_ehpEsc(dd.label||v.doelfunctie)+'</div>'+
-    oordeel+
-    '<div class="kg" style="margin-top:8px">'+kpis+'</div>'+
-    '<div style="overflow-x:auto;margin-top:10px"><table class="verg-tbl"><thead><tr>'+
-      '<th>Deelnemer</th><th>Zonder platform</th><th>Met platform</th><th>Eigen resultaat</th>'+
-      '<th>Toekenning</th><th>Borgcorrectie</th><th>Eindresultaat</th>'+
-      '</tr></thead><tbody>'+rijen+'</tbody></table></div>'+
-    '<div class="ib2" style="margin-top:8px"><strong>Zonder platform</strong> is de energie-inkoop op het '+
-      'eigen contract van de aansluiting, doorgerekend op dezelfde kwartierdata. <strong>Met platform</strong> '+
-      'is wat de deelnemer in de verrekening betaalt of ontvangt. Beide zijn exclusief energiebelasting en btw: '+
-      'die lopen bij een platform via een eigen route en zouden een verschil tonen dat niet uit de verrekening komt.'+
-      (poolt?' Bij deze sleutel wordt alles gepoold en opnieuw toebedeeld — het eigen resultaat vervalt dan als '+
-      'aparte grootheid, en dat is precies wat poolen betekent.':'')+'</div>'+
-    '</div>';
-}
-
-
-
-// --- Platformpositie van de groep --------------------------------------------
-// Som van wat alle deelnemers in de verrekening betalen minus wat de producenten ontvangen.
-// Het verschil vóór en ná het inrekenen van de accu is haar energievoordeel voor de groep.
-function _ehpPlatformPositie(result){
-  var kosten=(result.per_gebruiker||[]).reduce(function(t,u){
-    return t+(u.kosten_gelijktijdigheid_EUR||0)+(u.kosten_epex_tekort_EUR||0)+
-             (u.kosten_onbalans_verbruik_EUR||0)+(u.kosten_platform_EUR||0)+
-             (u.kosten_gvo_bilateraal_EUR||0)+(u.kosten_gvo_rest_EUR||0);
-  },0);
-  var opbrengst=(result.per_opwekker||[]).reduce(function(t,o){
-    return t+(o.netto_opbrengst_EUR||0);
-  },0);
-  return kosten-opbrengst;
-}
-
-// --- De rekening van de accu (Verdeling-tab) ---------------------------------
-// Kosten en opbrengsten van de opslag op één plek, met daarbij wélk deel al bij de deelnemers
-// is geland en welk deel nog verdeeld moet worden. Zonder dat onderscheid lijkt het alsof het
-// energievoordeel twee keer meetelt.
-function _ehpAccuRekeningHtml(v){
-  var lijst=(v&&v.accuRekeningen)||[];
-  if(!lijst.length)return '';
-  var eur=function(x){return '€ '+_e2(x);};
-  var post=function(lbl,bedrag,toelichting,dik){
-    return '<tr'+(dik?' style="font-weight:700;border-top:2px solid #ddd"':'')+'>'+
-      '<td>'+lbl+'</td>'+
-      '<td'+(bedrag<0?' style="color:#c0392b"':'')+'>'+_eMoney(bedrag)+'</td>'+
-      '<td style="font-size:12px;color:#666">'+toelichting+'</td></tr>';
-  };
-  var blokken=lijst.map(function(r){
-    var drager=r.kostenDrager==='platform'?'het platform (gedeeld)':_ehpEsc(r.kostenDragerNaam||r.kostenDrager);
-    return '<div style="margin-bottom:12px">'+
-      '<div class="st">'+_ehpEsc(r.naam)+' — rekening voor '+drager+'</div>'+
-      '<table class="verg-tbl"><thead><tr><th>Post</th><th>Bedrag</th><th>Toelichting</th></tr></thead><tbody>'+
-      post('Energievoordeel voor de groep',r.energievoordeel_EUR,
-        'al verwerkt in de kosten per deelnemer, naar rato van verbruik — telt hieronder niet nogmaals mee')+
-      // Alleen in de samenhangende modus: daar is de opslagmarge een aparte grootheid die
-      // via de gekozen verdeling wordt toebedeeld. Zonder deze regel telt de kolom niet op.
-      (r.opslagwaarde_EUR!=null
-        ? post('Opslagmarge',r.opslagwaarde_EUR,
-            'opbrengst van afgeleverde energie minus inkoop en slijtage')+
-          post('waarvan aandeel accu-eigenaar',r.aandeelOpslagwaarde_EUR||0,
-            'de rest gaat naar de energie-eigenaren of de pool, volgens de gekozen verdeling')
-        : '')+
-      post('Besparing transporttarief',r.piekwaarde_EUR,'lagere maandpiek en gecontracteerd vermogen')+
-      post('Opex',-r.opex_EUR,'onderhoud en beheer')+
-      post('Kapitaallast',-r.kapitaallast_EUR,'annuïteit over de investering')+
-      (r.eigenAansluiting_EUR?post('Eigen aansluiting',-r.eigenAansluiting_EUR,'gecontracteerd vermogen van de accu zelf'):'')+
-      post('Te verdelen',r.teVerdelen_EUR,
-        r.kostenDrager==='platform'?'gaat de pool in en volgt de verdeelsleutel':'komt volledig bij '+drager,true)+
-      post('Totaal resultaat accu',r.totaalResultaat_EUR,'energievoordeel plus het te verdelen deel',true)+
-      '</tbody></table></div>';
-  }).join('');
-  return '<div class="cd">'+
-    '<div class="ct2"><div class="ac" style="background:#c0793c"></div>Rekening van de opslag</div>'+
-    '<div class="ib2" style="margin-bottom:8px">Over de doorgerekende periode, niet per jaar — de '+
-    'referentie en de platformkosten hiernaast gaan ook over die periode. Het <strong>energievoordeel</strong> '+
-    'is al bij de deelnemers geland doordat hun tekort daalde; dat gebeurt naar rato van verbruik, ongeacht '+
-    'de gekozen verdeelsleutel. Alleen het deel <strong>te verdelen</strong> loopt via de sleutel.</div>'+
-    blokken+'</div>';
-}

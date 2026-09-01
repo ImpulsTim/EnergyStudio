@@ -1010,12 +1010,8 @@
     debugDump('na verbruik-aggregatie', verbruikKwartier);
 
     // Stap 4
-    // Injecteerbare allocator: zonder inputs.allocator draait het overgenomen prioriteitsmodel
-    // (referentiegedrag, byte-identiek aan voorheen). ehp/dispatch.js levert de prijsgedreven
-    // variant. Zo blijft er één implementatie van alle omliggende stappen.
-    var allocFn = inputs.allocator || allocateOpwekPriority;
     var opwekAlloc = (verbruikKwartier.length && opwekCorr.length)
-      ? allocFn(opwekCorr, verbruikByTijdLookup)
+      ? allocateOpwekPriority(opwekCorr, verbruikByTijdLookup)
       : [];
     debugDump('na allocate_opwek_priority', opwekAlloc);
 
@@ -1150,22 +1146,7 @@
     applyEconomicColumns:   applyEconomicColumns,
     makeForwardModel:       makeForwardModel,
     validateAgainstReference: validateAgainstReference,
-    platformWaarde:         platformWaarde,
-    // Interne bouwstenen, additief geexporteerd zodat ehp/dispatch.js ze kan hergebruiken in
-    // plaats van dupliceren. Puur uitgeven: geen enkele berekening hierboven verandert, waardoor
-    // buildModel() de geldige regressiebasis blijft.
-    intern: {
-      applyProsumerCorrection:    applyProsumerCorrection,
-      allocateOpwekPriority:      allocateOpwekPriority,
-      aggregateVerbruik:          _aggregateVerbruik,
-      aggregateOpwekAlloc:        _aggregateOpwekAlloc,
-      summarize:                  _summarize,
-      participantOutputsForModel: participantOutputsForModel,
-      runSanityChecks:            _runSanityChecks,
-      runBalanceWarnings:         _runBalanceWarnings,
-      debugDump:                  debugDump,
-      tsKey:                      _tsKey
-    }
+    platformWaarde:         platformWaarde
   };
 
 })(window);
