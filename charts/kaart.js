@@ -48,13 +48,27 @@ function initKaart(){
   var el=document.getElementById('kaartMap');
   if(!el||typeof L==='undefined')return;
   _kaartMap=L.map('kaartMap',{preferCanvas:false,zoomSnap:0.05,zoomDelta:0.05,wheelPxPerZoomLevel:60}).setView([51.50,3.80],12);
-  // CARTO Positron basemap: gratis, CORS-vriendelijk (nodig voor de html-to-image
-  // rapport-capture) en zonder API-key. Vervangt de OSM-tegels die sinds kort met
-  // "Access blocked" (403) worden geweigerd wegens hun tile-usage-policy.
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{
-    attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions">CARTO</a>',
-    subdomains:'abcd',crossOrigin:'anonymous',maxZoom:20
-  }).addTo(_kaartMap);
+  // Esri Light Gray Canvas: grijze, rustige ondergrond (bedoeld om data overheen te
+  // leggen), zonder API-key en met CORS — dat laatste is nodig voor de html-to-image
+  // rapport-capture. Vervangt CARTO Positron, dat key-loos gebruik sinds kort over de
+  // tegels heen stempelt met "API KEY REQUIRED"; daarvóór stond hier OSM.
+  // Twee lagen: ondergrond (zonder tekst) + los labelvlak, zoals Esri ze aanbiedt.
+  var esri='https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/';
+  var esriOpt={attribution:'Tegels © <a href="https://www.esri.com">Esri</a> — bronnen: HERE, Garmin, © <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+    crossOrigin:'anonymous',maxZoom:20,maxNativeZoom:16};
+  var _base=L.tileLayer(esri+'World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',esriOpt).addTo(_kaartMap);
+  L.tileLayer(esri+'World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
+    Object.assign({},esriOpt,{attribution:''})).addTo(_kaartMap);
+  // Valt de tegelbron uit, dan terug naar de standaard OSM-tegels i.p.v. een lege kaart.
+  var _tileErr=0;
+  _base.on('tileerror',function(){
+    if(++_tileErr!==6)return;
+    _kaartMap.removeLayer(_base);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      crossOrigin:'anonymous',maxZoom:19
+    }).addTo(_kaartMap);
+  });
   _kaartLG=L.layerGroup().addTo(_kaartMap);
   setTimeout(function(){_kaartMap.invalidateSize();},100);
 }

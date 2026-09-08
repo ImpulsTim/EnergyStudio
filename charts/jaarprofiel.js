@@ -288,18 +288,40 @@ function panJ() {
     (perKw || []).forEach(function (a, ci) { pSl[ci].push(a[si + i]); });
   }
 
+  // Legenda hier (niet in drawJaar): de chips zijn klikbaar en moeten bij elke
+  // hertekening de actuele aan/uit-status tonen.
+  document.getElementById('jLeg').innerHTML = conLegendHtml(cos || []);
+
+  // Alleen aangevinkte aansluitingen tekenen; kleur blijft op de oorspronkelijke
+  // index, zodat kleuren niet verspringen als je een bedrijf uitzet.
+  var vis = [];
+  (cos || []).forEach(function (c, ci) { if (conShown(c)) vis.push(ci); });
+
+  var pDsets = vis.map(function (ci) {
+    return { label: cos[ci].name, data: pSl[ci].map(function (v) { return v == null ? null : v * _cv.scale; }), borderColor: PAL[ci % PAL.length], fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5 };
+  });
+  // Aansluitwaarde (kVA × cos φ) als stippellijn per zichtbare aansluiting.
+  // Teruglevering alleen bij aansluitingen die daadwerkelijk terugleveren.
+  if (_cv.showGtv && _showAansl) {
+    var hasT = _jaarState.hasT || [];
+    vis.forEach(function (ci) {
+      var lim = connKw(cos[ci]);
+      if (lim == null) return;
+      var col = PAL[ci % PAL.length];
+      pDsets.push({ label: cos[ci].name + ' — aansluitwaarde ' + lim + ' kW', data: new Array(pTs.length).fill(lim), borderColor: col, borderDash: [6, 3], borderWidth: 1.2, pointRadius: 0, fill: false, _ref: true });
+      if (hasT[ci])
+        pDsets.push({ label: cos[ci].name + ' — aansluitwaarde T -' + lim + ' kW', data: new Array(pTs.length).fill(-lim), borderColor: col, borderDash: [2, 3], borderWidth: 1.2, pointRadius: 0, fill: false, _ref: true });
+    });
+  }
+
   dC('jaar');
   CH['jaar'] = new Chart(document.getElementById('cJaar'), {
     type: 'line',
-    data: {
-      labels: pTs,
-      datasets: (cos || []).map(function (c, ci) {
-        return { label: c.name, data: pSl[ci].map(function (v) { return v == null ? null : v * _cv.scale; }), borderColor: PAL[ci % PAL.length], fill: false, tension: 0, pointRadius: 0, borderWidth: 1.5 };
-      })
-    },
+    data: { labels: pTs, datasets: pDsets },
     options: {
       responsive: true, maintainAspectRatio: false, animation: false,
-      plugins: { legend: { display: false }, tooltip: { callbacks: { title: _jTipTitle } } },
+      // De vlakke referentielijnen uit de tooltip houden (_ref) — anders staan ze bij elke hover in beeld.
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: _jTipTitle }, filter: function (item) { return !item.dataset._ref; } } },
       scales: {
         x: {
           ticks: {
@@ -337,7 +359,9 @@ function setJaarPreset(days) {
 function drawJaar(allTs, perKw, grpKw, cos, gtvA, gtvT) {
   dC('jaar'); dC('jaarG');
   _jZoom = 1;
-  _jaarState = { allTs: allTs, perKw: perKw, grpKw: grpKw, cos: cos, gtvA: gtvA, gtvT: gtvT };
+  // hasT op de volledige reeks (niet op het zichtbare venster): de teruglever-
+  // stippellijn mag niet in/uit beeld springen bij zoomen of maandfilteren.
+  _jaarState = { allTs: allTs, perKw: perKw, grpKw: grpKw, cos: cos, gtvA: gtvA, gtvT: gtvT, hasT: (perKw || []).map(conHasT) };
   var startEl = document.getElementById('jDateStart');
   var endEl = document.getElementById('jDateEnd');
   if (startEl && endEl && allTs.length) {
@@ -348,10 +372,5 @@ function drawJaar(allTs, perKw, grpKw, cos, gtvA, gtvT) {
     startEl.value = minDate;
     endEl.value = maxDate;
   }
-  var legHtml = '';
-  for (var i = 0; i < cos.length; i++) {
-    legHtml += '<span class="li"><span class="ld" style="background:' + PAL[i % PAL.length] + '"></span>' + cos[i].name + '</span>';
-  }
-  document.getElementById('jLeg').innerHTML = legHtml;
-  panJ();
+  panJ(); // schrijft ook de legenda (#jLeg) weg
 }

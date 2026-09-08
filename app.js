@@ -546,6 +546,59 @@ function notify(msg,ok){
 
 function ap(){for(var i=0;i<S.projects.length;i++){if(S.projects[i].id===S.activeId)return S.projects[i];}return null;}
 function selC(){var p=ap();if(!p)return[];return p.companies.filter(function(c){return c.selected!==false;});}
+
+// ── Aansluitwaarde + bedrijfsselectie in de per-aansluiting grafieken ──
+// De aansluitwaarde in kW is de fysieke capaciteit (kVA) maal de power factor.
+var PF_DEF=0.9;
+function connPf(c){var v=parseFloat(c&&c.pf);return(isNaN(v)||v<=0||v>1)?PF_DEF:v;}
+function connKw(c){var v=parseFloat(c&&c.kva);return(isNaN(v)||v<=0)?null:+(v*connPf(c)).toFixed(1);} // null = geen kVA ingevuld
+function conHasT(series){for(var i=0;i<(series||[]).length;i++){var v=series[i];if(v!=null&&v<-0.05)return true;}return false;}
+
+function palRgba(hex,a){var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return'rgba('+r+','+g+','+b+','+a+')';}
+
+// Weergavefilter — raakt alleen #cJaar en #cWeekP, niet de analyse/KPI's.
+var _conHide={};       // {aansluiting-id:true} = uitgezet
+var _showAansl=true;   // vinkje 'Aansluitwaarde tonen'
+var _showMinMax=false; // vinkje 'Min/max tonen' (alleen weekprofiel)
+function conShown(c){return !_conHide[c.id];}
+function toggleCon(id){_conHide[id]=!_conHide[id];_redrawPerCon();}
+function setAllCon(on){
+  var p=ap();if(!p)return;
+  p.companies.forEach(function(c){if(on)delete _conHide[c.id];else _conHide[c.id]=true;});
+  _redrawPerCon();
+}
+function setShowAansl(on){_showAansl=!!on;_redrawPerCon();}
+function setShowMinMax(on){_showMinMax=!!on;_redrawPerCon();}
+function _redrawPerCon(){try{panJ();}catch(e){console.error('panJ:',e);}try{_renderWeek();}catch(e){console.error('_renderWeek:',e);}}
+
+// Legendabalk voor de per-aansluiting grafieken: klikbare chips + bediening.
+// Wordt door zowel panJ() als _renderWeek() opnieuw weggeschreven, dus de
+// klikafhandeling loopt via delegatie op #jLeg/#wLeg (zie init).
+// opts.minmax: toon ook het vinkje 'Min/max tonen' (alleen zinvol in het weekprofiel).
+function conLegendHtml(cos,opts){
+  opts=opts||{};
+  var _cv=(typeof _carrierView!=='undefined')?_carrierView:{showGtv:true};
+  var h='';
+  (cos||[]).forEach(function(c,i){
+    var off=!conShown(c),lim=connKw(c);
+    h+='<span class="li li-tog'+(off?' li-off':'')+'" data-conid="'+c.id+'" title="'+
+       (c.name.replace(/"/g,'')+(lim!=null?' — aansluitwaarde '+lim+' kW ('+c.kva+' kVA × '+connPf(c)+')':' — geen kVA ingevuld'))+
+       '"><span class="ld" style="background:'+PAL[i%PAL.length]+'"></span>'+c.name+'</span>';
+  });
+  if(_cv.showGtv&&_showAansl)
+    h+='<span class="li"><span class="ld" style="border:2px dashed #888;background:none"></span>aansluitwaarde (kVA × cos φ)</span>';
+  h+='<span style="margin-left:auto;display:flex;align-items:center;gap:7px">';
+  h+='<button class="b" data-conall="1" style="padding:2px 7px;font-size:11px">Alles</button>';
+  h+='<button class="b" data-conall="0" style="padding:2px 7px;font-size:11px">Geen</button>';
+  if(opts.minmax)
+    h+='<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#666;cursor:pointer">'+
+       '<input type="checkbox" class="js-showminmax"'+(_showMinMax?' checked':'')+' style="accent-color:#46962b">Min/max tonen</label>';
+  if(_cv.showGtv)
+    h+='<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:#666;cursor:pointer">'+
+       '<input type="checkbox" class="js-showaansl"'+(_showAansl?' checked':'')+' style="accent-color:#46962b">Aansluitwaarde tonen</label>';
+  h+='</span>';
+  return h;
+}
 function fmt(n){return Math.round(n).toLocaleString('nl-NL');}
 function ax(lbl){return{ticks:{color:'#999',font:{family:'Barlow',size:11},maxTicksLimit:12},grid:{color:'#f3f7f4'},title:lbl?{display:true,text:lbl,color:'#aaa',font:{family:'Barlow',size:11}}:undefined};}
 function sdesc(arr,n){
@@ -713,7 +766,7 @@ function renderOverzicht(){
     html+='<td><strong>'+c.name+'</strong></td><td style="font-family:monospace;font-size:10px">'+(c.ean||'—')+'</td>';
     html+='<td><span class="bdg bg">'+c.category+'</span></td>';
     html+='<td>'+c.gtvA+'kW</td><td>'+c.gtvT+'kW</td>';
-    html+='<td>'+(c.kva!=null?c.kva+' kVA':'—')+'</td>';
+    html+='<td>'+(c.kva!=null?c.kva+' kVA <span style="color:#999">('+connKw(c)+' kW)</span>':'—')+'</td>';
     html+='<td>'+(c.zekering||'—')+'</td>';
     html+='<td id="op_'+c.id+'">…</td>';
     html+='<td><button class="b" style="font-size:9px;padding:2px 6px" data-editid="'+c.id+'">Bewerken</button></td></tr>';
@@ -785,7 +838,7 @@ function openAddComp(){
   document.getElementById('cN').value='';document.getElementById('cE').value='';
   document.getElementById('cCarrier').value='elektra';document.getElementById('cDeelnemer').value='';
   document.getElementById('cAdres').value='';document.getElementById('cLat').value='';document.getElementById('cLng').value='';
-  document.getElementById('cKva').value='';document.getElementById('cZek').value='';
+  document.getElementById('cKva').value='';document.getElementById('cPf').value='0.9';document.getElementById('cZek').value='';
   document.getElementById('cCat').value='Grootverbruik';
   document.getElementById('cGA').value='150';document.getElementById('cGT').value='80';
   document.getElementById('cSA').value='TrafoMSLS';document.getElementById('cST').value='TrafoMSLS';
@@ -807,7 +860,8 @@ async function openEditComp(id){
   document.getElementById('cCarrier').value=c.carrier||'elektra';document.getElementById('cDeelnemer').value=c.deelnemer||'';
   document.getElementById('cAdres').value=c.adres||'';
   document.getElementById('cLat').value=c.lat!=null?c.lat:'';document.getElementById('cLng').value=c.lng!=null?c.lng:'';
-  document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cZek').value=c.zekering||'';
+  document.getElementById('cKva').value=c.kva!=null?c.kva:'';document.getElementById('cPf').value=c.pf!=null?c.pf:PF_DEF;
+  document.getElementById('cZek').value=c.zekering||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
   document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:0;
   document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';document.getElementById('cST').value=c.stedinT||'TrafoMSLS';
@@ -833,6 +887,7 @@ async function saveComp(){
     category:document.getElementById('cCat').value,
     gtvA:(function(){var v=parseFloat(document.getElementById('cGA').value);return isNaN(v)?150:v;})(),gtvT:(function(){var v=parseFloat(document.getElementById('cGT').value);return isNaN(v)?80:v;})(),
     kva:(function(){var v=parseFloat(document.getElementById('cKva').value);return isNaN(v)?null:v;})(),
+    pf:(function(){var v=parseFloat(document.getElementById('cPf').value);return(isNaN(v)||v<=0||v>1)?PF_DEF:v;})(),
     zekering:document.getElementById('cZek').value.trim(),
     stedinA:document.getElementById('cSA').value,stedinT:document.getElementById('cST').value,
     priceType:pType,priceA:parseFloat(document.getElementById('cPA').value)||0.12,
@@ -848,6 +903,7 @@ async function saveComp(){
 async function deleteComp(){
   if(!editId)return;if(!confirm('Aansluiting verwijderen?'))return;
   var p=ap();p.companies=p.companies.filter(function(c){return c.id!==editId;});
+  delete _conHide[editId];
   await dbDel('ts',editId);hideM('mComp');await saveMeta();resetCH();renderAll();notify('Verwijderd');
 }
 
@@ -1224,6 +1280,23 @@ document.addEventListener('DOMContentLoaded',function(){
   });
   document.getElementById('ovBody').addEventListener('click',function(e){
     var editBtn=e.target.closest('[data-editid]');if(editBtn)openEditComp(editBtn.getAttribute('data-editid'));
+  });
+  // Gedelegeerd: bedrijven aan/uit + aansluitwaarde-vinkje in de per-aansluiting legenda's.
+  // De legenda's worden bij elke hertekening met innerHTML vervangen, vandaar delegatie.
+  ['jLeg','wLeg'].forEach(function(id){
+    var el=document.getElementById(id);if(!el)return;
+    el.addEventListener('click',function(e){
+      var all=e.target.closest('[data-conall]');
+      if(all){setAllCon(all.getAttribute('data-conall')==='1');return;}
+      var chip=e.target.closest('[data-conid]');
+      if(chip)toggleCon(chip.getAttribute('data-conid'));
+    });
+    el.addEventListener('change',function(e){
+      var cb=e.target.closest('.js-showaansl');
+      if(cb){setShowAansl(cb.checked);return;}
+      var mm=e.target.closest('.js-showminmax');
+      if(mm)setShowMinMax(mm.checked);
+    });
   });
   // Modal sluiten
   document.getElementById('btnCloseProj').addEventListener('click',function(){hideM('mProj');});

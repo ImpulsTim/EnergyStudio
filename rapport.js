@@ -9,7 +9,7 @@ function rapportCss(){
     'html,body{background:#fff}',
     'body{font-family:"Barlow",Arial,sans-serif;font-size:10pt;color:#242b38;line-height:1.55;font-variant-numeric:tabular-nums}',
     '@page{size:A4 landscape;margin:8mm}',
-    '@media print{.pb{page-break-before:always}.no-break,.kg,.kbig,.rchart,.rsh,.kpi-row{page-break-inside:avoid}img{max-width:100%!important}}',
+    '@media print{.pb{page-break-before:always}.no-break,.kg,.kbig,.rchart,.rgrid2,.rsh,.kpi-row{page-break-inside:avoid}img{max-width:100%!important}}',
     'a{color:#46962b;text-decoration:none}',
     '.page{padding:8mm 6mm 6mm;position:relative}',
     '.page.pb{page-break-before:always}',
@@ -47,6 +47,13 @@ function rapportCss(){
     '.rchart img{max-width:100%;height:auto;display:block;margin:0 auto}',
     '.r2col{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:0 0 12px}',
     '.r2col .rchart{margin:0}',
+    // Per-aansluiting galerij: vier mini-grafieken (2×2) op één liggend vel.
+    '.rgrid2{display:grid;grid-template-columns:1fr 1fr;gap:5px 10px;margin:0}',
+    '.rgrid2 .rchart{margin:0}',
+    '.rgrid2 .rchart h3{display:flex;align-items:center;gap:5px;text-transform:none;letter-spacing:0;font-size:9pt;color:#242b38;margin:0 0 2px}',
+    '.rcap{font-size:8.5pt;font-weight:700;color:#46962b;margin:0 0 5px;text-transform:uppercase;letter-spacing:.5px}',
+    '.rdot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0;-webkit-print-color-adjust:exact;print-color-adjust:exact}',
+    '.rsub2{font-weight:400;color:#888;font-size:8pt}',
     '.kg{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin:0 0 14px}',
     '.kg.k4{grid-template-columns:repeat(4,1fr)}',
     '.kg.k2{grid-template-columns:repeat(2,1fr)}',
@@ -138,13 +145,19 @@ function rapportCss(){
 // Chart-capture: rendert een Chart.js-grafiek VERS in een offscreen container met
 // vaste afmeting (geen resize-race → geen half-gerenderde stacked bars/area-fills).
 async function _rapCi(id,h,full,customW){
-  var W=customW!=null?customW:(full!==false?1040:500);
-  var H=h||360;
   var src=document.getElementById(id);
   if(!src)return'';
   var chart=Chart.getChart?Chart.getChart(src):null;
   if(!chart)return'';
-  var cfg=chart.config;
+  return await _rapCiCfg(chart.config,h,full,customW,id);
+}
+
+// Zelfde offscreen-render, maar op een kant-en-klare Chart.js-config i.p.v. een
+// grafiek die live op de pagina staat. Voor grafieken die alleen in het rapport
+// bestaan (bv. één per aansluiting) — scheelt N keer de pagina hertekenen.
+async function _rapCiCfg(cfg,h,full,customW,dbgId){
+  var W=customW!=null?customW:(full!==false?1040:500);
+  var H=h||360;
   var box=document.createElement('div');
   box.style.cssText='position:fixed;left:-99999px;top:0;width:'+W+'px;height:'+H+'px;background:#fff';
   var off=document.createElement('canvas');
@@ -158,12 +171,93 @@ async function _rapCi(id,h,full,customW){
     c=new Chart(off,{type:cfg.type,data:data,options:opts,plugins:cfg.plugins});
     await new Promise(function(r){requestAnimationFrame(function(){requestAnimationFrame(r);});});
     uri=off.toDataURL('image/png');
-  }catch(e){console.error('_rapCi '+id+':',e);}
+  }catch(e){console.error('_rapCiCfg '+(dbgId||'')+':',e);}
   try{if(c)c.destroy();}catch(e){}
   try{document.body.removeChild(box);}catch(e){}
   if(!uri||uri==='data:,')return'';
   var imgW=customW!=null?'100%':W+'px';
   return'<img src="'+uri+'" style="width:'+imgW+';max-width:100%;height:auto;display:block">';
+}
+
+// ── Grafieken per aansluiting (alleen in het rapport) ──────────────────────
+// Lezen als het groepsprofiel: groen = afname, geel = teruglevering. De grens is
+// hier niet het GTV maar de aansluitwaarde (kVA × cos φ, connKw), in dezelfde
+// rood/oranje stippellijnen die het rapport voor het GTV gebruikt.
+function _rapAanslRefs(c,series,n){
+  var lim=(typeof connKw==='function')?connKw(c):null;
+  if(lim==null)return[];
+  var out=[{label:'Aansluitwaarde '+lim+' kW',data:new Array(n).fill(lim),
+    borderColor:'#c0392b',borderDash:[6,3],pointRadius:0,borderWidth:1.5,fill:false}];
+  if(typeof conHasT==='function'&&conHasT(series))
+    out.push({label:'Aansluitwaarde T -'+lim+' kW',data:new Array(n).fill(-lim),
+      borderColor:'#e67e22',borderDash:[4,4],pointRadius:0,borderWidth:1.5,fill:false});
+  return out;
+}
+
+// Jaarprofiel van één aansluiting — zelfde opbouw als #cJaarG (signSplit + vlakken).
+function _rapConJaarCfg(c,series,allTs){
+  var dec=_jDecimate(series,allTs,900);
+  var sp=signSplit(dec.kw,dec.ts,{lerpLabel:_jLerpTs});
+  var span=new Date(allTs[allTs.length-1]).getTime()-new Date(allTs[0]).getTime();
+  var zero=function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';};
+  return{type:'line',
+    data:{labels:sp.labels,datasets:[
+      {label:'Afname',data:sp.pos,borderColor:'#46962b',backgroundColor:'rgba(70,150,43,.12)',fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:1.5},
+      {label:'Teruglevering',data:sp.neg,borderColor:'#fbba00',backgroundColor:'rgba(251,186,0,.12)',fill:'origin',spanGaps:false,tension:0,pointRadius:0,borderWidth:1.5}
+    ].concat(_rapAanslRefs(c,series,sp.labels.length))},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{
+        x:{ticks:{color:'#999',font:{family:'Barlow',size:10},maxRotation:0,autoSkip:true,maxTicksLimit:6,
+          callback:function(v){var ts=this.getLabelForValue(v);return ts?_jFormatTick(ts,span):null;}},grid:{color:'#f3f7f4'}},
+        y:Object.assign(ax('kW'),{beginAtZero:false,grid:{color:zero,lineWidth:function(ctx){return ctx.tick.value===0?2:.5;}}})
+      }}};
+}
+
+// Gemiddeld weekprofiel van één aansluiting, mét min/max-band — zelfde opbouw als #cWeek.
+function _rapConWeekCfg(c,series,allTs){
+  var w=weekSlots(allTs,series,null);
+  var lb=weekSlotLabels();
+  // Op halve paginabreedte passen de uurlabels van de app-grafiek niet: alleen dagnamen.
+  var lbTick=lb.map(function(s,i){return i%96===0?s:'';});
+  var zero=function(ctx){return ctx.tick.value===0?'#242b38':'#f3f7f4';};
+  return{type:'line',
+    data:{labels:lb,datasets:[
+      {label:'Max',data:w.mx,borderColor:'rgba(70,150,43,.45)',backgroundColor:'rgba(70,150,43,.09)',fill:'+1',tension:.3,pointRadius:0,borderWidth:1.2,borderDash:[4,3]},
+      {label:'Min',data:w.mn,borderColor:'rgba(70,150,43,.45)',fill:false,tension:.3,pointRadius:0,borderWidth:1.2,borderDash:[4,3]},
+      {label:'Gemiddeld',data:w.avg,borderColor:'#46962b',fill:false,tension:.3,pointRadius:0,borderWidth:2}
+    ].concat(_rapAanslRefs(c,series,lb.length))},
+    options:{responsive:true,maintainAspectRatio:false,animation:false,
+      plugins:{legend:{display:false},tooltip:{enabled:false}},
+      scales:{
+        x:{ticks:{color:'#999',font:{family:'Barlow',size:10},maxTicksLimit:8,autoSkip:false,callback:function(v,i){return lbTick[i]||null;}},grid:{color:'#f3f7f4'}},
+        y:Object.assign(ax('kW'),{grid:{color:zero,lineWidth:function(ctx){return ctx.tick.value===0?2:.5;}}})
+      }}};
+}
+
+// Bouwt per aansluiting één mini-grafiek. kind: 'jaar' | 'week'.
+// Kleurstip volgt de volgorde van proj.companies, gelijk aan de aansluitingstabel.
+async function _rapPerConImgs(kind,res,proj){
+  var out=[];
+  var wd=res.withData||[],pk=res.perKw||[];
+  var allTs=_optim.allTs||[];
+  if(!allTs.length)return out;
+  for(var i=0;i<wd.length;i++){
+    var series=pk[i];
+    if(!series||!series.length)continue;
+    var c=wd[i];
+    var idx=-1;
+    for(var j=0;j<proj.companies.length;j++){if(proj.companies[j].id===c.id){idx=j;break;}}
+    var cfg=kind==='week'?_rapConWeekCfg(c,series,allTs):_rapConJaarCfg(c,series,allTs);
+    // 500×195: twee rijen van deze verhouding passen mét kop en voettekst binnen één
+    // liggend vel — bij een hogere grafiek loopt de pagina net over.
+    var img=await _rapCiCfg(cfg,195,false,null,kind+'-'+c.name);
+    if(!img)continue;
+    var lim=connKw(c);
+    out.push({name:c.name,color:PAL[(idx<0?i:idx)%PAL.length],
+      sub:lim!=null?'aansluitwaarde '+_fmtN(lim,0)+' kW':'geen kVA ingevuld',img:img});
+  }
+  return out;
 }
 
 // Element-capture: vang een willekeurig HTML-element (parameters/heatmaps/tabel) als
@@ -256,6 +350,8 @@ function openRapportModal(){
   var chartOpts=[
     {id:'jaar', lbl:'Jaarprofiel',def:true},
     {id:'week', lbl:'Weekprofiel',def:true},
+    {id:'jaarPer',lbl:'Jaarprofiel per aansluiting',def:false},
+    {id:'weekPer',lbl:'Weekprofiel per aansluiting',def:false},
     {id:'gelijkt',lbl:'Gelijktijdigheid',def:false},
     {id:'bdk',  lbl:'BDK',def:false},
     {id:'ovsch',lbl:'Overschrijdingen',def:false},
@@ -546,6 +642,10 @@ async function buildRapport(opts){
       batYear:hasBat?await ci('cBatYear',320):'',
       batSoC:hasBat?await ci('cBatSoC',280,false):''
     };
+    // Per aansluiting: eigen mini-grafiek per deelnemer (offscreen uit res.perKw,
+    // dus zonder de pagina per aansluiting te hertekenen).
+    imgs.jaarPer=selHas('jaarPer')?await _rapPerConImgs('jaar',res,proj):[];
+    imgs.weekPer=selHas('weekPer')?await _rapPerConImgs('week',res,proj):[];
     // Gelijktijdigheid: KPI-grid full-width + weekpatroon (offscreen render → schoon)
     if(selHas('gelijkt')){
       imgs.gelijktKpis=await cihEl(byId('gelijktKpis'));
@@ -565,8 +665,9 @@ async function buildRapport(opts){
     // Piekanalyse: beide charts op volle breedte (offscreen render → bars over alle maanden); legenda apart
     if(selHas('piek')){
       imgs.piekLeg=await cihEl(byId('pLeg'));
-      imgs.piekA=await ci('cPiekA',360);
-      imgs.piekT=await ci('cPiekT',360);
+      // Halve breedte (500px): afname en teruglevering staan naast elkaar op één pagina.
+      imgs.piekA=await ci('cPiekA',320,false);
+      imgs.piekT=await ci('cPiekT',320,false);
       imgs.gto=await cihEl(byId('gtoBody')?byId('gtoBody').closest('.cd'):null);
     }
     imgsByScen.push(imgs);
@@ -599,13 +700,13 @@ async function buildRapport(opts){
     var wi=-1;
     for(var j=0;j<_optim.withData.length;j++){if(_optim.withData[j].id===c.id){wi=j;break;}}
     var row=(wi>=0&&_optim.perKw&&_optim.perKw[wi])?_optim.perKw[wi]:null;
-    var o={c:c,has:!!row,jvMWh:0,tlMWh:0,piekA:0,piekT:0,ovA:0,ovT:0};
+    var o={c:c,has:!!row,jvMWh:0,tlMWh:0,piekA:0,piekT:0};
     if(row){
       var sumA=0,sumT=0;
       for(var q=0;q<row.length;q++){
         var v=row[q];if(v==null)continue;
-        if(v>0){sumA+=v;if(v>o.piekA)o.piekA=v;if(v>(c.gtvA||0))o.ovA++;}
-        else if(v<0){var a=-v;sumT+=a;if(a>o.piekT)o.piekT=a;if(a>(c.gtvT||0))o.ovT++;}
+        if(v>0){sumA+=v;if(v>o.piekA)o.piekA=v;}
+        else if(v<0){var a=-v;sumT+=a;if(a>o.piekT)o.piekT=a;}
       }
       o.jvMWh=sumA*0.25/1000/sumYears;
       o.tlMWh=sumT*0.25/1000/sumYears;
@@ -668,21 +769,19 @@ async function buildRapport(opts){
   '</div>';
 
   var colg='<colgroup>'+
-    '<col style="width:11%"><col style="width:12%"><col style="width:13%">'+
-    '<col style="width:5%"><col style="width:6%"><col style="width:6%"><col style="width:6%">'+
-    '<col style="width:8%"><col style="width:8%"><col style="width:7%"><col style="width:7%">'+
-    '<col style="width:5.5%"><col style="width:5.5%">'+
+    '<col style="width:13%"><col style="width:13%"><col style="width:16%">'+
+    '<col style="width:6%"><col style="width:7%"><col style="width:7%"><col style="width:7%">'+
+    '<col style="width:9%"><col style="width:9%"><col style="width:7%"><col style="width:6%">'+
   '</colgroup>';
   var thead='<thead>'+
     '<tr><th class="grp" colspan="7">Aansluitgegevens</th>'+
-      '<th class="grp" colspan="6">Analyse · '+(nonAnnual?'per jaar (geëxtrapoleerd)':'meetperiode')+'</th></tr>'+
+      '<th class="grp" colspan="4">Analyse · '+(nonAnnual?'per jaar (geëxtrapoleerd)':'meetperiode')+'</th></tr>'+
     '<tr>'+
       '<th>Naam</th><th>EAN</th><th>Adres</th>'+
       '<th class="num">kVA</th><th>Zekering</th>'+
       '<th class="num">GTV-A</th><th class="num">GTV-T</th>'+
       '<th class="num">Jaarverbr.<br>MWh</th><th class="num">Teruglev.<br>MWh</th>'+
       '<th class="num">Piek afn.<br>kW</th><th class="num">Piek ter.<br>kW</th>'+
-      '<th class="num">Ovsch.<br>GTV-A</th><th class="num">Ovsch.<br>GTV-T</th>'+
     '</tr></thead>';
   var connRows=connData.map(function(o,idx){
     var c=o.c;
@@ -698,8 +797,6 @@ async function buildRapport(opts){
       '<td class="num">'+(o.has?_fmtN(o.tlMWh,1):'—')+'</td>'+
       '<td class="num">'+(o.has?_fmtN(o.piekA,0):'—')+'</td>'+
       '<td class="num">'+(o.has?_fmtN(o.piekT,0):'—')+'</td>'+
-      '<td class="num"'+(o.has&&o.ovA>0?' style="color:#c0392b;font-weight:700"':'')+'>'+(o.has?o.ovA:'—')+'</td>'+
-      '<td class="num"'+(o.has&&o.ovT>0?' style="color:#c0392b;font-weight:700"':'')+'>'+(o.has?o.ovT:'—')+'</td>'+
     '</tr>';
   }).join('');
   var totRow='<tr class="tot">'+
@@ -710,8 +807,6 @@ async function buildRapport(opts){
     '<td class="num">'+_fmtN(tot.tl,1)+'</td>'+
     '<td class="num">'+_fmtN(basisKpis.maxA,0)+'</td>'+
     '<td class="num">'+_fmtN(basisKpis.maxT,0)+'</td>'+
-    '<td class="num">'+_fmtI(basisKpis.ovA)+'</td>'+
-    '<td class="num">'+_fmtI(basisKpis.ovT)+'</td>'+
   '</tr>';
 
   var dpHtml='<div class="page pb">'+
@@ -722,7 +817,7 @@ async function buildRapport(opts){
       (periode?', gemeten over '+periode:'')+'. Hieronder de collectieve kerncijfers, gevolgd door de analyse per aansluiting.</p>'+
     grpCards+
     '<table class="compact">'+colg+thead+'<tbody>'+connRows+totRow+'</tbody></table>'+
-    '<div class="rib2">De piek- en overschrijdingskolommen op de totaalrij tonen de <strong>collectieve</strong> waarde (gelijktijdig groepsprofiel), niet de som van de individuele pieken — dankzij diversiteit ligt de collectieve piek doorgaans lager.</div>'+
+    '<div class="rib2">De piekkolommen op de totaalrij tonen de <strong>collectieve</strong> waarde (gelijktijdig groepsprofiel), niet de som van de individuele pieken — dankzij diversiteit ligt de collectieve piek doorgaans lager.</div>'+
     '<div class="rib-warn"><strong>GTV bij scenario\'s:</strong> bij een scenario met meerdere aansluitingen worden de GTV\'s standaard <strong>bij elkaar opgeteld</strong> (tenzij anders vermeld in de titel van het scenario). Volledige optelling van GTV\'s is bij een collectief transportcontract (GTO) in de praktijk zelden mogelijk; of en in welke mate dit kan, hangt af van de onderhandelingen met de netbeheerder.</div>'+
     (nonAnnual?'<div class="rib-warn">De meetperiode beslaat '+_fmtN(sumYears,2)+' jaar; verbruiks- en terugleverwaarden (MWh) zijn geëxtrapoleerd naar een vol jaar. Pieken en overschrijdingen betreffen de werkelijke meetperiode.</div>':'')+
     pageFooter()+
@@ -784,6 +879,27 @@ async function buildRapport(opts){
       '<div class="rchart"><h3>Jaarprofiel — collectief groepsvermogen (kW)</h3>'+imgs.jaar+'</div>'});
     if(imgs.week)blocks.push({label:'Gemiddeld weekprofiel',html:
       '<div class="rchart"><h3>Gemiddeld weekprofiel — dag-/uurpatroon met min/max-band (kW)</h3>'+imgs.week+'</div>'});
+    // Per aansluiting: vier mini-grafieken per pagina, dus één blok per viertal.
+    // Bij zon/batterij een voetnoot: die werken op het collectief, niet op de
+    // individuele meetreeksen (calcScenario past ze alleen op grpKw toe).
+    function perConBlocks(list,label,titel){
+      if(!list||!list.length)return;
+      var note=(scenData.hasPV||scenData.hasBat)
+        ?'<p class="rintro" style="margin-top:6px">De individuele profielen zijn de <strong>gemeten</strong> profielen per aansluiting; zon en batterij in dit scenario werken op het collectieve profiel.</p>':'';
+      var per=4,n=Math.ceil(list.length/per);
+      for(var p=0;p<n;p++){
+        var cards=list.slice(p*per,(p+1)*per).map(function(o){
+          return'<div class="rchart"><h3><span class="rdot" style="background:'+o.color+'"></span>'+o.name+
+            ' <span class="rsub2">— '+o.sub+'</span></h3>'+o.img+'</div>';
+        }).join('');
+        blocks.push({label:label+(n>1?' ('+(p+1)+'/'+n+')':''),solo:true,
+          html:'<div class="rcap">'+titel+'</div><div class="rgrid2">'+cards+'</div>'+(p===n-1?note:'')});
+      }
+    }
+    perConBlocks(imgs.jaarPer,'Jaarprofiel per aansluiting',
+      'Jaarprofiel per aansluiting — groen=afname, geel=teruglevering, stippellijn=aansluitwaarde (kVA × cos φ)');
+    perConBlocks(imgs.weekPer,'Weekprofiel per aansluiting',
+      'Gemiddeld weekprofiel per aansluiting — met min/max-band en aansluitwaarde (kVA × cos φ)');
     if(imgs.gelijktKpis||imgs.gelijktW)blocks.push({label:'Gelijktijdigheid',html:
       (imgs.gelijktKpis?'<div class="rchart"><h3>Kernparameters gelijktijdigheid</h3>'+imgs.gelijktKpis+'</div>':'')+
       (imgs.gelijktW?'<div class="rchart"><h3>Weekpatroon gelijktijdigheid</h3>'+imgs.gelijktW+'</div>':'')});
@@ -793,11 +909,12 @@ async function buildRapport(opts){
     if(imgs.ovKpis||imgs.heat)blocks.push({label:'Overschrijdingen',html:
       (imgs.ovKpis?'<div class="rchart"><h3>Kernparameters overschrijdingen</h3>'+imgs.ovKpis+'</div>':'')+
       (imgs.heat?'<div class="rchart"><h3>Heatmap — overschrijdingen per uur en maand</h3>'+imgs.heat+'</div>':'')});
-    // Piekanalyse: afname en teruglevering elk op volle breedte, aparte pagina's
-    if(imgs.piekA)blocks.push({label:'Piekanalyse — maandpieken afname',html:
-      legHtml+'<div class="rchart"><h3>Maandpieken afname — individueel vs. collectief (kW)</h3>'+imgs.piekA+'</div>'});
-    if(imgs.piekT)blocks.push({label:'Piekanalyse — maandpieken teruglevering',html:
-      legHtml+'<div class="rchart"><h3>Maandpieken teruglevering — individueel vs. collectief (kW)</h3>'+imgs.piekT+'</div>'});
+    // Piekanalyse: afname en teruglevering naast elkaar op één pagina
+    if(imgs.piekA||imgs.piekT)blocks.push({label:'Piekanalyse — maandpieken',html:
+      legHtml+'<div class="r2col">'+
+      (imgs.piekA?'<div class="rchart"><h3>Maandpieken afname — individueel vs. collectief (kW)</h3>'+imgs.piekA+'</div>':'')+
+      (imgs.piekT?'<div class="rchart"><h3>Maandpieken teruglevering — individueel vs. collectief (kW)</h3>'+imgs.piekT+'</div>':'')+
+      '</div>'});
     if(imgs.gto)blocks.push({label:'GTO-besparing per maand',html:
       '<div class="rchart"><h3>GTO-besparing per maand (kW-max diversiteit)</h3>'+imgs.gto+'</div>'});
     if(imgs.pvYear||imgs.pvMonth)blocks.push({label:'Zonnepanelen',html:'<div class="r2col">'+
@@ -816,8 +933,9 @@ async function buildRapport(opts){
           (extra?'<span class="rsh-badge" style="margin-left:auto;background:'+scenColor+'55">'+extra+'</span>':'')+'</div></div>';
     }
 
-    // Pagina 1: kerncijfers + eerste gekozen grafiek
-    var first=blocks.length?blocks[0]:null;
+    // Pagina 1: kerncijfers + eerste gekozen grafiek. Een solo-blok (galerij van vier
+    // mini-grafieken) past daar niet naast en krijgt altijd een eigen pagina.
+    var first=(blocks.length&&!blocks[0].solo)?blocks[0]:null;
     var pages='<div class="page pb">'+
       pageHdr+
       scenHdr('Kerncijfers'+(first?' &amp; '+first.label:''))+
@@ -827,7 +945,7 @@ async function buildRapport(opts){
       pageFooter()+
     '</div>';
     // Vervolgpagina's: één gekozen grafiek per pagina, met banner
-    for(var b=1;b<blocks.length;b++){
+    for(var b=first?1:0;b<blocks.length;b++){
       pages+='<div class="page pb">'+pageHdr+scenHdr(blocks[b].label)+blocks[b].html+pageFooter()+'</div>';
     }
     return pages;
