@@ -218,7 +218,7 @@ async function buildIndRapport(opts){
       '</div>';
       var aansluitingKg='<div class="rsub"><span class="rsub-num">Aansluiting</span>contract &amp; capaciteit</div><div class="kg k4">'+
         _indRapCard('Zekering aansluitpunt',ans.zekering?_indEsc(ans.zekering):'—')+
-        _indRapCard('Fysieke capaciteit',ans.kva!=null?_fmtI(ans.kva):'—','kW')+
+        _indRapCard('Fysieke capaciteit',ans.kva!=null?_fmtI(ans.kva):'—','kVA')+
         _indRapCard('GTV afname',ans.gtvA?_fmtI(ans.gtvA):'—','kW')+
         _indRapCard('GTV-T teruglevering',ans.gtvT?_fmtI(ans.gtvT):'—','kW')+
       '</div>';

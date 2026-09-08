@@ -307,7 +307,7 @@ function renderIndResults(c,a){
   // Aansluiting
   var aansluitingKg='<div class="kg">'+
     _indKb('Zekering aansluitpunt',ans.zekering?_indEsc(ans.zekering):'—')+
-    _indKb('Fysieke capaciteit',ans.kva!=null?fmt(ans.kva):'—','kW')+
+    _indKb('Fysieke capaciteit',ans.kva!=null?fmt(ans.kva):'—','kVA')+
     _indKb('GTV afname',ans.gtvA?fmt(ans.gtvA):'—','kW')+
     _indKb('GTV-T teruglevering',ans.gtvT?fmt(ans.gtvT):'—','kW')+
   '</div>';

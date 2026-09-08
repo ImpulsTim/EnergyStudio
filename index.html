@@ -798,8 +798,9 @@
       <div class="fg"><label>Breedtegraad (lat)</label><input type="number" id="cLat" step="0.000001" placeholder="bijv. 51.4988"></div>
       <div class="fg"><label>Lengtegraad (lng)</label><input type="number" id="cLng" step="0.000001" placeholder="bijv. 3.6136"></div>
     </div>
-    <div class="fg2" style="margin-bottom:8px">
+    <div class="fg3" style="margin-bottom:8px">
       <div class="fg"><label>Fysieke capaciteit (kVA)<span class="tip-icon" data-tip="Maximale elektrische belasting van de aansluiting in kVA. Staat in het aansluitcontract.">ⓘ</span></label><input type="number" id="cKva" min="0" placeholder="bijv. 250"></div>
+      <div class="fg"><label>Power factor (cos φ)<span class="tip-icon" data-tip="Verhouding tussen werkelijk vermogen (kW) en schijnbaar vermogen (kVA). Aansluitwaarde in kW = kVA × cos φ. Standaard 0,9.">ⓘ</span></label><input type="number" id="cPf" min="0.1" max="1" step="0.01" value="0.9" placeholder="0.9"></div>
       <div class="fg"><label>Zekering<span class="tip-icon" data-tip="Zekeringswaarde, bijv. &apos;3×80A&apos;. Staat op de meterkast of in het aansluitcontract.">ⓘ</span></label><input type="text" id="cZek" placeholder="bijv. 3x80A"></div>
     </div>
     <div class="fg3" style="margin-bottom:8px">
