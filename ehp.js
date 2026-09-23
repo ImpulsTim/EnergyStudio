@@ -20,7 +20,7 @@ function _ehpDefaults(){
   return {
     // Nieuwe tariefparameters (EUR/MWh — worden /1000 omgerekend naar EUR/kWh bij berekening)
     gel_zon_mwh:20,gel_wind_mwh:20,gel_ai_mwh:0,
-    platform_mwh:0,gvo_bil_mwh:0,gvo_rest_mwh:0,
+    platform_mwh:0,markt_mwh:0,admin_dag:0,gvo_bil_mwh:0,gvo_rest_mwh:0,
     onb_zon_pct:0.20,onb_wind_pct:0.20,onb_vb_pct:0.08,
     onb_zon_risico_mwh:90,onb_wind_risico_mwh:60,onb_vb_risico_mwh:25,
     retail_opslag_mwh:20,
@@ -62,6 +62,8 @@ function renderEHP(){
   _sv2('ehpGelWind', c.gel_wind_mwh!=null?c.gel_wind_mwh:20);
   _sv2('ehpGelAI',   c.gel_ai_mwh!=null?c.gel_ai_mwh:0);
   _sv2('ehpPlatform',c.platform_mwh!=null?c.platform_mwh:0);
+  _sv2('ehpMarkt',   c.markt_mwh!=null?c.markt_mwh:0);
+  _sv2('ehpAdminDag',c.admin_dag!=null?c.admin_dag:0);
   _sv2('ehpGvoBil',  c.gvo_bil_mwh!=null?c.gvo_bil_mwh:0);
   _sv2('ehpGvoRest', c.gvo_rest_mwh!=null?c.gvo_rest_mwh:0);
   _sv2('ehpOnbZonPct',   c.onb_zon_pct!=null?(c.onb_zon_pct*100).toFixed(3):0);
@@ -173,10 +175,11 @@ function _ehpCommit(){
   var val=function(id){var el=document.getElementById(id);return el?el.value:'';};
   var chk=function(id){var el=document.getElementById(id);return el?el.checked:false;};
   var gZon=num('ehpGelZon',20),gWind=num('ehpGelWind',20),gAI=num('ehpGelAI',0);
-  var gPlat=num('ehpPlatform',0);
+  var gPlat=num('ehpPlatform',0),gMarkt=num('ehpMarkt',0);
   plat.cfg={
     gel_zon_mwh:gZon,gel_wind_mwh:gWind,gel_ai_mwh:gAI,
-    platform_mwh:gPlat,gvo_bil_mwh:num('ehpGvoBil',0),gvo_rest_mwh:num('ehpGvoRest',0),
+    platform_mwh:gPlat,markt_mwh:gMarkt,admin_dag:num('ehpAdminDag',0),
+    gvo_bil_mwh:num('ehpGvoBil',0),gvo_rest_mwh:num('ehpGvoRest',0),
     onb_zon_pct:num('ehpOnbZonPct',0)/100,
     onb_wind_pct:num('ehpOnbWindPct',0)/100,
     onb_vb_pct:num('ehpOnbVbPct',0)/100,
@@ -186,7 +189,7 @@ function _ehpCommit(){
     retail_opslag_mwh:num('ehpRetailOpslagMwh',20),
     // Backward compat (EUR/kWh) — voor financieel.js / rekenkern.js / rapport_ehp.js
     pZon:gZon/1000,pWind:gWind/1000,pOverig:gAI/1000,
-    fee:gPlat/1000,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
+    fee:(gPlat+gMarkt)/1000,feeMode:'kwh',pNetAfname:0.12,pNetTerug:0.04,
     ebOn:chk('ehpEbOn'),ebJaar:val('ehpEbJaar'),ebGrondslag:val('ehpEbGrondslag'),
     heffingskorting:num('ehpHeffing',0),btwOn:chk('ehpBtwOn'),btwPct:num('ehpBtwPct',21)
   };
@@ -323,6 +326,7 @@ async function calcEHP(){
     gelijktijdigheid_wind:            (cfg.gel_wind_mwh||0)/1000,
     gelijktijdigheid_afname_invoeden: (cfg.gel_ai_mwh||0)/1000,
     platform:                         (cfg.platform_mwh||0)/1000,
+    markttoegang:                     (cfg.markt_mwh||0)/1000,
     gvo_bilateraal:                   (cfg.gvo_bil_mwh||0)/1000,
     gvo_rest:                         (cfg.gvo_rest_mwh||0)/1000,
     onbalans_zon_pct:                 cfg.onb_zon_pct||0,
@@ -356,6 +360,8 @@ async function calcEHP(){
 
   // --- Tijdreeks voor bestaande chart-functies ---
   var allTs=model.map(function(r){return r.tijdKey;});
+  // Rekenperiode in dagen (kwartieren ÷ 96): grondslag voor administratie & beheer per aansluiting per dag.
+  var nDagen=Math.max(1,Math.round(allTs.length/96));
 
   // Netto kW per kwartier (positief = tekort/inkoop van net, negatief = overschot/teruglevering)
   var ehpNetKw=model.map(function(r){return (r.tekort_kWh-r.overschot_kWh)/0.25;});
@@ -493,9 +499,11 @@ async function calcEHP(){
     model_fwd:result.model_forward||null,
     controle:result.controle||[],
     samenvatting_fwd:result.samenvatting_fwd||null,
+    nDagen:nDagen,
     tarieven_cfg:{
       gel_zon_mwh:cfg.gel_zon_mwh||0,gel_wind_mwh:cfg.gel_wind_mwh||0,
       gel_ai_mwh:cfg.gel_ai_mwh||0,platform_mwh:cfg.platform_mwh||0,
+      markt_mwh:cfg.markt_mwh||0,admin_dag:cfg.admin_dag||0,
       gvo_bil_mwh:cfg.gvo_bil_mwh||0,gvo_rest_mwh:cfg.gvo_rest_mwh||0,
       onb_zon_risico_mwh:cfg.onb_zon_risico_mwh||0,
       onb_wind_risico_mwh:cfg.onb_wind_risico_mwh||0,
@@ -1615,17 +1623,29 @@ function _ehpOverzichtHtml(res){
   }
   function negStyle(v){return v<0?' style="color:#c0392b"':'';}
 
+  // Administratie & beheer: vast bedrag per aansluiting per dag. Aansluitingen met afname
+  // staan aan de afnemerszijde, aansluitingen met alleen opwek aan de producentenzijde; zo
+  // telt elke aansluiting één keer en sluit het totaal aan op de som van de jaarfacturen.
+  var adminDag=tc.admin_dag||0,nDagen=res.nDagen||0,adminPerAansl=adminDag*nDagen;
+  var deeln=_ehpFactuurDeelnemers(res);
+  var nAdminAfn=deeln.filter(function(d){return d.hasCons;}).length,nAdminProd=deeln.length-nAdminAfn;
+  function adminRegel(n,wie){
+    if(!adminDag)return '';
+    return '<tr class="pct-row"><td colspan="4">↳ '+n+' aansluiting'+(n!==1?'en':'')+' '+wie+' × '+nDagen+' dagen × € '+fEur(adminDag)+' per dag</td></tr>';
+  }
+
   function buildAfnemersTbl(s){
     var gel=s.gelijktijdig_kWh||0,tek=s.tekort_kWh||0,verb=s.totaal_verbruik_kWh||0;
     var kGel=s.kosten_gelijktijdigheid_totaal_EUR||0,kEpex=s.kosten_epex_tekort_EUR||0;
     // Onbalans op de afnemerszijde = alleen het verbruiksdeel (spec 5.6); zon/wind-onbalans
     // hoort bij de producenten. Eerder werd hier kosten_onbalans_totaal_EUR getoond.
     var kOnb=s.kosten_onbalans_verbruik_EUR||0,kPlat=s.kosten_platform_EUR||0;
+    var kMarkt=s.kosten_markttoegang_EUR||0,kAdmin=nAdminAfn*adminPerAansl;
     var kGvoBil=s.kosten_gvo_bilateraal_EUR||0,kGvoRest=s.kosten_gvo_rest_EUR||0;
     var subEnergie=kGel+kEpex+kOnb;
-    // Afnemerstotaal = energietransacties + platform + GVO. NIET de engine-kosten_totaal_EUR:
+    // Afnemerstotaal = energietransacties + platformkosten + GVO. NIET de engine-kosten_totaal_EUR:
     // die is een gemeenschaps-netto (incl. totale onbalans − producent-EPEX-opbrengst).
-    var kTotaal=subEnergie+kPlat+kGvoBil+kGvoRest;
+    var kTotaal=subEnergie+kPlat+kMarkt+kAdmin+kGvoBil+kGvoRest;
     // Onbalans-% van energiekosten = onbalans / (gelijktijdig + EPEX), zonder onbalans in noemer (spec 5.6).
     var onbPct=(kGel+kEpex)>0?(kOnb/(kGel+kEpex)*100):0;
     return '<table class="ehp-ov-tbl"><thead><tr>'+
@@ -1635,7 +1655,10 @@ function _ehpOverzichtHtml(res){
       '<tr><td>Onbalanskosten</td><td>—</td><td>—</td><td'+negStyle(kOnb)+'>'+fEur(kOnb)+'</td></tr>'+
       '<tr class="pct-row"><td colspan="4">↳ '+onbPct.toFixed(1)+'% van energiekosten</td></tr>'+
       '<tr class="subtotaal"><td>Subtotaal energietransacties</td><td>'+fMwh(verb)+'</td><td>'+fEurMwh(subEnergie,verb)+'</td><td>'+fEur(subEnergie)+'</td></tr>'+
-      '<tr><td>Kosten Platform</td><td>'+fMwh(verb)+'</td><td>'+(tc.platform_mwh?fEur(tc.platform_mwh):'—')+'</td><td>'+fEur(kPlat)+'</td></tr>'+
+      '<tr><td>Kosten Platformtarief</td><td>'+fMwh(verb)+'</td><td>'+(tc.platform_mwh?fEur(tc.platform_mwh):'—')+'</td><td>'+fEur(kPlat)+'</td></tr>'+
+      '<tr><td>Kosten Toegang energiemarkt &amp; voorspellingen</td><td>'+fMwh(verb)+'</td><td>'+(tc.markt_mwh?fEur(tc.markt_mwh):'—')+'</td><td>'+fEur(kMarkt)+'</td></tr>'+
+      '<tr><td>Kosten Administratie &amp; beheer</td><td>—</td><td>—</td><td>'+fEur(kAdmin)+'</td></tr>'+
+      adminRegel(nAdminAfn,'met afname')+
       '<tr><td>Kosten GVO bilateraal</td><td>'+fMwh(gel)+'</td><td>'+(tc.gvo_bil_mwh?fEur(tc.gvo_bil_mwh):'—')+'</td><td>'+fEur(kGvoBil)+'</td></tr>'+
       '<tr><td>Kosten GVO reststroom</td><td>'+fMwh(tek)+'</td><td>'+(tc.gvo_rest_mwh?fEur(tc.gvo_rest_mwh):'—')+'</td><td>'+fEur(kGvoRest)+'</td></tr>'+
       '<tr class="totaal"><td>Kosten totaal</td><td>'+fMwh(verb)+'</td><td>'+fEurMwh(kTotaal,verb)+'</td><td>'+fEur(kTotaal)+'</td></tr>'+
@@ -1648,11 +1671,13 @@ function _ehpOverzichtHtml(res){
     // Onbalans op de producentenzijde = zon + wind (spec 5.7); het verbruiksdeel hoort bij de afnemers.
     var kOnb=(s.kosten_onbalans_zon_EUR||0)+(s.kosten_onbalans_wind_EUR||0),kGvoBil=s.kosten_gvo_bilateraal_EUR||0;
     var kPlatProd=opwek*(tc.platform_mwh||0)/1000;
+    var kMarktProd=opwek*(tc.markt_mwh||0)/1000;
+    var kAdminProd=nAdminProd*adminPerAansl;
     var kGvoRestProd=ovsch*(tc.gvo_rest_mwh||0)/1000;
     var subEnergie=kGel+kEpexOpbr-kOnb;
     var opbrengsten=kGel+kEpexOpbr;
     var onbPct=opbrengsten>0?(kOnb/opbrengsten*100):0;
-    var totaal=subEnergie-kPlatProd+kGvoBil+kGvoRestProd;
+    var totaal=subEnergie-kPlatProd-kMarktProd-kAdminProd+kGvoBil+kGvoRestProd;
     return '<table class="ehp-ov-tbl"><thead><tr>'+
       '<th>Post</th><th>MWh</th><th>€/MWh</th><th>EUR</th></tr></thead><tbody>'+
       '<tr><td>Verkoop Gelijktijdig</td><td>'+fMwh(gel)+'</td><td>'+fEurMwh(kGel,gel)+'</td><td>'+fEur(kGel)+'</td></tr>'+
@@ -1660,7 +1685,10 @@ function _ehpOverzichtHtml(res){
       '<tr><td>Onbalanskosten</td><td>—</td><td>—</td><td'+negStyle(-kOnb)+'>'+fEur(-kOnb)+'</td></tr>'+
       '<tr class="pct-row"><td colspan="4">↳ '+onbPct.toFixed(1)+'% van opbrengsten</td></tr>'+
       '<tr class="subtotaal"><td>Subtotaal energietransacties</td><td>'+fMwh(opwek)+'</td><td>'+fEurMwh(subEnergie,opwek)+'</td><td'+negStyle(subEnergie)+'>'+fEur(subEnergie)+'</td></tr>'+
-      '<tr><td>Kosten Platform</td><td>'+fMwh(opwek)+'</td><td>'+(tc.platform_mwh?fEur(-tc.platform_mwh):'—')+'</td><td'+negStyle(-kPlatProd)+'>'+fEur(-kPlatProd)+'</td></tr>'+
+      '<tr><td>Kosten Platformtarief</td><td>'+fMwh(opwek)+'</td><td>'+(tc.platform_mwh?fEur(-tc.platform_mwh):'—')+'</td><td'+negStyle(-kPlatProd)+'>'+fEur(-kPlatProd||0)+'</td></tr>'+
+      '<tr><td>Kosten Toegang energiemarkt &amp; voorspellingen</td><td>'+fMwh(opwek)+'</td><td>'+(tc.markt_mwh?fEur(-tc.markt_mwh):'—')+'</td><td'+negStyle(-kMarktProd)+'>'+fEur(-kMarktProd||0)+'</td></tr>'+
+      '<tr><td>Kosten Administratie &amp; beheer</td><td>—</td><td>—</td><td'+negStyle(-kAdminProd)+'>'+fEur(-kAdminProd||0)+'</td></tr>'+
+      adminRegel(nAdminProd,'zonder afname')+
       '<tr><td>Inkomsten GVO bilateraal</td><td>'+fMwh(gel)+'</td><td>'+(tc.gvo_bil_mwh?fEur(tc.gvo_bil_mwh):'—')+'</td><td>'+fEur(kGvoBil)+'</td></tr>'+
       '<tr><td>Inkomsten GVO reststroom</td><td>'+fMwh(ovsch)+'</td><td>'+(tc.gvo_rest_mwh?fEur(tc.gvo_rest_mwh):'—')+'</td><td>'+fEur(kGvoRestProd)+'</td></tr>'+
       '<tr class="totaal"><td>Inkomsten totaal</td><td>'+fMwh(opwek)+'</td><td>'+fEurMwh(totaal,opwek)+'</td><td'+negStyle(totaal)+'>'+fEur(totaal)+'</td></tr>'+
@@ -1699,18 +1727,29 @@ function _ehpOverzichtHtml(res){
     html+'</div>';
 }
 
+// Deelnemers die een jaarfactuur krijgen, met hun afnemer- (g) en opwekkerresultaat (o).
+// Dit zijn ook de aansluitingen waarover de administratie- en beheerkosten lopen; het
+// financieel overzicht telt ze via deze functie zodat beide op elkaar aansluiten.
+function _ehpFactuurDeelnemers(res){
+  var gebr={},opw={};
+  (res.per_gebruiker||[]).forEach(function(u){gebr[u.Locatie]=u;});
+  (res.per_opwekker||[]).forEach(function(o){opw[o.Asset]=o;});
+  return (res.parties||[]).filter(function(x){return x.source!=='geen';}).map(function(x){
+    var g=gebr[x.id],o=opw[x.id];
+    return {x:x,g:g,o:o,hasCons:!!(g&&g.totaal_verbruik_kWh>0),hasProd:!!(o&&o.totaal_opwek_kWh>0)};
+  }).filter(function(d){return d.hasCons||d.hasProd;});
+}
+
 // Jaarfactuur per deelnemer — één factuurblok per bedrijf met de volledige EHP-
 // kostenuitsplitsing (intern/EPEX/platform/GVO/onbalans) plus energiebelasting en btw
 // wanneer die op het platform zijn aangevinkt (res.cfg.ebOn / res.cfg.btwOn).
 // Hergebruikt de per-deelnemer kosten uit res.per_gebruiker / res.per_opwekker en de
 // pure staffel-rekenkern calculateEnergyTax() uit rekenkern.js.
 function _ehpFactuurHtml(res){
-  var parties=res.parties||[];
-  if(!parties.length)return '';
-  var cfg=res.cfg||{};
-  var gebr={},opw={};
-  (res.per_gebruiker||[]).forEach(function(u){gebr[u.Locatie]=u;});
-  (res.per_opwekker||[]).forEach(function(o){opw[o.Asset]=o;});
+  var deeln=_ehpFactuurDeelnemers(res);
+  if(!deeln.length)return '';
+  var cfg=res.cfg||{},tc=res.tarieven_cfg||{};
+  var adminDag=tc.admin_dag||0,nDagen=res.nDagen||0;
 
   function fEur(v){
     if(v==null||isNaN(v))return '—';
@@ -1737,34 +1776,44 @@ function _ehpFactuurHtml(res){
 
   var srcLbl={zon:'Zon',wind:'Wind',afname_invoeden:'Afname-invoeden',overig:'Overig',none:'Alleen afnemer',alleen_afname:'Alleen afnemer',geen:'Geen'};
 
-  var cards=parties.filter(function(x){return x.source!=='geen';}).map(function(x){
-    var g=gebr[x.id],o=opw[x.id];
-    var hasCons=g&&(g.totaal_verbruik_kWh>0);
-    var hasProd=o&&(o.totaal_opwek_kWh>0);
-    if(!hasCons&&!hasProd)return '';
-
+  var cards=deeln.map(function(d){
+    var x=d.x,g=d.g,o=d.o;
     var lines='',subtotaal=0;
 
-    if(hasCons){
+    // Toegang energiemarkt & voorspellingen en de platformkosten over opwek alleen tonen als
+    // dat tarief is ingesteld — houdt de factuur compact (rapport: één pagina per deelnemer).
+    if(d.hasCons){
       var kGel=g.kosten_gelijktijdigheid_EUR||0,kEpex=g.kosten_epex_tekort_EUR||0;
       var kOnb=g.kosten_onbalans_verbruik_EUR||0,kPlat=g.kosten_platform_EUR||0;
+      var kMarkt=g.kosten_markttoegang_EUR||0;
       var kGvoBil=g.kosten_gvo_bilateraal_EUR||0,kGvoRest=g.kosten_gvo_rest_EUR||0;
       lines+=row('Inkoop gelijktijdig (intern)',g.gelijktijdig_kWh,kGel)+
              row('Inkoop EPEX (van net)',g.tekort_kWh,kEpex)+
              row('Onbalanskosten',null,kOnb)+
-             row('Kosten platform',g.totaal_verbruik_kWh,kPlat)+
+             row('Platformtarief',g.totaal_verbruik_kWh,kPlat)+
+             (tc.markt_mwh?row('Toegang energiemarkt &amp; voorspellingen',g.totaal_verbruik_kWh,kMarkt):'')+
              row('GVO bilateraal',g.gelijktijdig_kWh,kGvoBil)+
              row('GVO reststroom',g.tekort_kWh,kGvoRest);
-      subtotaal+=kGel+kEpex+kOnb+kPlat+kGvoBil+kGvoRest;
+      subtotaal+=kGel+kEpex+kOnb+kPlat+kMarkt+kGvoBil+kGvoRest;
     }
 
-    if(hasProd){
+    if(d.hasProd){
       var oGel=-(o.opbrengst_gelijktijdigheid_EUR||0),oEpex=-(o.opbrengst_epex_overschot_EUR||0);
       var oOnb=o.kosten_onbalans_opwek_EUR||0;
+      var oPlat=o.kosten_platform_EUR||0,oMarkt=o.kosten_markttoegang_EUR||0;
       lines+=row('Verkoop gelijktijdig (intern)',o.gelijktijdig_kWh,oGel)+
              row('Teruglevering naar net (EPEX)',o.overschot_kWh,oEpex)+
-             row('Onbalanskosten opwek',null,oOnb);
-      subtotaal+=oGel+oEpex+oOnb;
+             row('Onbalanskosten opwek',null,oOnb)+
+             (tc.platform_mwh?row('Platformtarief (opwek)',o.totaal_opwek_kWh,oPlat):'')+
+             (tc.markt_mwh?row('Toegang energiemarkt &amp; voorspellingen (opwek)',o.totaal_opwek_kWh,oMarkt):'');
+      subtotaal+=oGel+oEpex+oOnb+oPlat+oMarkt;
+    }
+
+    // Administratie & beheer: één keer per aansluiting over de hele rekenperiode.
+    if(adminDag){
+      var kAdmin=adminDag*nDagen;
+      lines+=srow('','Administratie &amp; beheer ('+nDagen+' dagen × € '+fEur(adminDag)+')',kAdmin);
+      subtotaal+=kAdmin;
     }
 
     lines+=srow('subtotaal','Subtotaal energie &amp; platform',subtotaal);

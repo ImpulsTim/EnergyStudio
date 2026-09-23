@@ -628,7 +628,10 @@
                                                     + m.kosten_gelijktijdigheid_zon_EUR
                                                     + m.kosten_gelijktijdigheid_wind_EUR;
 
+      // Platformtarief en toegang energiemarkt & voorspellingen: per kWh over het volledige
+      // volume. Hier de afnemerszijde; de opwekzijde staat per opwekker (participantOutputsForModel).
       m.kosten_platform_EUR       = m.totaal_verbruik_kWh * pg('platform');
+      m.kosten_markttoegang_EUR   = m.totaal_verbruik_kWh * pg('markttoegang');
       m.kosten_gvo_bilateraal_EUR = m.gelijktijdig_kWh    * pg('gvo_bilateraal');
       m.kosten_gvo_rest_EUR       = m.tekort_kWh          * pg('gvo_rest');
       m.kosten_epex_tekort_EUR    = m.tekort_kWh          * (m.epex_eur_per_kWh || 0);
@@ -658,6 +661,7 @@
       // Eindtotaal: kosten + onbalans − opbrengst EPEX-overschot (spec 5.3)
       m.kosten_totaal_EUR = m.kosten_gelijktijdigheid_totaal_EUR
                           + m.kosten_platform_EUR
+                          + m.kosten_markttoegang_EUR
                           + m.kosten_gvo_bilateraal_EUR
                           + m.kosten_gvo_rest_EUR
                           + m.kosten_epex_tekort_EUR
@@ -755,7 +759,7 @@
         gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0,
         attr_opwek_zon_kWh: 0, attr_opwek_wind_kWh: 0,
         kosten_gelijktijdigheid_EUR: 0, kosten_epex_tekort_EUR: 0,
-        kosten_onbalans_verbruik_EUR: 0, kosten_platform_EUR: 0,
+        kosten_onbalans_verbruik_EUR: 0, kosten_platform_EUR: 0, kosten_markttoegang_EUR: 0,
         kosten_gvo_bilateraal_EUR: 0, kosten_gvo_rest_EUR: 0, kosten_totaal_EUR: 0,
         monthly: {}
       };
@@ -795,6 +799,7 @@
       loc.kosten_epex_tekort_EUR    += aandeel * mr.kosten_epex_tekort_EUR;
       loc.kosten_onbalans_verbruik_EUR += aandeel * mr.kosten_onbalans_verbruik_EUR;
       loc.kosten_platform_EUR       += aandeel * mr.kosten_platform_EUR;
+      loc.kosten_markttoegang_EUR   += aandeel * mr.kosten_markttoegang_EUR;
       loc.kosten_gvo_bilateraal_EUR += aandeel * mr.kosten_gvo_bilateraal_EUR;
       loc.kosten_gvo_rest_EUR       += aandeel * mr.kosten_gvo_rest_EUR;
       loc.kosten_totaal_EUR         += aandeel * mr.kosten_totaal_EUR;
@@ -811,6 +816,7 @@
         totaal_opwek_kWh: 0, gelijktijdig_kWh: 0, overschot_kWh: 0,
         opbrengst_gelijktijdigheid_EUR: 0, opbrengst_epex_overschot_EUR: 0,
         kosten_onbalans_opwek_EUR: 0, netto_opbrengst_EUR: 0,
+        kosten_platform_EUR: 0, kosten_markttoegang_EUR: 0,
         monthly: {}
       };
       var a = assets[r.Asset];
@@ -829,6 +835,11 @@
       a.opbrengst_gelijktijdigheid_EUR += r.gelijktijdig_kWh * gelTarief;
       a.opbrengst_epex_overschot_EUR   += r.overschot_kWh * (mr.epex_eur_per_kWh || 0);
       a.kosten_onbalans_opwek_EUR      += r.opwek_kWh * onbPct * onbRisico;
+      // Platformtarief + toegang energiemarkt & voorspellingen over de volledige opwek.
+      // Bewust buiten netto_opbrengst_EUR (blijft de energie-netto conform de EXE);
+      // de jaarfactuur trekt ze apart af.
+      a.kosten_platform_EUR            += r.opwek_kWh * (p.platform || 0);
+      a.kosten_markttoegang_EUR        += r.opwek_kWh * (p.markttoegang || 0);
       var mn2 = r.tijdKey.slice(0, 7);
       if (!a.monthly[mn2]) a.monthly[mn2] = {totaal_opwek_kWh: 0, gelijktijdig_kWh: 0, overschot_kWh: 0};
       a.monthly[mn2].totaal_opwek_kWh += r.opwek_kWh;
@@ -855,7 +866,7 @@
       opwek_zon_kWh: 0, opwek_wind_kWh: 0, opwek_afname_invoeden_kWh: 0,
       gelijktijdig_zon_kWh: 0, gelijktijdig_wind_kWh: 0, gelijktijdig_afname_invoeden_kWh: 0,
       overschot_zon_kWh: 0, overschot_wind_kWh: 0, overschot_afname_invoeden_kWh: 0,
-      kosten_gelijktijdigheid_totaal_EUR: 0, kosten_platform_EUR: 0,
+      kosten_gelijktijdigheid_totaal_EUR: 0, kosten_platform_EUR: 0, kosten_markttoegang_EUR: 0,
       kosten_gvo_bilateraal_EUR: 0, kosten_gvo_rest_EUR: 0,
       kosten_epex_tekort_EUR: 0, opbrengst_epex_overschot_EUR: 0,
       kosten_onbalans_zon_EUR: 0, kosten_onbalans_wind_EUR: 0,
@@ -880,6 +891,7 @@
       s.overschot_afname_invoeden_kWh  += (m.overschot_afname_invoeden_kWh || 0);
       s.kosten_gelijktijdigheid_totaal_EUR += m.kosten_gelijktijdigheid_totaal_EUR;
       s.kosten_platform_EUR              += m.kosten_platform_EUR;
+      s.kosten_markttoegang_EUR          += (m.kosten_markttoegang_EUR || 0);
       s.kosten_gvo_bilateraal_EUR        += m.kosten_gvo_bilateraal_EUR;
       s.kosten_gvo_rest_EUR              += m.kosten_gvo_rest_EUR;
       s.kosten_epex_tekort_EUR           += m.kosten_epex_tekort_EUR;

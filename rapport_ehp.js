@@ -329,7 +329,7 @@ async function buildEhpRapport(opts){
     // ── PAGINA('s): Financieel overzicht (EPEX historisch + forward scenario) ──
     if(sec.financial)(cap.finBloks||[]).forEach(function(b){
       pages+='<div class="page pb">'+pageHdr+shdr('Financieel overzicht'+(b.label?' — '+_ehpEsc(b.label):''))+
-        '<p class="rintro">Kosten en opbrengsten van de gemeenschap, opgesplitst naar afnemers en producenten: gelijktijdigheid, EPEX, platformtarief, GVO en onbalans.</p>'+
+        '<p class="rintro">Kosten en opbrengsten van de gemeenschap, opgesplitst naar afnemers en producenten: gelijktijdigheid, EPEX, platformkosten (platformtarief, toegang energiemarkt &amp; voorspellingen, administratie &amp; beheer), GVO en onbalans.</p>'+
         '<div class="rchart">'+b.img+'</div>'+
         pageFooter()+'</div>';
     });
