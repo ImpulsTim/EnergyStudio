@@ -30,13 +30,30 @@ function _kaartMigrate(p){
   if(!p.msRingen)p.msRingen=[];
 }
 
+// Alle EAN's van één netbuur. Eén adres uit de netburenscan kan meerdere aansluitingen
+// hebben (kolommen EAN 1..5); oudere data heeft alleen het enkelvoudige n.ean.
+function _nbEans(n){
+  if(!n)return [];
+  if(n.eans&&n.eans.length)return n.eans.filter(Boolean);
+  return n.ean?[n.ean]:[];
+}
+// Primaire EAN — voor labels, dedup-sleutels en terugval op oud gedrag
+function _nbEan1(n){var e=_nbEans(n);return e.length?String(e[0]).trim():'';}
+// Is dit adres al een projectdeelnemer? (één van de EAN's volstaat)
+function _nbIsDeelnemer(n,compEanSet){
+  return _nbEans(n).some(function(e){return !!compEanSet[String(e).trim()];});
+}
+
 // Geeft de ringindex voor een EAN (-1 = niet gevonden)
 function _kaartRingIdx(ean,msRingen){
   if(!ean)return -1;
   var e=ean.trim();
   for(var i=0;i<(msRingen||[]).length;i++){
     var nb=msRingen[i].netburen||[];
-    for(var j=0;j<nb.length;j++){if((nb[j].ean||'').trim()===e)return i;}
+    for(var j=0;j<nb.length;j++){
+      var eans=_nbEans(nb[j]);
+      for(var k=0;k<eans.length;k++){if(String(eans[k]).trim()===e)return i;}
+    }
   }
   return -1;
 }
@@ -90,17 +107,24 @@ function renderKaart(){
   // EAN → eerste ringIndex (voor projectdeelnemers-koppeling)
   var eanRingMap={};
   msRingen.forEach(function(ring,ri){
-    (ring.netburen||[]).forEach(function(n){if(n.ean&&!(n.ean.trim() in eanRingMap))eanRingMap[n.ean.trim()]=ri;});
+    (ring.netburen||[]).forEach(function(n){
+      _nbEans(n).forEach(function(e){
+        var key=String(e).trim();
+        if(key&&!(key in eanRingMap))eanRingMap[key]=ri;
+      });
+    });
   });
 
   // EAN → alle ringIndices (voor overlap-detectie)
   var multiRingMap={};
   msRingen.forEach(function(ring,ri){
     (ring.netburen||[]).forEach(function(n){
-      if(!n.ean)return;
-      var key=n.ean.trim();
-      if(!multiRingMap[key])multiRingMap[key]=[];
-      if(multiRingMap[key].indexOf(ri)<0)multiRingMap[key].push(ri);
+      _nbEans(n).forEach(function(e){
+        var key=String(e).trim();
+        if(!key)return;
+        if(!multiRingMap[key])multiRingMap[key]=[];
+        if(multiRingMap[key].indexOf(ri)<0)multiRingMap[key].push(ri);
+      });
     });
   });
 
@@ -116,7 +140,7 @@ function renderKaart(){
     var ringCol=RING_PAL[ri%RING_PAL.length];
     var pts=(ring.netburen||[]).filter(function(n){
       return n.lat!=null&&!isNaN(n.lat)&&n.lng!=null&&!isNaN(n.lng)
-        &&!(n.ean&&compEanSet[n.ean.trim()]);
+        &&!_nbIsDeelnemer(n,compEanSet);
     }).map(function(n){return[+n.lat,+n.lng];});
     // Voeg projectdeelnemers toe die tot deze ring behoren (EAN-match)
     companies.forEach(function(c){
@@ -162,12 +186,13 @@ function renderKaart(){
     var ringCol=RING_PAL[ri%RING_PAL.length];
     (ring.netburen||[]).forEach(function(n){
       if(n.lat==null||n.lng==null||isNaN(n.lat)||isNaN(n.lng))return;
-      if(n.ean&&compEanSet[n.ean.trim()])return;
+      if(_nbIsDeelnemer(n,compEanSet))return;
       // Deduplicatie: elk uniek punt slechts één keer tekenen
-      var dedup=n.ean?n.ean.trim():(+n.lat).toFixed(5)+','+(+n.lng).toFixed(5);
+      var e1=_nbEan1(n);
+      var dedup=e1||((+n.lat).toFixed(5)+','+(+n.lng).toFixed(5));
       if(drawnNb[dedup])return;
       drawnNb[dedup]=true;
-      var ringIndices=n.ean?(multiRingMap[n.ean.trim()]||[ri]):[ri];
+      var ringIndices=e1?(multiRingMap[e1]||[ri]):[ri];
       var m=ringIndices.length>1
         ?_kaartMultiRingMarker(n,ringIndices,msRingen)
         :_kaartSingleNbMarker(n,ringCol,ring.label);
@@ -240,12 +265,12 @@ function _kaartSingleNbMarker(n,ringCol,ringLabel){
     radius:7,fillColor:ringCol,color:'#fff',weight:1.5,fillOpacity:0.8,opacity:1
   });
   var hasCustomName=n.name&&n.name!==n.adres&&n.name!==n.ean&&n.name!=='';
-  var nbLbl=hasCustomName?n.name:(n.adres||n.ean||'');
+  var nbLbl=hasCustomName?n.name:(n.adres||_nbEan1(n)||'');
   if(nbLbl.length>20)nbLbl=nbLbl.slice(0,19)+'…';
   m.bindTooltip(_kEsc(nbLbl),{permanent:true,direction:'top',className:'kaart-label-sm',offset:[0,-7]});
-  var tip='<strong>'+_kEsc(n.name||'?')+'</strong>'
+  var tip='<strong>'+_kEsc(n.name||n.adres||'?')+'</strong>'
     +' <span style="background:'+ringCol+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px">'+_kEsc(ringLabel)+'</span>';
-  if(n.ean)tip+='<br><span style="font-family:monospace;font-size:10px">EAN: '+_kEsc(n.ean)+'</span>';
+  tip+=_nbEanTip(n);
   if(n.adres)tip+='<br>'+_kEsc(n.adres);
   if(n.note)tip+='<br><em>'+_kEsc(n.note)+'</em>';
   m.bindPopup(tip,{className:'kaart-pop',maxWidth:240});
@@ -271,7 +296,7 @@ function _kaartMultiRingMarker(n,ringIndices,msRingen){
   var ringLabels=ringIndices.map(function(ri){return msRingen[ri].label;}).join(' + ');
   var m=L.marker([+n.lat,+n.lng],{icon:icon});
   var hasCustomName=n.name&&n.name!==n.adres&&n.name!==n.ean&&n.name!=='';
-  var nbLbl=hasCustomName?n.name:(n.adres||n.ean||'');
+  var nbLbl=hasCustomName?n.name:(n.adres||_nbEan1(n)||'');
   if(nbLbl.length>20)nbLbl=nbLbl.slice(0,19)+'…';
   m.bindTooltip(_kEsc(nbLbl),{permanent:true,direction:'top',
     className:'kaart-label-sm kaart-label-multi',offset:[0,-(r+4)]});
@@ -281,10 +306,21 @@ function _kaartMultiRingMarker(n,ringIndices,msRingen){
     return '<span style="background:'+col+';color:#fff;border-radius:3px;padding:1px 5px;font-size:10px;margin-right:2px">'+_kEsc(msRingen[ri].label)+'</span>';
   }).join('');
   var tip='<strong>'+_kEsc(n.name||n.adres||'?')+'</strong> '+badges;
-  if(n.ean)tip+='<br><span style="font-family:monospace;font-size:10px">EAN: '+_kEsc(n.ean)+'</span>';
+  tip+=_nbEanTip(n);
   if(n.adres)tip+='<br>'+_kEsc(n.adres);
   m.bindPopup(tip,{className:'kaart-pop',maxWidth:260});
   return m;
+}
+
+// EAN-regel(s) voor een netbuur-popup — of de matchstatus als er geen EAN is
+function _nbEanTip(n){
+  var eans=_nbEans(n);
+  if(!eans.length){
+    return '<br><span style="color:#e67e22;font-size:10px">'
+      +_kEsc(n.matchstatus?('Geen EAN — '+n.matchstatus):'Geen EAN in scan')+'</span>';
+  }
+  return '<br><span style="font-family:monospace;font-size:10px">EAN: '
+    +eans.map(_kEsc).join('<br>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;')+'</span>';
 }
 
 function _kaartBuildStats(){
@@ -327,10 +363,12 @@ function _kaartUpdateLegend(companies,msRingen,stats,eanRingMap){
   var multiRingMapLeg={};
   msRingen.forEach(function(ring,ri){
     (ring.netburen||[]).forEach(function(n){
-      if(!n.ean)return;
-      var key=n.ean.trim();
-      if(!multiRingMapLeg[key])multiRingMapLeg[key]=[];
-      if(multiRingMapLeg[key].indexOf(ri)<0)multiRingMapLeg[key].push(ri);
+      _nbEans(n).forEach(function(e){
+        var key=String(e).trim();
+        if(!key)return;
+        if(!multiRingMapLeg[key])multiRingMapLeg[key]=[];
+        if(multiRingMapLeg[key].indexOf(ri)<0)multiRingMapLeg[key].push(ri);
+      });
     });
   });
   var hasMulti=Object.keys(multiRingMapLeg).some(function(k){return multiRingMapLeg[k].length>1;});
@@ -398,7 +436,9 @@ function _kaartSetWarning(companies,msRingen){
   if(!companies){el.style.display='none';return;}
   var eanInNb={};
   (msRingen||[]).forEach(function(ring){
-    (ring.netburen||[]).forEach(function(n){if(n.ean)eanInNb[n.ean.trim()]=true;});
+    (ring.netburen||[]).forEach(function(n){
+      _nbEans(n).forEach(function(e){if(e)eanInNb[String(e).trim()]=true;});
+    });
   });
   var ontbrekend=companies.filter(function(c){return c.ean&&!eanInNb[c.ean.trim()];});
   if(!ontbrekend.length){el.style.display='none';return;}
@@ -471,11 +511,19 @@ function _renderRingenList(msRingen,companies){
     var col=RING_PAL[ri%RING_PAL.length];
     var nb=ring.netburen||[];
     var nGeo=nb.filter(function(n){return n.lat!=null&&!isNaN(n.lat);}).length;
-    var inProject=nb.filter(function(n){return n.ean&&compEanSet[n.ean.trim()];});
+    var nGeenEan=nb.filter(function(n){return !_nbEans(n).length;}).length;
+    // Deelnemersnamen die in deze ring voorkomen (elke EAN van een adres telt mee)
+    var inProjNamen=[];
+    nb.forEach(function(n){
+      _nbEans(n).forEach(function(e){
+        var nm=compEanSet[String(e).trim()];
+        if(nm&&inProjNamen.indexOf(nm)<0)inProjNamen.push(nm);
+      });
+    });
 
-    var inProjHtml=inProject.length
-      ? inProject.map(function(n){
-          return '<span style="display:inline-block;background:'+col+';color:#fff;border-radius:3px;padding:1px 6px;font-size:10px;margin:1px">'+_kEsc(compEanSet[n.ean.trim()])+'</span>';
+    var inProjHtml=inProjNamen.length
+      ? inProjNamen.map(function(nm){
+          return '<span style="display:inline-block;background:'+col+';color:#fff;border-radius:3px;padding:1px 6px;font-size:10px;margin:1px">'+_kEsc(nm)+'</span>';
         }).join('')
       : '<span style="color:#aaa;font-size:11px">geen deelnemers in deze ring</span>';
 
@@ -484,16 +532,27 @@ function _renderRingenList(msRingen,companies){
       var geoCol=n.lat!=null&&!isNaN(n.lat)?'#46962b':'#e67e22';
       // Toon bedrijfsnaam (vet) apart van adres als ze verschillen
       var hasCustomName=(n.name&&n.name!==n.adres&&n.name!==''&&n.name!==n.ean);
+      var eans=_nbEans(n);
       var nameHtml=hasCustomName
         ?'<span style="font-weight:600">'+_kEsc(n.name)+'</span>'
          +'<span style="color:#aaa;font-size:10px;margin-left:4px">'+_kEsc(n.adres||'')+'</span>'
-        :'<span style="color:#555">'+_kEsc(n.adres||n.ean||'?')+'</span>'
+        :'<span style="color:#555">'+_kEsc(n.adres||eans[0]||'?')+'</span>'
          +'<span style="color:#bbb;font-size:10px;margin-left:4px;font-style:italic">geen naam</span>';
+
+      // EAN-kolom: eerste EAN + "+N" bij meerdere; zonder EAN de matchstatus uit de scan
+      var eanHtml;
+      if(eans.length){
+        eanHtml='<span title="'+_kEsc(eans.join(' · '))+'" style="font-family:monospace;font-size:10px;color:#bbb;flex-shrink:0">'
+          +_kEsc(eans[0])+(eans.length>1?'<span style="color:#888;font-weight:600"> +'+(eans.length-1)+'</span>':'')+'</span>';
+      }else{
+        eanHtml='<span style="flex-shrink:0;background:#fff3e0;color:#e67e22;border-radius:3px;padding:1px 6px;font-size:10px">'
+          +_kEsc(n.matchstatus||'geen EAN')+'</span>';
+      }
 
       return '<div id="nb-row-'+n.id+'" style="display:flex;align-items:center;gap:5px;font-size:11px;padding:3px 0;border-bottom:1px solid #f0f0f0">'
         +'<span style="color:'+geoCol+';flex-shrink:0;width:12px">'+geo+'</span>'
         +'<span id="nb-nm-'+n.id+'" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+nameHtml+'</span>'
-        +'<span style="font-family:monospace;font-size:10px;color:#bbb;flex-shrink:0">'+_kEsc(n.ean||'')+'</span>'
+        +eanHtml
         +'<button onclick="editNetbuurName(\''+n.id+'\',\''+ring.id+'\')" title="Naam bewerken" '
           +'style="color:#2c7fb8;background:none;border:none;cursor:pointer;font-size:12px;padding:0 3px;flex-shrink:0">✏</button>'
         +'<button onclick="deleteNetbuur(\''+n.id+'\',\''+ring.id+'\')" title="Verwijderen" '
@@ -504,7 +563,8 @@ function _renderRingenList(msRingen,companies){
     return '<div class="nb-ring-block" style="border-left:4px solid '+col+';padding:8px 10px;margin-bottom:10px;background:#fafafa;border-radius:0 6px 6px 0">'
       +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'
       +'<span style="font-weight:700;font-size:13px">'+_kEsc(ring.label)+'</span>'
-      +'<span style="font-size:11px;color:#888">'+nb.length+' netburen · '+nGeo+' geocoded</span>'
+      +'<span style="font-size:11px;color:#888">'+nb.length+' netburen · '+nGeo+' geocoded'
+      +(nGeenEan?' · <span style="color:#e67e22">'+nGeenEan+' zonder EAN</span>':'')+'</span>'
       +'<button onclick="deleteRing(\''+ring.id+'\')" style="margin-left:auto;color:#c0392b;background:none;border:1px solid #e8b4b0;border-radius:4px;cursor:pointer;font-size:11px;padding:2px 7px">🗑 Ring verwijderen</button>'
       +'</div>'
       +'<div style="margin-bottom:6px"><span style="font-size:11px;font-weight:600;color:#555">In project:</span> '+inProjHtml+'</div>'
@@ -571,7 +631,9 @@ function _renderNbEanCheck(companies,msRingen){
   // EAN → ringIndex mapping
   var eanRingMap={};
   msRingen.forEach(function(ring,ri){
-    (ring.netburen||[]).forEach(function(n){if(n.ean)eanRingMap[n.ean.trim()]=ri;});
+    (ring.netburen||[]).forEach(function(n){
+      _nbEans(n).forEach(function(e){if(e)eanRingMap[String(e).trim()]=ri;});
+    });
   });
 
   var rows=withEan.map(function(c){
@@ -613,8 +675,9 @@ function saveNetbuur(){
     ring={id:_kUid(),label:'Ring '+(p.msRingen.length+1),netburen:[]};
     p.msRingen.push(ring);
   }
-  ring.netburen.push({id:_kUid(),name:name,ean:ean.replace(/\D/g,''),adres:adres,
-    lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,note:note});
+  var eanClean=ean.replace(/\D/g,'');
+  ring.netburen.push({id:_kUid(),name:name,ean:eanClean,eans:eanClean?[eanClean]:[],adres:adres,
+    lat:isNaN(lat)?null:lat,lng:isNaN(lng)?null:lng,note:note,matchstatus:''});
   saveMeta();
   _renderNetburenModal();
   renderKaart();
@@ -648,6 +711,62 @@ function deleteRing(ringId){
 }
 
 // ─── CSV / XLSX import (nieuwe ring) ─────────────────────────────────────────
+//
+// Twee formaten worden herkend, op kolomkop:
+//   nieuw — Adres ; Postcode ; Plaatsnaam ; EAN 1..5 ; Bedrijfsnaam_EAN ; Matchstatus
+//   oud   — Straat ; Huisnummer ; Huisnummertoevoeging ; Plaats ; Postcode ; EAN
+// Zonder herkenbare kopregel valt de import terug op de oude positielogica.
+
+// Kolomkop normaliseren: "EAN 1" → ean1, "Bedrijfsnaam_EAN" → bedrijfsnaamean
+function _nbNorm(s){
+  return String(s==null?'':s).toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/[^a-z0-9]/g,'');
+}
+
+// Zoekt kolomindices op kopnaam. Levert null als de kopregel niet herkend wordt.
+function _nbHeaderMap(hdr){
+  function find(syns){
+    for(var i=0;i<hdr.length;i++){if(syns.indexOf(_nbNorm(hdr[i]))>=0)return i;}
+    return -1;
+  }
+  var map={
+    adres:    find(['adres','straatennummer','straatenhuisnummer','adresregel']),
+    postcode: find(['postcode','pc']),
+    plaats:   find(['plaatsnaam','plaats','woonplaats']),
+    straat:   find(['straat','straatnaam']),
+    huisnr:   find(['huisnummer','huisnr','nummer']),
+    huistoe:  find(['huisnummertoevoeging','toevoeging','huisnrtoevoeging']),
+    naam:     find(['bedrijfsnaamean','bedrijfsnaam','naam','bedrijf']),
+    status:   find(['matchstatus','status']),
+    eanCols:  []
+  };
+  for(var i=0;i<hdr.length;i++){
+    var h=_nbNorm(hdr[i]);
+    if(/^ean\d*$/.test(h)||h==='eancode')map.eanCols.push(i);
+  }
+  // Een kopregel telt pas als er minstens één EAN-kolom én een adreskolom staat
+  if(!map.eanCols.length)return null;
+  if(map.adres<0&&map.straat<0)return null;
+  return map;
+}
+
+// Splitst een CSV-regel met respect voor aanhalingstekens ("" = letterlijk ").
+// Nodig omdat het adres in het nieuwe format één vrij tekstveld is dat een komma kan bevatten.
+function _nbSplit(line,delim){
+  var out=[],cur='',inQ=false;
+  for(var i=0;i<line.length;i++){
+    var ch=line[i];
+    if(inQ){
+      if(ch==='"'){if(line[i+1]==='"'){cur+='"';i++;}else inQ=false;}
+      else cur+=ch;
+    }else if(ch==='"')inQ=true;
+    else if(ch===delim){out.push(cur);cur='';}
+    else cur+=ch;
+  }
+  out.push(cur);
+  return out.map(function(c){return c.trim();});
+}
 
 function importNetburenFile(file){
   if(!file)return;
@@ -659,29 +778,48 @@ function importNetburenFile(file){
       if(typeof XLSX==='undefined'){notify('XLSX-bibliotheek niet geladen',false);return;}
       var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
       var ws=wb.Sheets[wb.SheetNames[0]];
-      rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      // raw:false → celwaarden als geformatteerde tekst. Een EAN van 18 cijfers past niet
+      // in Number.MAX_SAFE_INTEGER; als Excel hem als getal opslaat gaan anders de laatste
+      // cijfers verloren. _processNetburenRows waarschuwt als er alsnog EAN's sneuvelen.
+      rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:'',raw:false});
       rows=rows.filter(function(row){return row.some(function(c){return String(c).trim();});});
-      if(rows.length&&!/^\d{13,18}$/.test(String(rows[0][rows[0].length-1]).trim()))rows=rows.slice(1);
     } else {
-      var txt=e.target.result;
+      var txt=String(e.target.result).replace(/^\uFEFF/,'');
       var lines=txt.replace(/\r/g,'').split('\n').filter(function(l){return l.trim();});
       if(!lines.length){notify('Leeg bestand',false);return;}
-      var delim=(lines[0].split(';').length>=lines[0].split(',').length)?';':',';
-      var startIdx=0;
-      var first=lines[0].split(delim);
-      if(!/^\d{13,18}$/.test(first[first.length-1].trim()))startIdx=1;
-      rows=lines.slice(startIdx).map(function(l){
-        return l.split(delim).map(function(c){return c.trim().replace(/^"|"$/g,'');});
+      // Scheidingsteken: het meest voorkomende op de eerste regel, bij gelijkspel ';'
+      var cand=[';',',','\t'],delim=';',best=-1;
+      cand.forEach(function(d){
+        var n=lines[0].split(d).length;
+        if(n>best){best=n;delim=d;}
       });
+      rows=lines.map(function(l){return _nbSplit(l,delim);});
     }
     if(!rows.length){notify('Geen gegevens gevonden',false);return;}
-    _processNetburenRows(rows);
+
+    var map=_nbHeaderMap(rows[0]||[]);
+    if(map){
+      rows=rows.slice(1);               // kopregel herkend → overslaan
+    }else{
+      // Geen herkenbare koppen: oude positielogica, inclusief kopregel-gok
+      var last=rows[0][rows[0].length-1];
+      if(!/^\d{13,18}$/.test(String(last==null?'':last).trim()))rows=rows.slice(1);
+    }
+    if(!rows.length){notify('Geen gegevens gevonden',false);return;}
+    _processNetburenRows(rows,map);
   };
   r.onerror=function(){notify('Kan bestand niet lezen',false);};
   isXlsx?r.readAsArrayBuffer(file):r.readAsText(file,'UTF-8');
 }
 
-function _processNetburenRows(rows){
+// BRESKENS → Breskens (scans leveren plaatsnamen in kapitalen; leest slecht als kaartlabel)
+function _nbTitel(s){
+  s=String(s||'').trim();
+  if(!s||s!==s.toUpperCase())return s;   // gemengde schrijfwijze laten staan
+  return s.toLowerCase().replace(/(^|[\s'\-])([a-z])/g,function(m,pre,ch){return pre+ch.toUpperCase();});
+}
+
+function _processNetburenRows(rows,map){
   var p=ap();if(!p)return;
   if(!p.msRingen)p.msRingen=[];
 
@@ -690,26 +828,69 @@ function _processNetburenRows(rows){
   var ring={id:_kUid(),label:'Ring '+ringNr,netburen:[]};
   p.msRingen.push(ring);
 
-  // Deduplicatie binnen de nieuwe ring (EAN-basis)
+  // Deduplicatie binnen de nieuwe ring: op EAN, of op adres als de rij geen EAN heeft
   var existing={};
-  var added=0;
+  var added=0,eanTotaal=0,zonderEan=0,onleesbaar=0;
+
   rows.forEach(function(cols){
     cols=cols.map(function(c){return String(c==null?'':c).trim();});
-    if(cols.length<5)return;
-    var straat=cols[0]||'',huisnr=cols[1]||'',huistoe=cols[2]||'';
-    var plaats=cols[3]||'',postcode=cols[4]||'',ean=cols[5]||'';
-    if(!ean&&cols.length===5){ean=cols[4];postcode=cols[3];plaats=cols[2];huistoe='';}
-    ean=ean.replace(/\D/g,'');
-    if(!ean||existing[ean])return;
-    var huisvol=huisnr+(huistoe?('-'+huistoe):'');
-    var adres=[straat+' '+huisvol,postcode,plaats].filter(Boolean).join(', ').replace(/\s+/g,' ').trim();
-    ring.netburen.push({id:_kUid(),name:adres,ean:ean,adres:adres,lat:null,lng:null,note:''});
-    existing[ean]=true;added++;
+    var adres='',naam='',status='',eans=[];
+
+    function cel(i){return (i!=null&&i>=0)?(cols[i]||''):'';}
+
+    if(map){
+      var pc=cel(map.postcode),plaats=_nbTitel(cel(map.plaats));
+      var straatdeel;
+      if(map.adres>=0){
+        straatdeel=cel(map.adres);
+      }else{
+        var hn=cel(map.huisnr),ht=cel(map.huistoe);
+        straatdeel=(cel(map.straat)+' '+hn+(ht?('-'+ht):'')).trim();
+      }
+      adres=[straatdeel,pc,plaats].filter(Boolean).join(', ').replace(/\s+/g,' ').trim();
+      naam=cel(map.naam);
+      status=cel(map.status);
+      map.eanCols.forEach(function(ci){
+        var raw=cols[ci]||'';
+        if(!raw)return;
+        var e=raw.replace(/\D/g,'');
+        // Te kort = geen bruikbare EAN. Meestal een Excel-cel die als getal is opgeslagen
+        // en daardoor als 8,7169E+17 is uitgelezen.
+        if(e.length<13){onleesbaar++;return;}
+        if(eans.indexOf(e)<0)eans.push(e);
+      });
+    }else{
+      // Oude positielogica: Straat ; Huisnummer ; Toevoeging ; Plaats ; Postcode ; EAN
+      if(cols.length<5)return;
+      var straat=cols[0]||'',huisnr=cols[1]||'',huistoe=cols[2]||'';
+      var plaats2=cols[3]||'',postcode2=cols[4]||'',ean=cols[5]||'';
+      if(!ean&&cols.length===5){ean=cols[4];postcode2=cols[3];plaats2=cols[2];huistoe='';}
+      ean=ean.replace(/\D/g,'');
+      if(ean)eans.push(ean);
+      var huisvol=huisnr+(huistoe?('-'+huistoe):'');
+      adres=[straat+' '+huisvol,postcode2,plaats2].filter(Boolean).join(', ').replace(/\s+/g,' ').trim();
+    }
+
+    if(!eans.length&&!adres)return;
+
+    var key=eans.length?eans[0]:('@'+_nbNorm(adres));
+    if(existing[key])return;
+    existing[key]=true;
+
+    ring.netburen.push({id:_kUid(),name:naam||adres,ean:eans[0]||'',eans:eans,
+      adres:adres,lat:null,lng:null,note:'',matchstatus:status});
+    added++;eanTotaal+=eans.length;
+    if(!eans.length)zonderEan++;
   });
 
   saveMeta();
   _renderNetburenModal();
-  notify(added+' netburen toegevoegd als '+ring.label);
+  var msg=ring.label+': '+added+' adressen · '+eanTotaal+' EAN\'s';
+  if(zonderEan)msg+=' · '+zonderEan+' zonder match';
+  notify(msg);
+  if(onleesbaar){
+    notify(onleesbaar+' EAN-cel(len) onleesbaar — sla de EAN-kolom in Excel op als tekst',false);
+  }
   geocodeNetburen();
 }
 
