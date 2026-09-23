@@ -612,8 +612,11 @@
           <div><div style="font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:#e67e22;margin-bottom:4px">Teruglevering (kW)</div><div class="cw" style="height:340px"><canvas id="cPiekT" role="img"></canvas></div></div>
         </div></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>GTO-besparing per maand</div>
-        <table class="tbl"><thead><tr><th>Maand</th><th>Som ind. pieken (kW)</th><th>Coll. piek (kW)</th><th>Diversiteitswinst (kW / %)</th><th>Besparing kW-max (€)</th></tr></thead>
-        <tbody id="gtoBody"></tbody></table></div>
+        <table class="tbl"><thead><tr><th>Maand</th><th>Som ind. pieken (kW)</th><th>Coll. piek (kW)</th><th>Diversiteitswinst (kW / %)</th><th>Ind. kW-max (€)</th><th>Coll. kW-max (€)</th><th>MS/LS-toeslag (€)</th><th>Besparing kW-max (€)</th></tr></thead>
+        <tbody id="gtoBody"></tbody></table>
+        <div class="ib" id="gtoTarief" style="margin-top:8px"></div></div>
+      <div class="cd"><div class="ct2"><div class="ac"></div>GTO-besparing kW-contract (gecontracteerd vermogen)</div>
+        <div id="gtoKwc"></div></div>
       <div class="cd"><div class="ct2"><div class="ac"></div>Besparingssimulatie — extra piekreductie</div>
         <div style="display:flex;gap:12px;align-items:center;margin-bottom:10px;flex-wrap:wrap">
           <div style="flex:1;min-width:150px"><div class="fg"><label>Piekreductie<span class="tip-icon" data-tip="Simuleer een verlaging van de maandelijkse piek. Hogere waarde = meer reductie. Toont de impact op de GTV-kosten.">ⓘ</span></label><input type="range" id="simSlider" min="0" max="50" value="10" step="1" style="width:100%"></div></div>
@@ -820,12 +823,13 @@
           <option value="TS">TS — Maatwerk</option>
         </select>
       </div>
-      <div class="fg"><label>Stedin transportcategorie<span class="tip-icon" data-tip="Stedin transportcategorie. Bepalend voor de transportkosten. Te vinden in uw Stedin-contract.">ⓘ</span></label>
+      <div class="fg"><label>Stedin transportcategorie<span class="tip-icon" data-tip="Stedin transportcategorie. Bepalend voor de transportkosten. Volgt standaard uit de fysieke capaciteit: t/m 175 kVA = Trafo MS/LS, 176–1.750 kVA = MS, daarboven Trafo HS+TS/MS.">ⓘ</span></label>
         <select id="cST">
+          <option value="auto" selected>Automatisch uit kVA</option>
           <option value="none">— N.v.t. —</option>
           <option value="LS">LS — t/m 50 kW</option>
-          <option value="TrafoMSLS" selected>Trafo MS/LS — 51–150 kW</option>
-          <option value="MS">MS — 151–1.500 kW</option>
+          <option value="TrafoMSLS">Trafo MS/LS — t/m 175 kVA</option>
+          <option value="MS">MS — 176–1.750 kVA</option>
           <option value="TrafoHSres">Trafo HS+TS/MS reserve</option>
           <option value="TrafoHS">Trafo HS+TS/MS</option>
           <option value="TSres">TS reserve</option>
@@ -833,6 +837,7 @@
         </select>
       </div>
     </div>
+    <div style="font-size:12px;color:#888;margin:-4px 0 8px" id="cSTHint"></div>
     <div class="sh">Energieprijzen</div>
     <div class="tr" id="pTgl">
       <button class="tg on" data-pt="static">Statisch (€/kWh)</button>

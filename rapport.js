@@ -523,11 +523,16 @@ async function buildRapport(opts){
     };
   }
 
+  // Zelfde basis als de GTO-pagina: kW-max (individueel per eigen tarief, collectief
+  // tegen het groepstarief, minus de MS/LS-toeslag) plus de kW-contract-besparing uit
+  // het groeps-GTV. kW-max loopt alleen over afname, dus de terugleverpiek telt niet mee.
+  // _piek.totJaar is al geëxtrapoleerd over uitsluitend volledige maanden; de fallback
+  // hieronder middelt over alle maanden en geldt alleen voor oude sessiestatus.
   function calcGtoSavingBasis(){
-    if(!_piek||!_piek.mnds||!_piek.mnds.length||_piek.avgKm==null)return null;
+    if(!_piek||!_piek.mnds||!_piek.mnds.length||!_piek.indKm||!_piek.collKm)return null;
+    if(typeof _piek.totJaar==='number')return _piek.totJaar;
     var total=_piek.mnds.reduce(function(s,_,mi){
-      var collP=(_piek.collPA[mi]||0)+(_piek.collPT[mi]||0);
-      return s+((_piek.somInd[mi]||0)-collP)*_piek.avgKm;
+      return s+(_piek.indKm[mi]||0)-(_piek.collKm[mi]||0)-((_piek.toeslag||[])[mi]||0);
     },0);
     return total/Math.max(1,_piek.mnds.length)*12;
   }
@@ -565,7 +570,8 @@ async function buildRapport(opts){
     // Diversity / GTO
     if(divPct!=null&&divPct>15){
       out.push('Diversiteitswinst van <strong>'+_fmtN(divPct,0)+'%</strong> tussen som individuele pieken en collectieve piek. '+
-        (gtoY!=null?'Door collectief contract (GTO) is een besparing van <strong>'+_fmtE(gtoY)+' per jaar</strong> haalbaar op kW-max kosten.':''));
+        (gtoY!=null?'Door een groepstransportovereenkomst (GTO) is een besparing van <strong>'+_fmtE(gtoY)+' per jaar</strong> haalbaar op kW-max en kW-contract samen'+
+          ((_piek&&_piek.kwc&&Math.abs(_piek.kwc.groepsGtv-_piek.kwc.somGtv)<0.5)?', waarbij het groeps-GTV nog gelijkstaat aan de som van de individuele GTV\'s — de kW-contract-besparing zit daar dus nog niet in':'')+'.':''));
     }else if(divPct!=null){
       out.push('Beperkte diversiteit ('+_fmtN(divPct,0)+'%): pieken vallen samen. GTO levert hier minder besparing dan bij heterogene profielen.');
     }
@@ -669,6 +675,7 @@ async function buildRapport(opts){
       imgs.piekA=await ci('cPiekA',320,false);
       imgs.piekT=await ci('cPiekT',320,false);
       imgs.gto=await cihEl(byId('gtoBody')?byId('gtoBody').closest('.cd'):null);
+      imgs.gtoKwc=await cihEl(byId('gtoKwc')?byId('gtoKwc').closest('.cd'):null);
     }
     imgsByScen.push(imgs);
 
@@ -917,6 +924,8 @@ async function buildRapport(opts){
       '</div>'});
     if(imgs.gto)blocks.push({label:'GTO-besparing per maand',html:
       '<div class="rchart"><h3>GTO-besparing per maand (kW-max diversiteit)</h3>'+imgs.gto+'</div>'});
+    if(imgs.gtoKwc)blocks.push({label:'GTO-besparing kW-contract',html:
+      '<div class="rchart"><h3>GTO-besparing kW-contract (gecontracteerd vermogen)</h3>'+imgs.gtoKwc+'</div>'});
     if(imgs.pvYear||imgs.pvMonth)blocks.push({label:'Zonnepanelen',html:'<div class="r2col">'+
       (imgs.pvYear?'<div class="rchart"><h3>Zon — jaarprofiel</h3>'+imgs.pvYear+'</div>':'')+
       (imgs.pvMonth?'<div class="rchart"><h3>Maandopbrengst (kWh)</h3>'+imgs.pvMonth+'</div>':'')+'</div>'});

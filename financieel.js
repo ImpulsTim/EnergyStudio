@@ -352,9 +352,12 @@ function _finTabPlatform(L){
       '<div class="kg">'+
         '<div class="kb"><div class="kl">Som individuele aansluitingen</div><div class="kv" style="font-size:15px">€ '+_finEur0(nv.individueel)+'</div></div>'+
         '<div class="kb"><div class="kl">Eén collectieve aansluiting</div><div class="kv" style="font-size:15px">€ '+_finEur0(nv.collectief)+'</div></div>'+
+        (nv.mslsToeslag?'<div class="kb"><div class="kl">Waarvan MS/LS-toeslag</div><div class="kv" style="font-size:15px">€ '+_finEur0(nv.mslsToeslag)+'</div></div>':'')+
         '<div class="kb"><div class="kl">Verschil</div><div class="kv '+bCls+'" style="font-size:15px">'+_finMoney(nv.besparing)+'</div></div>'+
       '</div>'+
-      '<div class="ib2" style="margin-top:6px">Indicatief: vergelijkt de som van de individuele netkosten met één gedeelde aansluiting op het netto groepsprofiel (configuratie in de zijbalk). Vereist juridisch één aansluitpunt.</div></div>';
+      '<div class="ib2" style="margin-top:6px">Indicatief: vergelijkt de som van de individuele netkosten met één gedeelde aansluiting op het netto groepsprofiel (configuratie in de zijbalk). De collectieve categorie is '+((typeof ST!=='undefined'&&ST[nv.collectiefCat])?ST[nv.collectiefCat].l:nv.collectiefCat)+
+      (nv.mslsToeslag?'; de MS/LS-toeslag dekt het kWcontract-verschil dat de Trafo MS/LS-deelnemers anders zouden ontlopen':'')+
+      '. Vereist juridisch één aansluitpunt.</div></div>';
   }
   var totHtml='<div class="cd"><div class="ct2"><div class="ac" style="background:#2c7fb8"></div>Geconsolideerd platform</div>'+
     '<div class="kg">'+

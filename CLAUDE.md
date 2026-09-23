@@ -50,8 +50,8 @@ CSV / JSON import → parseCSV() / parseJSON() → IndexedDB (EGP_v4) → runAna
 5. Piekanalyse — monthly peak analysis
 
 **Key configuration objects in JS:**
-- `SA` — tariff types (LS, MSdist, TrafoHS1, etc.)
-- `ST` — system types with technical parameters (voltage ratio, copper/magnetic losses)
+- `SA` — aansluitcategorieën met de periodieke aansluitvergoeding per jaar (`y`), uit tabel 2 van het Stedin-tariefblad
+- `ST` — transportcategorieën uit tabel 3: `vr` vastrecht transport (€/maand), `kc` kW-contract (€/kW/maand), `km` kW-max (€/kW/maand), `dn`/`dl` dubbeltarief normaal/laag (€/kWh). De GTO-rekenregels en hun bronvermelding staan bovenin `tarieven.js`; zie ook `README.md`.
 - `HOL` — Dutch public holidays keyed as `'MM-DD'`
 
 ## Input/Output Formats

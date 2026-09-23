@@ -401,8 +401,10 @@ function calcScenario(sc) {
   var pvTotal = 0;
   if (solar_kw) pvTotal = solar_kw.reduce(function (s, v) { return s - Math.min(0, v); }, 0) * 0.25 / 1000;
 
-  var avgKm = _optim.avgKm;
-  var kmSaving = (basePA.reduce(function (s, v) { return s + v; }, 0) - mPA.reduce(function (s, v) { return s + v; }, 0)) / Math.max(1, mnds.length) * 12 * avgKm;
+  // Een scenario verandert de collectieve piek, dus reken tegen het groepstarief.
+  // De MS/LS-toeslag hangt aan de individuele MS/LS-pieken en verschuift hier niet mee.
+  var kmColl = _optim.kmColl;
+  var kmSaving = (basePA.reduce(function (s, v) { return s + v; }, 0) - mPA.reduce(function (s, v) { return s + v; }, 0)) / Math.max(1, mnds.length) * 12 * kmColl;
 
   return {
     grpKw: grpKw, perKw: perKwSub, withData: subset, gtvA: gtvA, gtvT: gtvT,

@@ -301,9 +301,10 @@ function calculateGridCosts(company,quarterData,opts){
 // perKwByMember[m][t] = kW per lid per kwartier, uitgelijnd op allTs.
 function compareGridCostsIndividualVsCollective(companies,perKwByMember,allTs,collectief,opts){
   companies=companies||[];perKwByMember=perKwByMember||[];allTs=allTs||[];opts=opts||{};
+  var _cat=(typeof connStCat==='function')?connStCat:function(c){return (c&&c.stedinT)||'none';};
   var perCompany=companies.map(function(c,m){
     var data=allTs.map(function(ts,i){return {ts:ts,kw:_num((perKwByMember[m]||[])[i],0)};});
-    var g=calculateGridCosts(c,data,opts);
+    var g=calculateGridCosts(Object.assign({},c,{stedinT:_cat(c)}),data,opts);
     return {id:c.id,name:c.name,totaal:g.totaal,detail:g};
   });
   var individueel=perCompany.reduce(function(s,x){return s+x.totaal;},0);
@@ -311,9 +312,23 @@ function compareGridCostsIndividualVsCollective(companies,perKwByMember,allTs,co
     var sum=0;for(var m=0;m<perKwByMember.length;m++)sum+=_num((perKwByMember[m]||[])[i],0);
     return {ts:ts,kw:sum};
   });
-  var collectiefDetail=calculateGridCosts(collectief||{},collectiefProfiel,opts);
-  return {individueel:individueel,collectief:collectiefDetail.totaal,
-    besparing:individueel-collectiefDetail.totaal,perCompany:perCompany,collectiefDetail:collectiefDetail};
+  // Collectieve categorie: expliciete keuze, anders het hoogste netvlak in de groep.
+  var collCfg=Object.assign({},collectief||{});
+  if(!collCfg.stedinT&&typeof groepsStCat==='function')collCfg.stedinT=groepsStCat(companies);
+  var collectiefDetail=calculateGridCosts(collCfg,collectiefProfiel,opts);
+  // MS/LS-toeslag: alleen de maandpieken van de MS/LS-deelnemers, tegen het
+  // kWcontract-verschil MS/LS − MS. Komt bovenop de collectieve netkosten.
+  var mnds=collectiefDetail.maandpiekAfname.map(function(x){return x.maand;});
+  var indPieken=perCompany.map(function(x){
+    var m={};x.detail.maandpiekAfname.forEach(function(r){m[r.maand]=r.piekKw;});
+    return mnds.map(function(mn){return m[mn]||0;});
+  });
+  var toeslag=((typeof gtoToeslagPerMaand==='function')?gtoToeslagPerMaand(companies,indPieken,mnds):[])
+    .reduce(function(s,v){return s+v;},0);
+  var collTotaal=collectiefDetail.totaal+toeslag;
+  return {individueel:individueel,collectief:collTotaal,mslsToeslag:toeslag,
+    collectiefCat:collCfg.stedinT,
+    besparing:individueel-collTotaal,perCompany:perCompany,collectiefDetail:collectiefDetail};
 }
 
 // --- Huidige contractkosten per bedrijf --------------------------------------
@@ -797,7 +812,8 @@ function buildAnnualComparison(members,priceSeries,assumptions){
   // 2. Platformscenario (één doorrekening voor de hele groep).
   var platMembers=members.map(function(m,i){var c=m.company||{};
     return {id:m.id,name:m.name,source:m.source,kw:perKwByMember[i],
-      stedinA:c.stedinA,stedinT:c.stedinT,gtvA:c.gtvA,gecontracteerdVermogen:c.gecontracteerdVermogen};});
+      stedinA:c.stedinA,stedinT:c.stedinT,stAuto:c.stAuto,kva:c.kva,
+      gtvA:c.gtvA,gecontracteerdVermogen:c.gecontracteerdVermogen};});
   var platRes=settlePlatform({
     members:platMembers,ts:allTs,priceSeries:priceSeries,internalPrices:a.internalPrices||{},
     platform:{leveranciersOpslag:a.leveranciersOpslag,terugleverAfslag:a.terugleverAfslag,

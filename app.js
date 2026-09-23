@@ -2,7 +2,7 @@
 var S={projects:[],activeId:null};
 var editId=null,pendData=null,pendName='',pType='static';
 var CH={},_piek=null,_jaarState=null,_jZoom=1;
-var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,avgKm:0,optKw:[],perKw:[],withData:[],allData:[],activeScenId:'basis',scenResults:{}};
+var _optim={baseKw:[],allTs:[],gtvA:0,gtvT:0,kmColl:0,optKw:[],perKw:[],withData:[],allData:[],activeScenId:'basis',scenResults:{}};
 
 // --- Globale grafiek-hover -----------------------------------------------------
 // Maakt tooltips overal langs de x-as bereikbaar (geen precies mikken meer) en
@@ -831,6 +831,22 @@ function delProj(){
 }
 
 // Aansluitingbeheer
+// Toont onder de categoriekeuze wat de aansluitcapaciteit zou opleveren, zodat een
+// handmatige afwijking van de automatische afleiding zichtbaar is.
+function updateSTHint(){
+  var el=document.getElementById('cSTHint');if(!el)return;
+  var kva=document.getElementById('cKva').value,sel=document.getElementById('cST').value;
+  var auto=stCatUitKva(kva);
+  if(sel==='auto'){
+    el.innerHTML=auto?('Volgt de capaciteit: <strong>'+ST[auto].l+'</strong> ('+kva+' kVA).')
+      :'Vul een fysieke capaciteit (kVA) in; zolang die ontbreekt wordt Trafo MS/LS aangehouden.';
+    return;
+  }
+  el.innerHTML=(auto&&auto!==sel)
+    ? '⚠ Handmatig ingesteld. Op '+kva+' kVA zou de categorie <strong>'+ST[auto].l+'</strong> zijn.'
+    : 'Handmatig ingesteld.';
+}
+
 function openAddComp(){
   editId=null;pendData=null;pendName='';
   document.getElementById('mCT').textContent='Aansluiting toevoegen';
@@ -841,7 +857,8 @@ function openAddComp(){
   document.getElementById('cKva').value='';document.getElementById('cPf').value='0.9';document.getElementById('cZek').value='';
   document.getElementById('cCat').value='Grootverbruik';
   document.getElementById('cGA').value='150';document.getElementById('cGT').value='80';
-  document.getElementById('cSA').value='TrafoMSLS';document.getElementById('cST').value='TrafoMSLS';
+  document.getElementById('cSA').value='TrafoMSLS';document.getElementById('cST').value='auto';
+  updateSTHint();
   document.getElementById('cPA').value='0.23';document.getElementById('cPT2').value='0.08';
   document.getElementById('cPD').value='';document.getElementById('cPills').innerHTML='';
   setPT('static');showM('mComp');
@@ -864,7 +881,9 @@ async function openEditComp(id){
   document.getElementById('cZek').value=c.zekering||'';
   document.getElementById('cCat').value=c.category||'Grootverbruik';
   document.getElementById('cGA').value=c.gtvA!=null?c.gtvA:150;document.getElementById('cGT').value=c.gtvT!=null?c.gtvT:0;
-  document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';document.getElementById('cST').value=c.stedinT||'TrafoMSLS';
+  document.getElementById('cSA').value=c.stedinA||'TrafoMSLS';
+  document.getElementById('cST').value=c.stAuto?'auto':(c.stedinT||'TrafoMSLS');
+  updateSTHint();
   document.getElementById('cPA').value=c.priceA!=null?c.priceA:0.12;document.getElementById('cPT2').value=c.priceT!=null?c.priceT:0.08;
   document.getElementById('cPD').value=c.priceDyn||'';
   setPT(c.priceType||'static');
@@ -879,6 +898,13 @@ async function saveComp(){
   var _cLat=parseFloat(document.getElementById('cLat').value);
   var _cLng=parseFloat(document.getElementById('cLng').value);
   var _deeln=document.getElementById('cDeelnemer').value.trim();
+  // Transportcategorie: 'auto' laat hem uit de aansluitcapaciteit volgen. We slaan
+  // altijd een concrete sleutel op in stedinT, zodat alle bestaande lezers (rekenkern,
+  // individueel, financieel) onveranderd blijven werken; stAuto onthoudt de keuze.
+  var _kva=(function(){var v=parseFloat(document.getElementById('cKva').value);return isNaN(v)?null:v;})();
+  var _stSel=document.getElementById('cST').value;
+  var _stAuto=_stSel==='auto';
+  var _stT=_stAuto?(stCatUitKva(_kva)||'TrafoMSLS'):_stSel;
   var obj={id:id,name:name,ean:document.getElementById('cE').value.trim(),
     carrier:document.getElementById('cCarrier').value||'elektra',
     deelnemer:_deeln||name,
@@ -886,10 +912,10 @@ async function saveComp(){
     lat:isNaN(_cLat)?null:_cLat,lng:isNaN(_cLng)?null:_cLng,
     category:document.getElementById('cCat').value,
     gtvA:(function(){var v=parseFloat(document.getElementById('cGA').value);return isNaN(v)?150:v;})(),gtvT:(function(){var v=parseFloat(document.getElementById('cGT').value);return isNaN(v)?80:v;})(),
-    kva:(function(){var v=parseFloat(document.getElementById('cKva').value);return isNaN(v)?null:v;})(),
+    kva:_kva,stAuto:_stAuto,stedinT:_stT,
     pf:(function(){var v=parseFloat(document.getElementById('cPf').value);return(isNaN(v)||v<=0||v>1)?PF_DEF:v;})(),
     zekering:document.getElementById('cZek').value.trim(),
-    stedinA:document.getElementById('cSA').value,stedinT:document.getElementById('cST').value,
+    stedinA:document.getElementById('cSA').value,
     priceType:pType,priceA:parseFloat(document.getElementById('cPA').value)||0.12,
     priceT:parseFloat(document.getElementById('cPT2').value)||0.08,
     priceDyn:document.getElementById('cPD').value,fileName:pendName,selected:true};
@@ -984,10 +1010,10 @@ async function runAnalysis(){
   try{drawGelijktijdigheid(allTs,perKw,withData);}catch(e){console.error('drawGelijktijdigheid:',e);}
   try{drawBDK(perKw,gA,gT,withData,gtvA,gtvT);}catch(e){console.error('drawBDK:',e);}
   try{drawOvsch(allTs,gA,gT,gtvA,gtvT);}catch(e){console.error('drawOvsch:',e);}
-  try{drawPiek(allTs,perKw,grpKw,withData);}catch(e){console.error('drawPiek:',e);}
-  var totKm=withData.reduce(function(s,c){return s+(ST[c.stedinT||'none']||ST.none).km;},0);
+  try{drawPiek(allTs,perKw,grpKw,withData,gtvA);}catch(e){console.error('drawPiek:',e);}
   _optim.baseKw=grpKw.slice();_optim.allTs=allTs.slice();
-  _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.avgKm=totKm/Math.max(1,withData.length);
+  // kW-max-tarief van de groep = dat van het hoogste netvlak erin (zie tarieven.js).
+  _optim.gtvA=gtvA;_optim.gtvT=gtvT;_optim.kmColl=(ST[groepsStCat(withData)]||ST.none).km;
   _optim.perKw=perKw;_optim.withData=withData;
   // Overzicht: gas krijgt een eigen pagina (m³/maand/CO₂/baseload); elektra/warmte de bestaande KPI's.
   var ovEl=document.getElementById('ovElektra'),ovGas=document.getElementById('ovGas');
@@ -1363,6 +1389,8 @@ document.addEventListener('DOMContentLoaded',function(){
     bar.style.background=n<8?'#e74c3c':n<14?'#f39c12':'#46962b';
   });
   document.getElementById('simSlider').addEventListener('input',updateSim);
+  document.getElementById('cKva').addEventListener('input',updateSTHint);
+  document.getElementById('cST').addEventListener('change',updateSTHint);
   // Pieklijst filters
   document.getElementById('peakLimitA').addEventListener('change',function(){
     renderPeakTables(parseInt(this.value),parseInt(document.getElementById('peakLimitT').value));
